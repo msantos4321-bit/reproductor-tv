@@ -52,6 +52,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -141,6 +142,8 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
     var error by remember { mutableStateOf<String?>(null) }
     var remaining by remember { mutableLongStateOf(Long.MAX_VALUE) }
     var viewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var seekHint by remember { mutableStateOf("") }
+    var seekTick by remember { mutableIntStateOf(0) }
 
     fun save() {
         val it = items.getOrNull(player.currentMediaItemIndex) ?: return
@@ -193,8 +196,23 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
         if (v != null && ctrlVisible && error == null) v.hideController() else nav.back()
     }
 
+    LaunchedEffect(seekTick) { if (seekTick > 0) { delay(900); seekHint = "" } }
+
     val item = items.getOrNull(current)
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onPreviewKeyEvent { e ->
+                // Con los controles ocultos: ◀ ▶ regresan/adelantan 10 s (como en Netflix)
+                if (e.type != KeyEventType.KeyDown || ctrlVisible || error != null) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft -> { player.seekBack(); seekHint = "−10 s  ·  " + TextUtil.clock(player.currentPosition); seekTick++; true }
+                    Key.DirectionRight -> { player.seekForward(); seekHint = "+10 s  ·  " + TextUtil.clock(player.currentPosition); seekTick++; true }
+                    else -> false
+                }
+            },
+    ) {
         AndroidView(
             factory = { c ->
                 PlayerView(c).apply {
@@ -227,6 +245,10 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
                     if (!item?.subtitle.isNullOrBlank()) Text(item?.subtitle.orEmpty(), color = C.Mid, fontSize = 15.sp, maxLines = 1)
                 }
             }
+        }
+        if (seekHint.isNotEmpty()) {
+            Text(seekHint, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000), RoundedCornerShape(10.dp)).padding(horizontal = 20.dp, vertical = 10.dp))
         }
         // Aviso de siguiente episodio
         val next = items.getOrNull(current + 1)
