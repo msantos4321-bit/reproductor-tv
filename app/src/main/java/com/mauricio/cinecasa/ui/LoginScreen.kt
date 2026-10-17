@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun LoginScreen() {
+fun LoginScreen(onPair: () -> Unit = {}) {
     var server by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
@@ -104,6 +104,7 @@ fun LoginScreen() {
                 if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Spinner(size = 28.dp); Text("Conectando…", color = C.Mid, fontSize = 14.sp)
                 } else ActionButton("Entrar", { submit() }, Modifier.fillMaxWidth(), primary = true)
+                ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
             }
         }
     }

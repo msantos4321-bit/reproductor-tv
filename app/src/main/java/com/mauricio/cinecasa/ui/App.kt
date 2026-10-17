@@ -58,6 +58,8 @@ import com.mauricio.cinecasa.data.Channel
 import com.mauricio.cinecasa.data.LoadState
 import com.mauricio.cinecasa.data.PlayItem
 import com.mauricio.cinecasa.data.Prefs
+import com.mauricio.cinecasa.data.Profiles
+import com.mauricio.cinecasa.data.Cloud
 import com.mauricio.cinecasa.data.Repo
 import com.mauricio.cinecasa.data.Show
 import com.mauricio.cinecasa.data.Vod
@@ -93,13 +95,43 @@ val LocalNav = staticCompositionLocalOf<Nav> { error("sin navegación") }
 @Composable
 fun App() {
     val account by Prefs.account.collectAsState()
+    var pairing by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(C.Bg)) {
-        if (account == null) LoginScreen() else Shell()
+        if (account == null) {
+            if (pairing) PairScreen { pairing = false } else LoginScreen(onPair = { pairing = true })
+        } else ProfileGate()
         AutoUpdateCheck()
         SleepTimerWatcher()
     }
     LaunchedEffect(Unit) {
         while (true) { C.apply(Prefs.themeMode); kotlinx.coroutines.delay(60_000) }
+    }
+}
+
+/** Después de la cuenta: hogar en la nube, perfiles y "¿Quién está viendo?". */
+@Composable
+private fun ProfileGate() {
+    val current by Profiles.current.collectAsState()
+    val revoked by Cloud.revoked.collectAsState()
+    var ready by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withTimeoutOrNull(8000) { Cloud.ensureHousehold(); Cloud.syncNow() }
+        Profiles.ensureFirst()
+        val d = Profiles.deviceDefault
+        Profiles.list.value.firstOrNull { it.id == d && !it.hasPin }?.let { Profiles.select(it) }
+        ready = true
+        Cloud.startLoop()
+    }
+    LaunchedEffect(current?.id) { if (current != null && ready) runCatching { Cloud.syncNow() } }
+    LaunchedEffect(revoked) {
+        if (revoked) { Cloud.forgetHousehold(); Profiles.signOut(); Repo.logout() }
+    }
+    val cur = current
+    when {
+        !ready -> CenterMessage("Cargando perfiles…", loading = true)
+        manageProfilesOpen.value -> ProfileManager { manageProfilesOpen.value = false }
+        cur == null -> ProfilePicker(onManage = { manageProfilesOpen.value = true })
+        else -> key(cur.id) { Shell() }
     }
 }
 
@@ -239,6 +271,27 @@ private fun Sidebar(current: Route, onSelect: (Route) -> Unit) {
             .padding(horizontal = 12.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.Center,
     ) {
+        val me by Profiles.current.collectAsState()
+        me?.let { p ->
+            Surface(
+                onClick = { Profiles.signOut() },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, contentColor = C.Mid, focusedContainerColor = C.Accent, focusedContentColor = C.OnAccent),
+            ) {
+                Row(Modifier.padding(horizontal = 7.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(p, 32.dp)
+                    if (expanded) {
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(p.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text("Cambiar perfil", fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
         navItems.forEachIndexed { i, item ->
             val shape = RoundedCornerShape(10.dp)
             Surface(

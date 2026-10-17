@@ -42,7 +42,23 @@ data class Catalog(
         (vodCats + seriesCats + liveCats).filter { TextUtil.isAdult(it.name) }.map { it.id }.toSet()
     }
 
-    fun visibleCat(id: String) = Prefs.showAdult || id !in adultIds
+    private val kidsRe = Regex("(infantil|niñ|nin[oa]s|kids|anim|cartoon|caricatura|disney|pixar|familia|family|junior)", RegexOption.IGNORE_CASE)
+    private val kidIds: Set<String> by lazy { (vodCats + seriesCats + liveCats).filter { kidsRe.containsMatchIn(it.name) }.map { it.id }.toSet() }
+    private val vodIds by lazy { vodCats.map { it.id }.toSet() }
+    private val seriesIds by lazy { seriesCats.map { it.id }.toSet() }
+    private val kidsVod by lazy { vodIds.any { it in kidIds } }
+    private val kidsSeries by lazy { seriesIds.any { it in kidIds } }
+    private val kidsLive by lazy { liveCats.any { it.id in kidIds } }
+
+    fun visibleCat(id: String): Boolean {
+        if (Profiles.current.value?.kids == true) {
+            if (id in adultIds) return false
+            if (id in kidIds) return true
+            // Si el proveedor no tiene categorías infantiles de ese tipo, se muestra todo lo que no es de adultos
+            return when (id) { in vodIds -> !kidsVod; in seriesIds -> !kidsSeries; else -> !kidsLive }
+        }
+        return Prefs.showAdult || id !in adultIds
+    }
 
     val visMovies: List<Vod> by lazy { movies.filter { visibleCat(it.cat) } }
     val visShows: List<Show> by lazy { shows.filter { visibleCat(it.cat) } }
@@ -159,6 +175,8 @@ object Repo {
         dir = File(ctx.filesDir, "catalog").apply { mkdirs() }
         Prefs.init(ctx)
         Library.init(ctx)
+        Cloud.init(ctx)
+        Profiles.init(ctx)
     }
 
     fun xtream(): Xtream? = Prefs.account.value?.let { Xtream(it) }

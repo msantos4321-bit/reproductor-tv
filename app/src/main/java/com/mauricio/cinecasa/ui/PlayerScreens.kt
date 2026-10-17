@@ -52,6 +52,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -388,6 +391,14 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(rootFr)
+            // Celular/tableta: tocar abre la lista; deslizar arriba/abajo cambia de canal
+            .pointerInput(Unit) { detectTapGestures(onTap = { if (!showList) showList = true }) }
+            .pointerInput(Unit) {
+                var acc = 0f
+                detectVerticalDragGestures(
+                    onDragEnd = { if (acc < -90f) move(1) else if (acc > 90f) move(-1); acc = 0f },
+                ) { _, d -> acc += d }
+            }
             .onKeyEvent { e ->
                 if (showList || e.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (e.key) {

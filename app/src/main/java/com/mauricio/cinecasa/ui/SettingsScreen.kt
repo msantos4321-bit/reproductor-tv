@@ -60,6 +60,8 @@ fun SettingsScreen() {
     var tmdb by remember { mutableStateOf(Prefs.tmdbKey) }
     var tmdbMsg by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
+    val me by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
+    val isAdmin = me?.admin == true
     var serverDlg by remember { mutableStateOf(false) }
     val firstFr = remember { FocusRequester() }
 
@@ -75,7 +77,7 @@ fun SettingsScreen() {
     ) {
         Text("Ajustes", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
 
-        Section("Tu cuenta") {
+        if (isAdmin) Section("Tu cuenta") {
             val a = account
             Line("Servidor", a?.base.orEmpty())
             Line("Usuario", a?.user.orEmpty())
@@ -100,6 +102,13 @@ fun SettingsScreen() {
             Text("El catálogo se actualiza solo cada 8 horas al abrir la app.", color = C.Low, fontSize = 12.sp)
         }
 
+        if (isAdmin) Section("Perfiles y aparatos") {
+            Text("Agrega, renombra o protege con PIN los perfiles de tu casa. Nadie ve qué perfil se está usando ni en qué aparato.", color = C.Mid, fontSize = 13.sp)
+            ActionButton("Administrar perfiles", { manageProfilesOpen.value = true }, icon = Icons.Filled.Refresh)
+            DevicesSection()
+        }
+        if (!isAdmin) Text("La cuenta, los perfiles y los aparatos solo los cambia el administrador.", color = C.Low, fontSize = 12.sp)
+
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -116,7 +125,10 @@ fun SettingsScreen() {
                 color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(0.85f),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LangFilter.presets.forEach { p -> Pill(p.label, LangFilter.current.id == p.id, { LangFilter.set(p.id) }) }
+                LangFilter.presets.forEach { p -> Pill(p.label, LangFilter.current.id == p.id, {
+                    LangFilter.set(p.id)
+                    com.mauricio.cinecasa.data.Profiles.current.value?.let { cur -> if (!cur.guest) com.mauricio.cinecasa.data.Profiles.save(cur.copy(lang = p.id)) }
+                }) }
             }
             val stats = c.langStats.entries.sortedByDescending { it.value }
                 .joinToString("  ·  ") { "${it.key.label.ifBlank { "Sin etiqueta" }}: ${"%,d".format(it.value)}" }
@@ -149,7 +161,7 @@ fun SettingsScreen() {
             }
         }
 
-        Section("Contenido para adultos") {
+        if (isAdmin) Section("Contenido para adultos") {
             Text("Las categorías para adultos están ocultas en toda la app, incluida la búsqueda.", color = C.Mid, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Pill("Ocultar", !adult, { adult = false; Prefs.showAdult = false; Repo.refilter() })
@@ -157,7 +169,7 @@ fun SettingsScreen() {
             }
         }
 
-        Section("Búsqueda por actor (opcional)") {
+        if (isAdmin) Section("Búsqueda por actor (opcional)") {
             Text(
                 "Tu proveedor casi nunca etiqueta el reparto de cada película. Con una clave gratuita de TMDB (themoviedb.org) " +
                     "puedes buscar un actor o director y ver todas sus películas y series que estén en tu catálogo. " +
