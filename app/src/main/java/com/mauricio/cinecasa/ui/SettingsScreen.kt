@@ -134,6 +134,17 @@ fun SettingsScreen() {
             if (tmdbMsg.isNotEmpty()) Text(tmdbMsg, color = if (tmdbMsg.startsWith("Clave guardada")) C.Good else C.Warn, fontSize = 13.sp)
         }
 
+        Section("Actualizaciones") {
+            Text("La app revisa sola si hay versión nueva cada vez que la abres. También puedes revisar aquí.", color = C.Mid, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                ActionButton("Buscar actualización", {
+                    updateDialogOpen.value = true
+                    scope.launch { com.mauricio.cinecasa.data.Updater.check() }
+                }, icon = Icons.Filled.Refresh)
+                Text("Tienes la versión ${BuildConfig.VERSION_NAME}", color = C.Low, fontSize = 13.sp)
+            }
+        }
+
         Section("Acerca de") {
             Line("App", "CineCasa ${BuildConfig.VERSION_NAME}")
             Text("Funciona con cuentas tipo Xtream Codes (servidor, usuario y contraseña).", color = C.Low, fontSize = 12.sp)

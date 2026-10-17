@@ -94,6 +94,7 @@ fun App() {
     val account by Prefs.account.collectAsState()
     Box(Modifier.fillMaxSize().background(C.Bg)) {
         if (account == null) LoginScreen() else Shell()
+        AutoUpdateCheck()
     }
 }
 
