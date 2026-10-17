@@ -114,13 +114,13 @@ fun LicensesSection() {
     var created by remember { mutableStateOf("") }
     var createdFor by remember { mutableStateOf("") }
     var createdMax by remember { mutableIntStateOf(1) }
+    var list by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
     val ctx = LocalContext.current
     fun share(code: String, max: Int, name: String, email: Boolean) {
         if (!shareInvite(ctx, code, max, name, email)) msg = "Este aparato no puede compartir; hazlo desde tu celular."
     }
-    var list by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var msg by remember { mutableStateOf("") }
     val fmt = remember { SimpleDateFormat("d MMM yyyy, HH:mm", Locale("es", "MX")) }
     val iso = remember { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") } }
     fun date(s: String) = try { fmt.format(iso.parse(s.take(19))!!) } catch (_: Exception) { s.take(16) }
