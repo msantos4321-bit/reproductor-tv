@@ -158,7 +158,8 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
     }
 
     DisposableEffect(Unit) {
-        val mediaItems = items.map { MediaItem.Builder().setUri(it.url).setMediaId(it.key).build() }
+        // Si está descargado, se reproduce del aparato (sin internet)
+        val mediaItems = items.map { MediaItem.Builder().setUri(com.mauricio.cinecasa.data.Downloads.localUri(it.key) ?: it.url).setMediaId(it.key).build() }
         player.setMediaItems(mediaItems, start, startPos.coerceAtLeast(0))
         player.prepare()
         player.playWhenReady = true

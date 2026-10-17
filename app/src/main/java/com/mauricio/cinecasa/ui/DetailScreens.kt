@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -168,6 +169,7 @@ fun MovieDetailScreen(vod0: Vod) {
                 )
                 if (p != null) ActionButton("Desde el inicio", { movieItem(vod)?.let { nav.play(listOf(it), 0, 0L) } }, icon = Icons.Filled.Replay)
                 ActionButton("Tráiler", { openTrailer(ctx, i?.trailer.orEmpty(), vod.title, vod.year, i?.tmdb?.ifBlank { null } ?: vod.tmdb, false) }, icon = Icons.Filled.OndemandVideo)
+                DownloadButton(movieItem(vod))
                 ActionButton(
                     if (inList) "En mi lista" else "Mi lista",
                     { Library.toggleList("movie", vod.id, vod.title, vod.icon) },
@@ -253,6 +255,13 @@ fun ShowDetailScreen(show0: Show) {
                     else if (failed) uiScope.launch { info = Repo.seriesInfo(show.id); failed = info == null }
                 }, Modifier.focusRequester(playFr), icon = Icons.Filled.PlayArrow, primary = true)
                 ActionButton("Tráiler", { openTrailer(ctx, inf?.trailer?.ifBlank { null } ?: show.trailer, show.title, show.year, show.tmdb, true) }, icon = Icons.Filled.OndemandVideo)
+                if (inf != null && season > 0 && canDownload()) {
+                    val eps = inf.episodes[season].orEmpty()
+                    ActionButton("Descargar T$season", {
+                        val items = episodeItems(show.id, show.title, inf.backdrop.ifBlank { show.backdrop.ifBlank { show.cover } }, inf)
+                        items.filter { it.season == season }.forEach { com.mauricio.cinecasa.data.Downloads.start(it) }
+                    }, icon = Icons.Filled.Download)
+                }
                 ActionButton(
                     if (inList) "En mi lista" else "Mi lista",
                     { Library.toggleList("series", show.id, show.title, show.cover) },

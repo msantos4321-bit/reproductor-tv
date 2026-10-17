@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
@@ -72,6 +73,7 @@ sealed interface Route {
     data class Series(val cat: String? = null) : Route
     data object Live : Route
     data object MyList : Route
+    data object Downloads : Route
     data object Settings : Route
     data class MovieDetail(val vod: Vod) : Route
     data class ShowDetail(val show: Show) : Route
@@ -176,7 +178,11 @@ private fun Shell() {
                 } else stack.add(r)
             },
             back = { if (stack.size > 1) stack.removeAt(stack.lastIndex) },
-            play = { items, start, pos -> withConnectionCheck { stack.add(Route.Play(items, start, pos)) } },
+            play = { items, start, pos ->
+                // Lo descargado no usa pantallas de la cuenta: se reproduce directo
+                if (items.all { com.mauricio.cinecasa.data.Downloads.localUri(it.key) != null }) stack.add(Route.Play(items, start, pos))
+                else withConnectionCheck { stack.add(Route.Play(items, start, pos)) }
+            },
             playLive = { ch, i -> withConnectionCheck { stack.add(Route.LivePlay(ch, i)) } },
             memory = { k -> memories.getOrPut(k) { FocusMemory() } },
             state = state,
@@ -199,6 +205,7 @@ private fun Shell() {
                 CenterMessage("No se pudo cargar", ls.msg) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("Reintentar", { Repo.start(force = true) }, primary = true)
+                        ActionButton("Ver mis descargas", { stack.clear(); stack.add(Route.Downloads); Repo.markOffline() })
                         ActionButton("Cambiar servidor", { serverDlg = true })
                         ActionButton("Cambiar cuenta", { Repo.logout() })
                     }
@@ -217,6 +224,7 @@ private fun Shell() {
                         is Route.Series -> key(top) { BrowseScreen(isSeries = true, initialCat = top.cat) }
                         Route.Live -> LiveScreen()
                         Route.MyList -> MyListScreen()
+                        Route.Downloads -> DownloadsScreen()
                         Route.Settings -> SettingsScreen()
                         else -> {}
                     }
@@ -240,7 +248,7 @@ private fun Shell() {
 }
 
 private fun isTopLevel(r: Route) = r == Route.Home || r is Route.Search || r is Route.Movies || r is Route.Series ||
-    r == Route.Live || r == Route.MyList || r == Route.Settings
+    r == Route.Live || r == Route.MyList || r == Route.Settings || r == Route.Downloads
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: Route, val match: (Route) -> Boolean)
 
@@ -251,6 +259,7 @@ private val navItems = listOf(
     NavItem("Series", Icons.Filled.Tv, Route.Series()) { it is Route.Series },
     NavItem("TV en vivo", Icons.Filled.LiveTv, Route.Live) { it == Route.Live },
     NavItem("Mi lista", Icons.Filled.Bookmarks, Route.MyList) { it == Route.MyList },
+    NavItem("Descargas", Icons.Filled.Download, Route.Downloads) { it == Route.Downloads },
     NavItem("Ajustes", Icons.Filled.Settings, Route.Settings) { it == Route.Settings },
 )
 

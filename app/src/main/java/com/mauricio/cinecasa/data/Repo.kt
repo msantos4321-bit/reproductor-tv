@@ -177,6 +177,7 @@ object Repo {
         Library.init(ctx)
         Cloud.init(ctx)
         Profiles.init(ctx)
+        Downloads.init(ctx)
     }
 
     fun xtream(): Xtream? = Prefs.account.value?.let { Xtream(it) }
@@ -230,6 +231,9 @@ object Repo {
         val c = _catalog.value
         _catalog.value = c.copy()
     }
+
+    /** Sin internet: deja pasar a la app (p. ej. para ver descargas) aunque no haya catálogo. */
+    fun markOffline() { if (_state.value is LoadState.Error) _state.value = LoadState.Ready }
 
     fun logout() {
         clearAll()
