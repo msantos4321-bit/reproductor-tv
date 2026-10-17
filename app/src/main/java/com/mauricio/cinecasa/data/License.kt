@@ -1,5 +1,10 @@
 package com.mauricio.cinecasa.data
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -21,6 +26,20 @@ object License {
 
     private val _owner = MutableStateFlow(false)
     val owner: StateFlow<Boolean> get() = _owner
+
+    /** Trabajo que no debe cancelarse si la pantalla cambia (p. ej. al pasar a "Revisando…"). */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Revisa la licencia fuera de cualquier pantalla, con límite de tiempo. */
+    fun refresh(quiet: Boolean = false) {
+        scope.launch {
+            val done = withTimeoutOrNull(25_000) { verify(quiet); true }
+            if (done == null && _state.value is State.Checking) {
+                _state.value = if (System.currentTimeMillis() - okAt < GRACE) State.Ok
+                else State.Need("La revisión tardó demasiado. Revisa tu internet e inténtalo de nuevo.")
+            }
+        }
+    }
 
     private const val GRACE = 7L * 24 * 3600_000
 

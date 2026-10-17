@@ -109,7 +109,7 @@ fun App() {
     val account by Prefs.account.collectAsState()
     var pairing by remember { mutableStateOf(false) }
     val lic by com.mauricio.cinecasa.data.License.state.collectAsState()
-    LaunchedEffect(Unit) { com.mauricio.cinecasa.data.License.verify() }
+    LaunchedEffect(Unit) { com.mauricio.cinecasa.data.License.refresh() }
     LaunchedEffect(C.dark) { DeviceUi.styleBars(C.dark) }
     Box(Modifier.fillMaxSize().background(C.Bg).then(if (DeviceUi.isTv) Modifier else Modifier.systemBarsPadding())) {
         when (val l = lic) {

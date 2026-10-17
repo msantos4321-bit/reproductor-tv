@@ -384,14 +384,19 @@ fun PairScreen(onCancel: () -> Unit) {
             while (System.currentTimeMillis() < until) {
                 delay(3000)
                 val p = Cloud.pairPoll(o) ?: continue
-                Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
-                // Si el hogar que lo aprobó usa código, este aparato se activa con el mismo
-                p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
-                if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
-                Repo.clearAll()
-                Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
-                License.verify()
-                onCancel()
+                // Se termina fuera de esta pantalla: al cambiar el estado, la pantalla desaparece
+                // y cancelaría el trabajo a medias (eso dejaba la app en "Revisando activación…").
+                status = "¡Aprobado! Entrando…"
+                License.scope.launch {
+                    Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
+                    if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
+                    Repo.clearAll()
+                    Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
+                    // Si el hogar que lo aprobó usa código, este aparato se activa con el mismo
+                    p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
+                    License.refresh()
+                    onCancel()
+                }
                 return@LaunchedEffect
             }
         }
