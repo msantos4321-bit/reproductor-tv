@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
-import androidx.tv.material3.Surface
+
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -274,7 +274,7 @@ fun ActionButton(
                 Icon(icon, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = if (LocalCompact.current) 2 else 1)
         }
     }
 }

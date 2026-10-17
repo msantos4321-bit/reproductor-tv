@@ -56,7 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
-import androidx.tv.material3.Surface
+
 import androidx.tv.material3.Text
 import com.mauricio.cinecasa.data.Account
 import com.mauricio.cinecasa.data.Cloud

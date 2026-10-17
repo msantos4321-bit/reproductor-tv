@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
-import androidx.tv.material3.Surface
+
 import androidx.tv.material3.Text
 import com.mauricio.cinecasa.data.Channel
 import com.mauricio.cinecasa.data.LoadState

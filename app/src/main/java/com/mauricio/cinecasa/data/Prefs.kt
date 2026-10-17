@@ -93,7 +93,7 @@ object Prefs {
 
     /** Tema: "light" | "dark" | "auto" */
     var themeMode: String
-        get() = sp.getString("theme", "light") ?: "light"
+        get() = sp.getString("theme", "dark") ?: "dark"
         set(v) = sp.edit().putString("theme", v).apply()
 
     /** Filtro de idioma: "all" | "es" | "es_sub" | "en" */

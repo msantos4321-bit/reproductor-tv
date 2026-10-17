@@ -38,7 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Surface
+
 import androidx.tv.material3.Text
 import com.mauricio.cinecasa.data.LangFilter
 import com.mauricio.cinecasa.data.Library
