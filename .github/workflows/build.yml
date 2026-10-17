@@ -29,7 +29,14 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Compilar
-        run: gradle :app:assembleRelease --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --no-daemon 2>&1 | tee build.log
+
+      - name: Mostrar errores
+        if: failure()
+        run: |
+          grep -E "^e: |error:|What went wrong" -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
 
       - name: Preparar APK
         run: |
