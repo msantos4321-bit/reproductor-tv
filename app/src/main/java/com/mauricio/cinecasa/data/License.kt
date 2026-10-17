@@ -43,7 +43,7 @@ object License {
         if (Cloud.hasHousehold) {
             when (Cloud.isOwner()) {
                 true -> { ok(true); return }
-                null -> if (ownerCached && recent) { ok(true); return }
+                null -> if (ownerCached && System.currentTimeMillis() - okAt < 30L * 24 * 3600_000) { ok(true); return }
                 false -> { ownerCached = false; _owner.value = false }
             }
         }
