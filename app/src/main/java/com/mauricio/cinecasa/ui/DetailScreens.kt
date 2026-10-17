@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.mauricio.cinecasa.ui
 
 import android.app.SearchManager
@@ -6,6 +8,9 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +28,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
@@ -38,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -86,12 +94,33 @@ fun openTrailer(ctx: Context, youtubeId: String, title: String, year: Int, tmdb:
 
 @Composable
 private fun DetailFrame(backdrop: String?, content: @Composable () -> Unit) {
+    if (LocalCompact.current) {
+        // Celular: la imagen arriba y el texto debajo (como en la app de TV de Apple)
+        Box(Modifier.fillMaxSize().background(C.Bg)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
+                Img(backdrop, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.5f to androidx.compose.ui.graphics.Color.Transparent, 1f to C.Bg)))
+            }
+            content()
+            val nav = LocalNav.current
+            Box(
+                Modifier.padding(12.dp).size(38.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape)
+                    .clickable { nav.back() },
+                contentAlignment = Alignment.Center,
+            ) { androidx.tv.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, "Atrás", Modifier.size(20.dp), tint = androidx.compose.ui.graphics.Color.White) }
+        }
+        return
+    }
     Box(Modifier.fillMaxSize()) {
         Img(backdrop, Modifier.fillMaxSize())
         Scrim()
         content()
     }
 }
+
+@Composable fun sidePad() = if (LocalCompact.current) 16.dp else 48.dp
+@Composable fun wide(f: Float) = if (LocalCompact.current) 1f else f
+@Composable fun detailTop() = if (LocalCompact.current) 190.dp else 44.dp
 
 @Composable
 private fun CastRow(cast: String, director: String) {
@@ -100,8 +129,8 @@ private fun CastRow(cast: String, director: String) {
         .map { it.trim() }.filter { it.length > 2 }.distinct().take(16)
     if (people.isEmpty()) return
     Column {
-        Text("Reparto y dirección · elige a alguien para ver más de su trabajo", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = 48.dp, bottom = 6.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Reparto y dirección · elige a alguien para ver más de su trabajo", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = sidePad(), bottom = 6.dp))
+        LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(people) { p -> Pill(p, false, { nav.go(Route.Search(p)) }) }
         }
     }
@@ -135,8 +164,8 @@ fun MovieDetailScreen(vod0: Vod) {
     }
 
     DetailFrame(i?.backdrop?.ifBlank { null } ?: vod.icon) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 44.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.fillMaxWidth(0.58f).padding(start = 48.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = detailTop(), bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.fillMaxWidth(wide(0.58f)).padding(start = sidePad())) {
                 Text(vod.title, color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 MetaLine(
@@ -161,7 +190,7 @@ fun MovieDetailScreen(vod0: Vod) {
                     }
                 }
             }
-            Row(Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(Modifier.padding(start = sidePad(), end = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionButton(
                     if (p != null) "Continuar" else "Reproducir",
                     { movieItem(vod)?.let { nav.play(listOf(it), 0, p?.pos ?: 0L) } },
@@ -180,8 +209,8 @@ fun MovieDetailScreen(vod0: Vod) {
             if (i != null) CastRow(i.cast, i.director)
             if (related.isNotEmpty()) {
                 Column {
-                    SectionTitle("Más en ${c.vodCatName[vod.cat] ?: "esta categoría"}", Modifier.padding(start = 48.dp))
-                    LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    SectionTitle("Más en ${c.vodCatName[vod.cat] ?: "esta categoría"}", Modifier.padding(start = sidePad()))
+                    LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         items(related, key = { it.id }) { v -> PosterCard(v.title, v.icon, { nav.go(Route.MovieDetail(v)) }) }
                     }
                 }
@@ -230,8 +259,8 @@ fun ShowDetailScreen(show0: Show) {
     val anyWatched = all.any { it.id in watched } || latest != null
 
     DetailFrame((inf?.backdrop?.ifBlank { null }) ?: show.backdrop.ifBlank { show.cover }) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 40.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.fillMaxWidth(0.6f).padding(start = 48.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = detailTop(), bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.fillMaxWidth(wide(0.6f)).padding(start = sidePad())) {
                 Text(show.title, color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 val seasonsTxt = inf?.seasons?.size?.let { if (it == 1) "1 temporada" else "$it temporadas" }.orEmpty()
@@ -243,7 +272,7 @@ fun ShowDetailScreen(show0: Show) {
                     color = C.Mid, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(Modifier.padding(start = sidePad(), end = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val label = when {
                     target == null -> if (failed) "Reintentar" else "Cargando…"
                     latest != null && latest.id == target.id -> "Continuar T${target.season}:E${target.num}"
@@ -270,7 +299,7 @@ fun ShowDetailScreen(show0: Show) {
             }
             if (variants.size > 1) VersionRow(variants.map { versionLabel(it.lang, it.quality) }, variants.indexOf(show)) { show = variants[it] }
             if (inf != null && inf.seasons.isNotEmpty()) {
-                LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(inf.seasons) { s ->
                         val eps = inf.episodes[s].orEmpty()
                         val done = eps.isNotEmpty() && eps.all { it.id in watched }
@@ -283,7 +312,7 @@ fun ShowDetailScreen(show0: Show) {
                     val idx = eps.indexOfFirst { it.id == target?.id }
                     if (idx > 0) rowState.scrollToItem(idx)
                 }
-                LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = sidePad(), vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(eps, key = { _, e -> e.id }) { _, e ->
                         val pe = prog["episode:${e.id}"]
                         WideCard(
@@ -298,7 +327,7 @@ fun ShowDetailScreen(show0: Show) {
                         )
                     }
                 }
-                Column(Modifier.fillMaxWidth(0.7f).heightIn(min = 60.dp).padding(start = 48.dp)) {
+                Column(Modifier.fillMaxWidth(wide(0.7f)).heightIn(min = 60.dp).padding(start = sidePad())) {
                     val fe = focusedEp
                     if (fe != null && fe.season == season) {
                         Text("T${fe.season}:E${fe.num} · ${episodeName(fe, show.title)}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -307,11 +336,11 @@ fun ShowDetailScreen(show0: Show) {
                     Text("Mantén presionado OK sobre un episodio para marcarlo como visto o no visto.", color = C.Low, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
                 }
             } else if (inf == null && !failed) {
-                Row(Modifier.padding(start = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = sidePad()), verticalAlignment = Alignment.CenterVertically) {
                     Spinner(size = 26.dp); Text("  Cargando episodios…", color = C.Mid, fontSize = 14.sp)
                 }
             } else if (failed) {
-                Text("No se pudieron cargar los episodios. Revisa tu conexión y presiona Reintentar.", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 48.dp))
+                Text("No se pudieron cargar los episodios. Revisa tu conexión y presiona Reintentar.", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = sidePad()))
             }
             CastRow(inf?.cast?.ifBlank { null } ?: show.cast, inf?.director?.ifBlank { null } ?: show.director)
         }
@@ -329,8 +358,8 @@ private fun VersionRow(labels: List<String>, selected: Int, onSelect: (Int) -> U
     // Si dos versiones se llaman igual, se numeran
     val shown = labels.mapIndexed { i, l -> if (labels.count { it == l } > 1) "$l (${labels.take(i + 1).count { it == l }})" else l }
     Column {
-        Text("Versiones disponibles · elige idioma o calidad", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = 48.dp, bottom = 6.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Versiones disponibles · elige idioma o calidad", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = sidePad(), bottom = 6.dp))
+        LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(shown) { i, l -> Pill(l, i == selected, { onSelect(i) }, icon = if (i == selected) Icons.Filled.Check else null) }
         }
     }

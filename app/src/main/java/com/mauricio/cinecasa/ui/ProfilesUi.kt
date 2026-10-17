@@ -129,7 +129,7 @@ fun ProfilePicker(onManage: () -> Unit) {
     Box(Modifier.fillMaxSize().background(C.Bg), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(26.dp)) {
             Text("¿Quién está viendo?", color = C.Hi, fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.width(820.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.paneWidth(820.dp).padding(horizontal = 12.dp)) {
                 list.forEachIndexed { i, p ->
                     ProfileTile(p, if (i == 0) Modifier.focusRequester(firstFr) else Modifier) {
                         if (p.hasPin) pinFor = p else enter(p)
@@ -180,7 +180,7 @@ fun PinDialog(title: String, sub: String = "", onCancel: () -> Unit, onDone: (St
     }
     Dialog(onDismissRequest = onCancel) {
         Column(
-            Modifier.width(380.dp).background(C.Panel, RoundedCornerShape(20.dp)).padding(26.dp)
+            Modifier.cardWidth(380.dp).background(C.Panel, RoundedCornerShape(20.dp)).padding(26.dp)
                 .onPreviewKeyEvent { e ->
                     val c = e.key.nativeKeyCode
                     if (e.type == KeyEventType.KeyDown && c in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9) {
@@ -290,7 +290,7 @@ private fun ProfileEditor(p0: Profile, canRemoveAdmin: Boolean, onClose: () -> U
     fun commit() { Profiles.save(p.copy(name = name.trim().ifBlank { p.name })) }
 
     Dialog(onDismissRequest = { commit(); onClose() }) {
-        Column(Modifier.width(560.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.cardWidth(560.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(p.copy(name = name), 56.dp)
                 Spacer(Modifier.width(14.dp))
@@ -346,7 +346,7 @@ private fun PrivateCreator(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onClose) {
-        Column(Modifier.width(520.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.cardWidth(520.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Nuevo perfil privado", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text("Elige un nombre (solo lo verás tú) y un PIN de 4 números que no uses en otro perfil.", color = C.Mid, fontSize = 13.sp)
             TvTextField(name, { name = it }, "Nombre", Modifier.fillMaxWidth(), boxRequester = fr)
@@ -397,10 +397,10 @@ fun PairScreen(onCancel: () -> Unit) {
         }
     }
     Box(Modifier.fillMaxSize().background(C.Bg), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Icon(Icons.Filled.Tv, null, Modifier.size(44.dp), tint = C.Accent)
             Text("Agregar este aparato", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Text("En una tele o celular donde ya uses CineCasa, entra a Ajustes → Agregar aparato y escribe:", color = C.Mid, fontSize = 15.sp)
+            Text("En una tele o celular donde ya uses CineCasa, entra a Ajustes → Agregar aparato y escribe:", color = C.Mid, fontSize = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text(offer?.code?.chunked(3)?.joinToString(" ") ?: "··· ···", color = C.Hi, fontSize = 64.sp, fontWeight = FontWeight.Light, letterSpacing = 6.sp)
             Text(status, color = C.Low, fontSize = 13.sp)
             ActionButton("Volver", onCancel, Modifier.focusRequester(fr))
@@ -418,7 +418,7 @@ fun AddDeviceDialog(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onClose) {
-        Column(Modifier.width(500.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.cardWidth(500.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Agregar aparato", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text("En el aparato nuevo abre CineCasa y elige «Tengo CineCasa en otro aparato». Escribe aquí el código que muestra.", color = C.Mid, fontSize = 13.sp)
             TvTextField(code, { code = it.filter { c -> c.isDigit() }.take(6) }, "Código de 6 números", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Number, boxRequester = fr)
@@ -472,7 +472,7 @@ fun DevicesSection() {
     if (rename) {
         val fr = remember { FocusRequester() }
         Dialog(onDismissRequest = { rename = false }) {
-            Column(Modifier.width(460.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.cardWidth(460.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Nombre de este aparato", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 TvTextField(name, { name = it }, "Sala, Recámara, Celular…", Modifier.fillMaxWidth(), boxRequester = fr)
                 ActionButton("Guardar", { Cloud.deviceName = name; rename = false }, primary = true)

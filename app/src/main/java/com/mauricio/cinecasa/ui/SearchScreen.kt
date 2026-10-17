@@ -112,10 +112,10 @@ fun SearchScreen(initial: String) {
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item {
-            Row(Modifier.padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Wrap(Modifier.padding(horizontal = if (LocalCompact.current) 16.dp else 28.dp), 12.dp) {
                 TvTextField(
                     query, { query = it }, "Título, actor, director, canal o año…",
-                    Modifier.width(520.dp), imeAction = ImeAction.Search, leading = Icons.Filled.Search, boxRequester = fieldFr,
+                    Modifier.paneWidth(520.dp), imeAction = ImeAction.Search, leading = Icons.Filled.Search, boxRequester = fieldFr,
                     onImeAction = { Prefs.addRecentSearch(query); recents = Prefs.recentSearches },
                 )
                 if (canVoice) RoundIcon(Icons.Filled.Mic, "Buscar por voz", primary = true) { listen() }

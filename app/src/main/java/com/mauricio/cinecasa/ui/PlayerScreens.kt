@@ -140,6 +140,7 @@ private val PLow = Color(0xFFA1A1A6)
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
+    LandscapeWhilePlaying()
     val nav = LocalNav.current
     val ctx = LocalContext.current
     val player = remember { buildPlayer(ctx, live = false) }
@@ -292,6 +293,7 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
+    LandscapeWhilePlaying()
     val nav = LocalNav.current
     val ctx = LocalContext.current
     val c by Repo.catalog.collectAsState()

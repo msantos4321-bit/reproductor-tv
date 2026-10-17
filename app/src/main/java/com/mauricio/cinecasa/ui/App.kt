@@ -2,6 +2,15 @@ package com.mauricio.cinecasa.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.ScreenLockRotation
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,6 +83,7 @@ sealed interface Route {
     data object Live : Route
     data object MyList : Route
     data object Downloads : Route
+    data object More : Route
     data object Settings : Route
     data class MovieDetail(val vod: Vod) : Route
     data class ShowDetail(val show: Show) : Route
@@ -100,7 +110,8 @@ fun App() {
     var pairing by remember { mutableStateOf(false) }
     val lic by com.mauricio.cinecasa.data.License.state.collectAsState()
     LaunchedEffect(Unit) { com.mauricio.cinecasa.data.License.verify() }
-    Box(Modifier.fillMaxSize().background(C.Bg)) {
+    LaunchedEffect(C.dark) { DeviceUi.styleBars(C.dark) }
+    Box(Modifier.fillMaxSize().background(C.Bg).then(if (DeviceUi.isTv) Modifier else Modifier.systemBarsPadding())) {
         when (val l = lic) {
             com.mauricio.cinecasa.data.License.State.Checking -> CenterMessage("CineCasa", "Revisando activación…", loading = true)
             is com.mauricio.cinecasa.data.License.State.Need ->
@@ -223,6 +234,7 @@ private fun Shell() {
             top is Route.MultiView -> MultiViewScreen(top.pool, top.first)
             top is Route.MovieDetail -> key(top) { MovieDetailScreen(top.vod) }
             top is Route.ShowDetail -> key(top) { ShowDetailScreen(top.show) }
+            LocalCompact.current -> PhoneShell(top)
             else -> Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(start = 72.dp)) {
                     when (top) {
@@ -256,7 +268,7 @@ private fun Shell() {
 }
 
 private fun isTopLevel(r: Route) = r == Route.Home || r is Route.Search || r is Route.Movies || r is Route.Series ||
-    r == Route.Live || r == Route.MyList || r == Route.Settings || r == Route.Downloads
+    r == Route.Live || r == Route.MyList || r == Route.Settings || r == Route.Downloads || r == Route.More
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: Route, val match: (Route) -> Boolean)
 
@@ -340,7 +352,7 @@ fun ConfirmDialog(title: String, message: String, confirm: String, onConfirm: ()
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier.width(460.dp).background(C.Panel, RoundedCornerShape(16.dp)).padding(28.dp),
+            Modifier.cardWidth(460.dp).background(C.Panel, RoundedCornerShape(16.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(title, color = C.Hi, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -353,4 +365,117 @@ fun ConfirmDialog(title: String, message: String, confirm: String, onConfirm: ()
         }
     }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+}
+
+
+// ======================================================================
+// Celular: pestañas abajo como en iPhone
+// ======================================================================
+private data class Tab(val label: String, val icon: ImageVector, val route: Route, val match: (Route) -> Boolean)
+
+private val phoneTabs = listOf(
+    Tab("Inicio", Icons.Filled.Home, Route.Home) { it == Route.Home || it is Route.Movies || it is Route.Series },
+    Tab("Buscar", Icons.Filled.Search, Route.Search()) { it is Route.Search },
+    Tab("En vivo", Icons.Filled.LiveTv, Route.Live) { it == Route.Live },
+    Tab("Descargas", Icons.Filled.Download, Route.Downloads) { it == Route.Downloads },
+    Tab("Más", Icons.Filled.Menu, Route.More) { it == Route.More || it == Route.MyList || it == Route.Settings },
+)
+
+@Composable
+private fun PhoneShell(top: Route) {
+    val nav = LocalNav.current
+    Column(Modifier.fillMaxSize().background(C.Bg)) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (top) {
+                Route.Home -> HomeScreen()
+                is Route.Search -> key(top) { SearchScreen(top.q) }
+                is Route.Movies -> key(top) { BrowseScreen(isSeries = false, initialCat = top.cat) }
+                is Route.Series -> key(top) { BrowseScreen(isSeries = true, initialCat = top.cat) }
+                Route.Live -> LiveScreen()
+                Route.MyList -> MyListScreen()
+                Route.Downloads -> DownloadsScreen()
+                Route.Settings -> SettingsScreen()
+                Route.More -> MoreScreen()
+                else -> {}
+            }
+        }
+        // Barra de pestañas
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(C.Line))
+        Row(Modifier.fillMaxWidth().background(C.Glass).padding(top = 6.dp, bottom = 6.dp)) {
+            phoneTabs.forEach { t ->
+                val sel = t.match(top)
+                Column(
+                    Modifier.weight(1f).clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
+                    ) { nav.go(t.route) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(t.icon, t.label, Modifier.size(24.dp), tint = if (sel) C.Accent else C.Low)
+                    Text(t.label, fontSize = 10.sp, color = if (sel) C.Accent else C.Low, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+/** "Más": como la pestaña de Ajustes de iPhone, en grupos. */
+@Composable
+private fun MoreScreen() {
+    val nav = LocalNav.current
+    val me by Profiles.current.collectAsState()
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        PhoneTopBar("Más")
+        me?.let { p ->
+            Group {
+                Row(Modifier.fillMaxWidth().clickable { Profiles.signOut() }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(p, 52.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name, color = C.Hi, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Cambiar de perfil", color = C.Low, fontSize = 13.sp)
+                    }
+                    Icon(Icons.Filled.ChevronRight, null, tint = C.Low)
+                }
+            }
+        }
+        Group {
+            MoreRow(Icons.Filled.Bookmarks, "Mi lista") { nav.go(Route.MyList) }
+            MoreRow(Icons.Filled.Movie, "Películas") { nav.go(Route.Movies()) }
+            MoreRow(Icons.Filled.Tv, "Series") { nav.go(Route.Series()) }
+            MoreRow(Icons.Filled.Download, "Descargas", last = true) { nav.go(Route.Downloads) }
+        }
+        Group {
+            MoreRow(
+                if (DeviceUi.rotationLocked) Icons.Filled.ScreenLockRotation else Icons.Filled.ScreenRotation,
+                if (DeviceUi.rotationLocked) "Rotación bloqueada" else "Rotación automática",
+                value = if (DeviceUi.rotationLocked) "Toca para desbloquear" else "Toca para bloquear",
+            ) { DeviceUi.toggleRotationLock() }
+            MoreRow(Icons.Filled.Settings, "Ajustes", last = true) { nav.go(Route.Settings) }
+        }
+        Text("Los videos siempre se ven a lo ancho. El candado deja fija la orientación del resto de la app.", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))
+    }
+}
+
+@Composable
+private fun Group(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.Panel)) { content() }
+}
+
+@Composable
+private fun MoreRow(icon: ImageVector, title: String, value: String = "", last: Boolean = false, onClick: () -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(C.Accent), contentAlignment = Alignment.Center) {
+                Icon(icon, null, Modifier.size(18.dp), tint = Color.White)
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(title, color = C.Hi, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            if (value.isNotBlank()) Text(value, color = C.Low, fontSize = 13.sp)
+            Icon(Icons.Filled.ChevronRight, null, tint = C.Low)
+        }
+        if (!last) Box(Modifier.fillMaxWidth().padding(start = 56.dp).height(0.5.dp).background(C.Line))
+    }
 }

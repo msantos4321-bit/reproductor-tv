@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.DisposableEffect
@@ -140,6 +142,60 @@ fun LiveScreen() {
 
     if (c.channels.isEmpty()) {
         CenterMessage("Tu cuenta no tiene canales en vivo")
+        return
+    }
+
+    if (LocalCompact.current) {
+        // Celular: el canal que tocas se ve arriba (como YouTube/Apple TV); toca el video para verlo en grande
+        val pc = previewCh
+        fun full() { val i = list.indexOfFirst { it.id == pc?.id }; if (pc != null) { preview.stop(); nav.playLive(if (i >= 0) list else listOf(pc), i.coerceAtLeast(0)) } }
+        val video: @Composable (Modifier) -> Unit = { m ->
+            Box(m.clip(RoundedCornerShape(14.dp)).background(Color.Black).clickable { full() }, contentAlignment = Alignment.Center) {
+                if (pc != null && !previewFail) MiniVideo(preview, Modifier.fillMaxSize())
+                if (pc == null) Text("Toca un canal para verlo aquí", color = Color(0xFFA1A1A6), fontSize = 14.sp)
+                else if (!previewReady || previewFail) {
+                    Img(pc.icon, Modifier.fillMaxSize(0.4f), ContentScale.Fit)
+                    if (previewFail) Text("No se pudo abrir el canal", color = Color(0xFFFFD60A), fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp))
+                    else Spinner(Modifier.align(Alignment.BottomEnd).padding(8.dp), 22.dp)
+                }
+                if (pc != null) Icon(Icons.Filled.Fullscreen, "Pantalla completa", Modifier.align(Alignment.TopEnd).padding(8.dp).size(26.dp), tint = Color.White)
+            }
+        }
+        val listUi: @Composable (Modifier) -> Unit = { m ->
+            Column(m) {
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                    items(cats.filter { (id, _) -> when (id) { FAVS -> favs.isNotEmpty(); RECENT -> recent.isNotEmpty(); ALLCH -> true; else -> (counts[id] ?: 0) > 0 } }, key = { it.first }) { (id, name) ->
+                        Pill(name, cat == id, { cat = id; nav.state["live_cat"] = id })
+                    }
+                }
+                LazyColumn(state = chState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+                    itemsIndexed(list, key = { _, ch -> ch.id }) { _, ch ->
+                        ChannelRow(ch, ch.id in favs, Modifier, selected = ch.id == pc?.id, onLongClick = { Library.toggleFavChannel(ch.id) }) {
+                            if (pc?.id == ch.id) full() else focusedCh = ch
+                        }
+                    }
+                }
+            }
+        }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            if (maxWidth > maxHeight) {
+                Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                        if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty()) { full() }
+                    }
+                    listUi(Modifier.width(320.dp).fillMaxHeight())
+                }
+            } else {
+                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    PhoneTopBar("En vivo")
+                    Spacer(Modifier.height(8.dp))
+                    video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                    if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty()) { full() }
+                    listUi(Modifier.fillMaxWidth().weight(1f))
+                }
+            }
+        }
         return
     }
 
@@ -281,5 +337,21 @@ private fun LiveCatItem(name: String, count: Int, selected: Boolean, modifier: M
             Text(name, Modifier.weight(1f), fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(count.toString(), fontSize = 11.sp, color = C.Low)
         }
+    }
+}
+
+
+@Composable
+private fun PhoneNowPlaying(ch: Channel, catName: String, onFull: () -> Unit) {
+    val nav = LocalNav.current
+    val epg = rememberEpg(ch, 0)
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(ch.name, color = C.Hi, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(epg.firstOrNull()?.let { "Ahora: " + it.title } ?: catName, color = C.Mid, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            epg.firstOrNull()?.let { ProgressBar(it.progress(), Modifier.fillMaxWidth(0.7f).padding(top = 4.dp)) }
+        }
+        Icon(Icons.Filled.GridView, "Pantalla múltiple", Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { nav.state.remove("mv_slots"); nav.go(Route.MultiView(listOf(ch), ch)) }.padding(8.dp), tint = C.Mid)
+        Icon(Icons.Filled.Fullscreen, "Pantalla completa", Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { onFull() }.padding(8.dp), tint = C.Accent)
     }
 }

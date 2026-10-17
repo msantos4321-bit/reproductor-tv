@@ -100,6 +100,47 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
     val catName = if (cat == ALL) (if (isSeries) "Todas las series" else "Todas las películas")
     else (if (isSeries) c.seriesCatName[cat] else c.vodCatName[cat]).orEmpty()
 
+    if (LocalCompact.current) {
+        // Celular: título grande, categorías y orden en carriles que se deslizan, rejilla de 3 columnas
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(104.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PhoneTopBar(if (isSeries) "Series" else "Películas")
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { Pill("Todas", cat == ALL, { cat = ALL; pendingCat = ALL; nav.state["cat_$kind"] = ALL }) }
+                        items(cats.filter { (counts[it.id] ?: 0) > 0 }, key = { it.id }) { k ->
+                            Pill(k.name, cat == k.id, { cat = k.id; pendingCat = k.id; nav.state["cat_$kind"] = k.id })
+                        }
+                    }
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { Pill(lf.label, lf.id != "all", { LangFilter.next() }, icon = Icons.Filled.Translate) }
+                        for ((k, label) in listOf("new" to "Recientes", "year" to "Año", "rating" to "Calificación", "az" to "A–Z")) {
+                            item { Pill(label, sort == k, { sort = k; nav.state["sort_$kind"] = k }) }
+                        }
+                    }
+                    Text("$catName · ${"%,d".format(tiles.size)} títulos", color = C.Low, fontSize = 12.sp)
+                }
+            }
+            items(tiles, key = { it.key }) { t ->
+                when (t) {
+                    is Tile.M -> PosterCard(t.v.title, t.v.icon, { nav.go(Route.MovieDetail(t.v)) }, Modifier, width = 110.dp,
+                        progress = prog["movie:${t.v.id}"]?.fraction, badge = c.movieLangs(t.v).ifBlank { null })
+                    is Tile.S -> PosterCard(t.s.title, t.s.cover, { nav.go(Route.ShowDetail(t.s)) }, Modifier, width = 110.dp,
+                        badge = c.showLangs(t.s).ifBlank { null })
+                    else -> {}
+                }
+            }
+        }
+        return
+    }
+
     Row(Modifier.fillMaxSize()) {
         // Categorías
         LazyColumn(

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -414,3 +415,32 @@ fun Scrim(modifier: Modifier = Modifier) {
 }
 
 fun Modifier.roundedClip(r: Dp = 8.dp) = this.clip(RoundedCornerShape(r))
+
+/** Fila que se acomoda en varias líneas si no cabe (celular), igual que una fila normal en la tele. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun Wrap(modifier: Modifier = Modifier, gap: Dp = 10.dp, content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier, horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) { content() }
+}
+
+/** Dos columnas en la tele; una sola columna con scroll en el celular. */
+@Composable
+fun AdaptivePane(gap: Dp, content: @Composable () -> Unit) {
+    if (LocalCompact.current) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) { content() }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) { content() }
+    }
+}
+
+@Composable
+fun Modifier.paneWidth(w: Dp): Modifier = if (LocalCompact.current) this.fillMaxWidth() else this.width(w)
+
+/** Ancho de tarjetas/diálogos: fijo en la tele, casi a todo lo ancho en el celular. */
+@Composable
+fun Modifier.cardWidth(w: Dp): Modifier = if (LocalCompact.current) this.fillMaxWidth().padding(horizontal = 16.dp) else this.width(w)

@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MultiViewScreen(pool: List<Channel>, first: Channel?) {
+    LandscapeWhilePlaying()
     val nav = LocalNav.current
     val ctx = LocalContext.current
     val c by Repo.catalog.collectAsState()

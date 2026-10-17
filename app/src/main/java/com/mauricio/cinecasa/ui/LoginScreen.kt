@@ -76,8 +76,8 @@ fun LoginScreen(onPair: () -> Unit = {}) {
         Modifier.fillMaxSize().background(Brush.radialGradient(listOf(C.Panel2, C.Bg), radius = 1400f)),
         contentAlignment = Alignment.Center,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(300.dp)) {
+        AdaptivePane(56.dp) {
+            Column(Modifier.paneWidth(300.dp)) {
                 Text("CineCasa", color = C.Hi, fontSize = 40.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -88,7 +88,7 @@ fun LoginScreen(onPair: () -> Unit = {}) {
                 Text("Presiona OK sobre cada campo para escribir. También puedes dictar con el micrófono del teclado.", color = C.Low, fontSize = 13.sp)
             }
             Column(
-                Modifier.width(420.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
+                Modifier.paneWidth(420.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 TvTextField(server, { server = it }, "Servidor (ej. http://servidor.com:8080)", Modifier.fillMaxWidth(),

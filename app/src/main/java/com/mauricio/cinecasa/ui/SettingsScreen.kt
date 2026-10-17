@@ -93,7 +93,7 @@ fun SettingsScreen() {
             }
             Line("Catálogo", "${"%,d".format(c.movies.size)} películas · ${"%,d".format(c.shows.size)} series · ${"%,d".format(c.channels.size)} canales")
             if (Prefs.lastRefresh > 0) Line("Actualizado", SimpleDateFormat("d MMM, HH:mm", Locale("es", "MX")).format(Date(Prefs.lastRefresh)))
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Wrap(Modifier.padding(top = 8.dp), 12.dp) {
                 ActionButton("Actualizar catálogo", { Repo.start(force = true) }, Modifier.focusRequester(firstFr), icon = Icons.Filled.Refresh)
                 ActionButton("Cambiar servidor", { serverDlg = true })
                 ActionButton("Cambiar de cuenta", { confirmLogout = true })
@@ -114,7 +114,7 @@ fun SettingsScreen() {
 
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 for ((k, label) in listOf("light" to "Claro", "dark" to "Grafito", "auto" to "Automático")) {
                     Pill(label, theme == k, { theme = k; Prefs.themeMode = k; C.apply(k) })
                 }
@@ -127,7 +127,7 @@ fun SettingsScreen() {
                     "las versiones se eligen dentro de la ficha. Este filtro decide cuáles se muestran y cuál va primero.",
                 color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(0.85f),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 LangFilter.presets.forEach { p -> Pill(p.label, LangFilter.current.id == p.id, {
                     LangFilter.set(p.id)
                     com.mauricio.cinecasa.data.Profiles.current.value?.let { cur -> if (!cur.guest) com.mauricio.cinecasa.data.Profiles.save(cur.copy(lang = p.id)) }
@@ -141,12 +141,12 @@ fun SettingsScreen() {
 
         Section("Al abrir y al dormir") {
             Text("Qué mostrar al abrir la app:", color = C.Mid, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 Pill("Inicio", !startLive, { startLive = false; Prefs.startOnLive = false })
                 Pill("Último canal en vivo", startLive, { startLive = true; Prefs.startOnLive = true })
             }
             Text("Temporizador para apagar (te pregunta antes de cerrar):", color = C.Mid, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 val left = SleepTimer.minutesLeft()
                 Pill("Apagado", left == 0, { SleepTimer.set(0) })
                 for (m in listOf(30, 60, 90, 120)) Pill("$m min", false, { SleepTimer.set(m) })
@@ -157,7 +157,7 @@ fun SettingsScreen() {
 
         Section("TV en vivo") {
             Text("Formato de los canales. Si un canal no abre o se corta, prueba el otro.", color = C.Mid, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 for ((k, label) in listOf("auto" to "Automático", "ts" to "MPEG-TS", "m3u8" to "HLS")) {
                     Pill(label, liveFmt == k, { liveFmt = k; Prefs.liveFormat = k })
                 }
@@ -166,7 +166,7 @@ fun SettingsScreen() {
 
         if (isAdmin) Section("Contenido para adultos") {
             Text("Las categorías para adultos están ocultas en toda la app, incluida la búsqueda.", color = C.Mid, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wrap {
                 Pill("Ocultar", !adult, { adult = false; Prefs.showAdult = false; Repo.refilter() })
                 Pill("Mostrar", adult, { adult = true; Prefs.showAdult = true; Repo.refilter() })
             }
@@ -180,8 +180,8 @@ fun SettingsScreen() {
                 color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(0.85f),
             )
             Text("Cómo obtenerla: crea una cuenta en themoviedb.org → Ajustes → API → solicita una clave (uso personal). Copia la «API Key».", color = C.Low, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(0.85f))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvTextField(tmdb, { tmdb = it }, "Clave de API de TMDB (v3)", Modifier.width(420.dp), leading = Icons.Filled.Key)
+            Wrap(gap = 12.dp) {
+                TvTextField(tmdb, { tmdb = it }, "Clave de API de TMDB (v3)", Modifier.paneWidth(420.dp), leading = Icons.Filled.Key)
                 ActionButton("Guardar", {
                     scope.launch {
                         if (tmdb.isBlank()) { Prefs.tmdbKey = ""; tmdbMsg = "Clave borrada."; return@launch }
@@ -197,7 +197,7 @@ fun SettingsScreen() {
 
         Section("Actualizaciones") {
             Text("La app revisa sola si hay versión nueva cada vez que la abres. También puedes revisar aquí.", color = C.Mid, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Wrap(gap = 12.dp) {
                 ActionButton("Buscar actualización", {
                     updateDialogOpen.value = true
                     scope.launch { com.mauricio.cinecasa.data.Updater.check() }
@@ -257,7 +257,7 @@ fun ServerDialog(onClose: () -> Unit) {
     val fr = remember { FocusRequester() }
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Column(
-            Modifier.width(520.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
+            Modifier.cardWidth(520.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Cambiar servidor", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -265,7 +265,7 @@ fun ServerDialog(onClose: () -> Unit) {
             TvTextField(server, { server = it }, "http://servidor.com:8080", Modifier.fillMaxWidth(),
                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri, boxRequester = fr)
             if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Wrap(gap = 12.dp) {
                 if (busy) { Spinner(size = 26.dp); Text("Probando…", color = C.Mid, fontSize = 14.sp) }
                 else {
                     ActionButton("Guardar y probar", {

@@ -5,6 +5,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.ScreenLockRotation
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -126,9 +136,11 @@ fun HomeScreen() {
         }
     }
 
+    val compact = LocalCompact.current
+    val side = if (compact) 16.dp else 28.dp
     Box(Modifier.fillMaxSize()) {
         // Fondo del destacado
-        AnimatedContent(hero?.image, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "bg",
+        if (!compact) AnimatedContent(hero?.image, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "bg",
             modifier = Modifier.fillMaxWidth(0.72f).fillMaxHeight(0.62f).align(Alignment.TopEnd)) { img ->
             Box(Modifier.fillMaxSize()) {
                 Img(img, Modifier.fillMaxSize())
@@ -137,7 +149,7 @@ fun HomeScreen() {
         }
         Column(Modifier.fillMaxSize()) {
             // Texto del destacado
-            Column(Modifier.fillMaxWidth(0.55f).height(196.dp).padding(start = 28.dp, top = 30.dp)) {
+            if (!compact) Column(Modifier.fillMaxWidth(0.55f).height(196.dp).padding(start = 28.dp, top = 30.dp)) {
                 val h = hero
                 if (h != null) {
                     Text(h.title, color = C.Hi, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -153,14 +165,15 @@ fun HomeScreen() {
                 contentPadding = PaddingValues(bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
+                if (compact) item(key = "phone_header") { PhoneHomeHeader(rows, c) }
                 rows.forEachIndexed { ri, row ->
                     item(key = row.id) {
                         val rowState = remember { nav.state.getOrPut("home_row_${row.id}") { LazyListState() } as LazyListState }
                         Column {
-                            SectionTitle(row.title, Modifier.padding(start = 28.dp))
+                            SectionTitle(row.title, Modifier.padding(start = side))
                             LazyRow(
                                 state = rowState,
-                                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = side, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 items(row.tiles, key = { it.key }) { t ->
@@ -246,3 +259,55 @@ private fun buildHomeRows(c: Catalog): List<HomeRow> {
     return rows.filter { it.tiles.isNotEmpty() }
 }
 
+
+
+/** Celular: encabezado tipo iPhone (título grande, accesos rápidos y un destacado grande). */
+@Composable
+private fun PhoneHomeHeader(rows: List<HomeRow>, c: Catalog) {
+    val nav = LocalNav.current
+    val featured = remember(rows) { rows.firstOrNull { it.id == "est" || it.id == "newm" }?.tiles?.firstOrNull() ?: rows.firstOrNull { !it.wide }?.tiles?.firstOrNull() }
+    var hero by remember(featured) { mutableStateOf(featured?.let { heroFor(it, c) }) }
+    LaunchedEffect(featured) {
+        val t = featured as? Tile.M ?: return@LaunchedEffect
+        if (Repo.cachedVodInfo(t.v.id) == null) { Repo.vodInfo(t.v.id); hero = heroFor(t, c) }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        PhoneTopBar("CineCasa")
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item { Pill("Películas", false, { nav.go(Route.Movies()) }) }
+            item { Pill("Series", false, { nav.go(Route.Series()) }) }
+            item { Pill("Mi lista", false, { nav.go(Route.MyList) }) }
+            item { Pill("En vivo", false, { nav.go(Route.Live) }) }
+        }
+        val h = hero
+        if (featured != null && h != null) {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp)).background(C.Panel2)
+                    .clickable { openTile(featured, nav, c) },
+            ) {
+                Img(h.image, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.45f to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color(0xE6000000))))
+                Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                    Text(h.title, color = androidx.compose.ui.graphics.Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(h.meta.filter { it.isNotBlank() }.distinct().take(3).joinToString(" · "), color = androidx.compose.ui.graphics.Color(0xFFD1D1D6), fontSize = 13.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** Título grande a la izquierda; perfil y candado de rotación a la derecha (como en iPhone). */
+@Composable
+fun PhoneTopBar(title: String) {
+    val me by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = C.Hi, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        androidx.tv.material3.Icon(
+            if (DeviceUi.rotationLocked) androidx.compose.material.icons.Icons.Filled.ScreenLockRotation else androidx.compose.material.icons.Icons.Filled.ScreenRotation,
+            "Candado de rotación", tint = if (DeviceUi.rotationLocked) C.Accent else C.Low,
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { DeviceUi.toggleRotationLock() }.padding(7.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        me?.let { p -> Box(Modifier.clip(RoundedCornerShape(50)).clickable { com.mauricio.cinecasa.data.Profiles.signOut() }) { Avatar(p, 34.dp) } }
+    }
+}
