@@ -86,6 +86,16 @@ object Prefs {
         get() = sp.getBoolean("adult", false)
         set(v) = sp.edit().putBoolean("adult", v).apply()
 
+    /** Tema: "light" | "dark" | "auto" */
+    var themeMode: String
+        get() = sp.getString("theme", "light") ?: "light"
+        set(v) = sp.edit().putString("theme", v).apply()
+
+    /** Filtro de idioma: "all" | "es" | "es_sub" | "en" */
+    var langPreset: String
+        get() = sp.getString("langPreset", "all") ?: "all"
+        set(v) = sp.edit().putString("langPreset", v).apply()
+
     /** "auto" | "ts" | "m3u8" */
     var liveFormat: String
         get() = sp.getString("liveFormat", "auto") ?: "auto"

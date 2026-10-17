@@ -56,6 +56,85 @@ data class Catalog(
     val showByTmdb: Map<String, List<Show>> by lazy { visShows.filter { it.tmdb.isNotBlank() && it.tmdb != "0" }.groupBy { it.tmdb } }
     val movieByNorm: Map<String, List<Vod>> by lazy { visMovies.groupBy { it.norm } }
     val showByNorm: Map<String, List<Show>> by lazy { visShows.groupBy { it.norm } }
+
+    // ---------- Versiones (mismo título en distintos idiomas o calidades) ----------
+    init {
+        val vm = vodCats.associate { it.id to it.name }
+        val sm = seriesCats.associate { it.id to it.name }
+        for (v in movies) if (v.lang == null) {
+            val cn = vm[v.cat].orEmpty()
+            v.lang = LangDetect.lang(v.name, cn); v.quality = LangDetect.quality(v.name, cn)
+        }
+        for (v in shows) if (v.lang == null) {
+            val cn = sm[v.cat].orEmpty()
+            v.lang = LangDetect.lang(v.name, cn); v.quality = LangDetect.quality(v.name, cn)
+        }
+    }
+
+    /** Clave de grupo: mismo título normalizado; si dos tienen años distintos (remakes), se separan. */
+    private fun <T> groupKeys(items: List<T>, norm: (T) -> String, year: (T) -> Int, id: (T) -> Int): Map<Int, String> {
+        val out = HashMap<Int, String>(items.size * 2)
+        for ((n, list) in items.groupBy(norm)) {
+            val years = list.map(year).filter { it > 0 }.groupingBy { it }.eachCount()
+            if (years.size <= 1) { list.forEach { out[id(it)] = n }; continue }
+            val main = years.maxBy { it.value }.key
+            for (it in list) {
+                val y = year(it)
+                val near = years.keys.firstOrNull { k -> y > 0 && kotlin.math.abs(k - y) <= 1 }
+                out[id(it)] = "$n|${if (y == 0) main else (near ?: y)}"
+            }
+        }
+        return out
+    }
+
+    private val movieKey: Map<Int, String> by lazy { groupKeys(visMovies, { it.norm }, { it.year }, { it.id }) }
+    private val showKey: Map<Int, String> by lazy { groupKeys(visShows, { it.norm }, { it.year }, { it.id }) }
+    private val movieGroups: Map<String, List<Vod>> by lazy { visMovies.groupBy { movieKey[it.id] ?: it.norm } }
+    private val showGroups: Map<String, List<Show>> by lazy { visShows.groupBy { showKey[it.id] ?: it.norm } }
+
+    private fun vodRank(v: Vod) = LangFilter.rank(v.lang ?: Lang.NONE) * 10 + LangFilter.rankQuality(v.quality)
+    private fun showRank(v: Show) = LangFilter.rank(v.lang ?: Lang.NONE) * 10 + LangFilter.rankQuality(v.quality)
+
+    /** Todas las versiones de esta película (idiomas y calidades), la preferida primero. */
+    fun movieVariants(v: Vod): List<Vod> =
+        movieGroups[movieKey[v.id] ?: v.norm].orEmpty().ifEmpty { listOf(v) }.sortedBy { vodRank(it) }
+
+    fun showVariants(s: Show): List<Show> =
+        showGroups[showKey[s.id] ?: s.norm].orEmpty().ifEmpty { listOf(s) }.sortedBy { showRank(it) }
+
+    /** Idiomas disponibles de una película, para la etiqueta de la tarjeta ("LAT · SUB"). */
+    fun movieLangs(v: Vod): String = movieVariants(v).mapNotNull { it.lang?.short?.ifBlank { null } }.distinct().joinToString(" · ")
+    fun showLangs(s: Show): String = showVariants(s).mapNotNull { it.lang?.short?.ifBlank { null } }.distinct().joinToString(" · ")
+
+    /** Una sola tarjeta por título, respetando el filtro de idioma y escogiendo la mejor versión. */
+    fun dedupeMovies(list: List<Vod>): List<Vod> {
+        val out = ArrayList<Vod>(list.size)
+        val pos = HashMap<String, Int>()
+        for (v in list) {
+            if (!LangFilter.allows(v.lang ?: Lang.NONE)) continue
+            val k = movieKey[v.id] ?: v.norm
+            val i = pos[k]
+            if (i == null) { pos[k] = out.size; out.add(v) }
+            else if (vodRank(v) < vodRank(out[i])) out[i] = v
+        }
+        return out
+    }
+
+    fun dedupeShows(list: List<Show>): List<Show> {
+        val out = ArrayList<Show>(list.size)
+        val pos = HashMap<String, Int>()
+        for (v in list) {
+            if (!LangFilter.allows(v.lang ?: Lang.NONE)) continue
+            val k = showKey[v.id] ?: v.norm
+            val i = pos[k]
+            if (i == null) { pos[k] = out.size; out.add(v) }
+            else if (showRank(v) < showRank(out[i])) out[i] = v
+        }
+        return out
+    }
+
+    /** Cuántas películas trae cada idioma (para revisar en Ajustes que la detección funcione). */
+    val langStats: Map<Lang, Int> by lazy { visMovies.groupingBy { it.lang ?: Lang.NONE }.eachCount() }
 }
 
 object Repo {
@@ -293,21 +372,21 @@ object Repo {
             .map { it to SearchEngine.scoreTitle(q, it.norm, it.year) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Vod, Int>> { it.second }.thenByDescending { it.first.added })
-            .map { it.first }.distinctBy { it.norm + it.year }.take(60).toList()
+            .map { it.first }.toList().let { c.dedupeMovies(it) }.take(60)
         val shows = c.visShows.asSequence()
             .map { it to SearchEngine.scoreTitle(q, it.norm, it.year) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Show, Int>> { it.second }.thenByDescending { it.first.lastMod })
-            .map { it.first }.distinctBy { it.norm }.take(60).toList()
+            .map { it.first }.toList().let { c.dedupeShows(it) }.take(60)
         val channels = if (q.year > 0) emptyList() else c.visChannels.asSequence()
             .map { it to SearchEngine.scoreTitle(q, it.norm, 0) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
             .map { it.first }.take(40).toList()
-        val peopleShows = c.visShows.filter { SearchEngine.matchPeople(q, it.normPeople) }.take(40)
+        val peopleShows = c.dedupeShows(c.visShows.filter { SearchEngine.matchPeople(q, it.normPeople) }).take(40)
         val peopleMovies = vodInfos.entries.asSequence()
             .filter { SearchEngine.matchPeople(q, it.value.normPeople) }
-            .mapNotNull { c.movieById[it.key] }.filter { c.visibleCat(it.cat) }.take(40).toList()
+            .mapNotNull { c.movieById[it.key] }.filter { c.visibleCat(it.cat) }.toList().let { c.dedupeMovies(it) }.take(40)
         return SearchResults(raw, movies, shows, channels, peopleMovies, peopleShows)
     }
 
@@ -334,7 +413,7 @@ object Repo {
                     hit.firstOrNull()?.let(movies::add)
                 }
             }
-            Triple(person, movies.toList(), shows.toList())
+            Triple(person, c.dedupeMovies(movies.toList()), c.dedupeShows(shows.toList()))
         } catch (e: Exception) { null }
     }
 }

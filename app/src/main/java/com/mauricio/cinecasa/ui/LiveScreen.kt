@@ -108,7 +108,7 @@ fun LiveScreen() {
 
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.width(220.dp).fillMaxHeight().background(Color(0x66000000)),
+            Modifier.width(220.dp).fillMaxHeight().background(C.Panel.copy(alpha = 0.75f)),
             contentPadding = PaddingValues(start = 14.dp, end = 10.dp, top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -188,13 +188,13 @@ fun ChannelRow(ch: Channel, fav: Boolean, modifier: Modifier, selected: Boolean 
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) C.AccentSoft else C.Panel.copy(alpha = 0.7f),
             contentColor = C.Hi,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
         ),
     ) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (ch.num > 0) ch.num.toString() else "", Modifier.width(34.dp), fontSize = 12.sp, color = if (focused) Color.DarkGray else C.Low)
-            Box(Modifier.size(width = 52.dp, height = 32.dp).background(Color(0x22FFFFFF), RoundedCornerShape(5.dp)).padding(3.dp), contentAlignment = Alignment.Center) {
+            Text(if (ch.num > 0) ch.num.toString() else "", Modifier.width(34.dp), fontSize = 12.sp, color = if (focused) Color(0xDDFFFFFF) else C.Low)
+            Box(Modifier.size(width = 52.dp, height = 32.dp).background(C.Panel2, RoundedCornerShape(5.dp)).padding(3.dp), contentAlignment = Alignment.Center) {
                 Img(ch.icon, Modifier.fillMaxSize(), ContentScale.Fit)
             }
             Spacer(Modifier.width(10.dp))
@@ -202,7 +202,7 @@ fun ChannelRow(ch: Channel, fav: Boolean, modifier: Modifier, selected: Boolean 
                 Text(ch.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val epg = rememberEpg(ch, 600)
                 epg.firstOrNull()?.let { e ->
-                    Text(e.title, fontSize = 11.sp, color = if (focused) Color.DarkGray else C.Low, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.title, fontSize = 11.sp, color = if (focused) Color(0xDDFFFFFF) else C.Low, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ProgressBar(e.progress(), Modifier.fillMaxWidth().padding(top = 3.dp), 2.dp)
                 }
             }
@@ -222,8 +222,8 @@ private fun LiveCatItem(name: String, count: Int, selected: Boolean, modifier: M
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) C.AccentSoft else Color.Transparent,
             contentColor = if (selected) C.Accent else C.Mid,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
         ),
     ) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

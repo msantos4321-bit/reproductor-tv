@@ -128,6 +128,9 @@ private fun errorText(e: PlaybackException): String = when (e.errorCode) {
     else -> "No se pudo reproducir (${e.errorCodeName})."
 }
 
+private val PMid = Color(0xFFD1D1D6)
+private val PLow = Color(0xFFA1A1A6)
+
 // ======================================================================
 // Películas y series
 // ======================================================================
@@ -242,7 +245,7 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))).padding(start = 40.dp, end = 40.dp, top = 26.dp, bottom = 40.dp)) {
                 Column {
                     Text(item?.title.orEmpty(), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    if (!item?.subtitle.isNullOrBlank()) Text(item?.subtitle.orEmpty(), color = C.Mid, fontSize = 15.sp, maxLines = 1)
+                    if (!item?.subtitle.isNullOrBlank()) Text(item?.subtitle.orEmpty(), color = PMid, fontSize = 15.sp, maxLines = 1)
                 }
             }
         }
@@ -257,7 +260,7 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
                 Column {
                     Text("Siguiente en ${remaining / 1000} s", color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Text(next.subtitle, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(300.dp))
-                    Text("Usa ⏭ para pasar ya", color = C.Low, fontSize = 11.sp)
+                    Text("Usa ⏭ para pasar ya", color = PLow, fontSize = 11.sp)
                 }
             }
         }
@@ -265,7 +268,7 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
             Box(Modifier.align(Alignment.Center).background(Color(0xE6101010), RoundedCornerShape(12.dp)).padding(24.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(msg, color = Color.White, fontSize = 16.sp)
-                    Text("Presiona OK para reintentar o Atrás para salir.", color = C.Mid, fontSize = 13.sp)
+                    Text("Presiona OK para reintentar o Atrás para salir.", color = PMid, fontSize = 13.sp)
                 }
             }
             LaunchedEffect(msg) {
@@ -434,7 +437,7 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
         AnimatedVisibility(showList, Modifier.align(Alignment.CenterStart), enter = slideInHorizontally { -it } + fadeIn(), exit = slideOutHorizontally { -it } + fadeOut()) {
             val listState = rememberLazyListState(initialFirstVisibleItemIndex = (index - 3).coerceAtLeast(0))
             Column(Modifier.width(430.dp).fillMaxHeight().background(Brush.horizontalGradient(listOf(Color(0xF2050608), Color(0xCC050608))))) {
-                Text("Canales · Mantén OK para favorito", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp))
+                Text("Canales · Mantén OK para favorito", color = PLow, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp))
                 LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     itemsIndexed(channels, key = { _, k -> k.id }) { i, k ->
                         ChannelRow(
@@ -452,8 +455,8 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
             Column(Modifier.align(Alignment.Center).background(Color(0xE6101010), RoundedCornerShape(12.dp)).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(ch?.name.orEmpty(), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
-                Text(msg, color = C.Mid, fontSize = 14.sp)
-                Text("Cambia de canal con ▲ ▼ o abre la lista con OK.", color = C.Low, fontSize = 12.sp)
+                Text(msg, color = PMid, fontSize = 14.sp)
+                Text("Cambia de canal con ▲ ▼ o abre la lista con OK.", color = PLow, fontSize = 12.sp)
             }
         }
     }
@@ -475,25 +478,25 @@ private fun LiveBanner(ch: Channel, catName: String, fav: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (ch.num > 0) Text("${ch.num}  ", color = C.Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(ch.name + if (fav) "  ★" else "", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (catName.isNotBlank()) Text("   $catName", color = C.Low, fontSize = 13.sp, maxLines = 1)
+                    if (catName.isNotBlank()) Text("   $catName", color = PLow, fontSize = 13.sp, maxLines = 1)
                 }
                 val now = epg.firstOrNull()
                 val nxt = epg.getOrNull(1)
                 if (now != null) {
                     Spacer(Modifier.height(6.dp))
-                    Text("Ahora: ${now.title}", color = C.Hi, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Ahora: ${now.title}", color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                         ProgressBar(now.progress(), Modifier.width(260.dp), 3.dp)
-                        Text("  ${TextUtil.hhmm(now.start)}–${TextUtil.hhmm(now.end)}", color = C.Low, fontSize = 12.sp)
+                        Text("  ${TextUtil.hhmm(now.start)}–${TextUtil.hhmm(now.end)}", color = PLow, fontSize = 12.sp)
                     }
-                    if (nxt != null) Text("Después (${TextUtil.hhmm(nxt.start)}): ${nxt.title}", color = C.Mid, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (nxt != null) Text("Después (${TextUtil.hhmm(nxt.start)}): ${nxt.title}", color = PMid, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else {
-                    Text("Sin guía de programación", color = C.Low, fontSize = 13.sp)
+                    Text("Sin guía de programación", color = PLow, fontSize = 13.sp)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("▲▼ cambiar · OK lista · ▶ info", color = C.Low, fontSize = 11.sp)
-                Text("Números: ir a canal", color = C.Low, fontSize = 11.sp)
+                Text("▲▼ cambiar · OK lista · ▶ info", color = PLow, fontSize = 11.sp)
+                Text("Números: ir a canal", color = PLow, fontSize = 11.sp)
             }
         }
     }

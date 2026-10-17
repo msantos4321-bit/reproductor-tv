@@ -40,7 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import com.mauricio.cinecasa.data.LangFilter
 import com.mauricio.cinecasa.data.Library
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Translate
 import com.mauricio.cinecasa.data.Repo
 import kotlinx.coroutines.delay
 
@@ -74,7 +77,8 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
     val counts = remember(c, isSeries) {
         if (isSeries) c.visShows.groupingBy { it.cat }.eachCount() else c.visMovies.groupingBy { it.cat }.eachCount()
     }
-    val tiles: List<Tile> = remember(c, cat, sort, isSeries) {
+    val lf = LangFilter.current
+    val tiles: List<Tile> = remember(c, cat, sort, isSeries, lf) {
         if (isSeries) {
             val l = if (cat == ALL) c.visShows else c.visShows.filter { it.cat == cat }
             when (sort) {
@@ -82,7 +86,7 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
                 "rating" -> l.sortedByDescending { if (it.rating > 10) it.rating / 10 else it.rating }
                 "year" -> l.sortedWith(compareByDescending<com.mauricio.cinecasa.data.Show> { it.year }.thenByDescending { it.lastMod })
                 else -> l.sortedByDescending { it.lastMod }
-            }.map { Tile.S(it) }
+            }.let { c.dedupeShows(it) }.map { Tile.S(it) }
         } else {
             val l = if (cat == ALL) c.visMovies else c.visMovies.filter { it.cat == cat }
             when (sort) {
@@ -90,7 +94,7 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
                 "rating" -> l.sortedByDescending { if (it.rating > 10) it.rating / 10 else it.rating }
                 "year" -> l.sortedWith(compareByDescending<com.mauricio.cinecasa.data.Vod> { it.year }.thenByDescending { it.added })
                 else -> l.sortedByDescending { it.added }
-            }.map { Tile.M(it) }
+            }.let { c.dedupeMovies(it) }.map { Tile.M(it) }
         }
     }
     val catName = if (cat == ALL) (if (isSeries) "Todas las series" else "Todas las películas")
@@ -100,7 +104,7 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
         // Categorías
         LazyColumn(
             state = catState,
-            modifier = Modifier.width(210.dp).fillMaxHeight().background(Color(0x66000000)),
+            modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Panel.copy(alpha = 0.75f)),
             contentPadding = PaddingValues(start = 14.dp, end = 10.dp, top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -123,9 +127,10 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(catName, color = C.Hi, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${"%,d".format(tiles.size)} títulos", color = C.Low, fontSize = 12.sp)
+                    Text("${"%,d".format(tiles.size)} títulos · Idioma: ${lf.label.lowercase()} (cámbialo con el botón de la derecha)", color = C.Low, fontSize = 12.sp)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill(lf.label, lf.id != "all", { LangFilter.next() }, icon = Icons.Filled.Translate)
                     for ((k, label) in listOf("new" to "Recientes", "year" to "Año", "rating" to "Calificación", "az" to "A–Z")) {
                         Pill(label, sort == k, { sort = k; nav.state["sort_$kind"] = k })
                     }
@@ -147,9 +152,9 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
                         val m = Modifier.rememberFocus(mem, "g:${t.key}").then(if (t === tiles.first()) Modifier.focusRequester(firstFr) else Modifier)
                         when (t) {
                             is Tile.M -> PosterCard(t.v.title, t.v.icon, { nav.go(Route.MovieDetail(t.v)) }, m, width = 104.dp,
-                                progress = prog["movie:${t.v.id}"]?.fraction, badge = if (sort == "year" && t.v.year > 0) t.v.year.toString() else null)
+                                progress = prog["movie:${t.v.id}"]?.fraction, badge = if (sort == "year" && t.v.year > 0) t.v.year.toString() else c.movieLangs(t.v).ifBlank { null })
                             is Tile.S -> PosterCard(t.s.title, t.s.cover, { nav.go(Route.ShowDetail(t.s)) }, m, width = 104.dp,
-                                badge = if (sort == "year" && t.s.year > 0) t.s.year.toString() else null)
+                                badge = if (sort == "year" && t.s.year > 0) t.s.year.toString() else c.showLangs(t.s).ifBlank { null })
                             else -> {}
                         }
                     }
@@ -171,8 +176,8 @@ private fun CatItem(name: String, count: Int, selected: Boolean, modifier: Modif
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) C.AccentSoft else Color.Transparent,
             contentColor = if (selected) C.Accent else C.Mid,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
         ),
     ) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -96,6 +96,9 @@ fun App() {
         if (account == null) LoginScreen() else Shell()
         AutoUpdateCheck()
     }
+    LaunchedEffect(Unit) {
+        while (true) { C.apply(Prefs.themeMode); kotlinx.coroutines.delay(60_000) }
+    }
 }
 
 @Composable
@@ -211,10 +214,7 @@ private fun Sidebar(current: Route, onSelect: (Route) -> Unit) {
         Modifier
             .fillMaxHeight()
             .width(if (expanded) 220.dp else 72.dp)
-            .background(
-                if (expanded) Brush.horizontalGradient(listOf(Color(0xFA07080B), Color(0xF207080B)))
-                else Brush.horizontalGradient(listOf(Color(0xCC07080B), Color(0x0007080B))),
-            )
+            .background(if (expanded) C.Glass else C.Panel.copy(alpha = 0.9f))
             .onFocusChanged { expanded = it.hasFocus }
             .focusProperties { enter = { requesters[sel] } }
             .focusGroup()
@@ -231,8 +231,8 @@ private fun Sidebar(current: Route, onSelect: (Route) -> Unit) {
                 colors = ClickableSurfaceDefaults.colors(
                     containerColor = Color.Transparent,
                     contentColor = if (i == sel) C.Accent else C.Mid,
-                    focusedContainerColor = Color.White,
-                    focusedContentColor = Color.Black,
+                    focusedContainerColor = C.Accent,
+                    focusedContentColor = C.OnAccent,
                 ),
             ) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

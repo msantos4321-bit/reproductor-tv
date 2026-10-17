@@ -100,7 +100,8 @@ fun HomeScreen() {
     val colState = remember { nav.state.getOrPut("home_col") { LazyListState() } as LazyListState }
     val firstFr = remember { FocusRequester() }
 
-    val rows = remember(c, progress, myList) { buildHomeRows(c) }
+    val lf = com.mauricio.cinecasa.data.LangFilter.current
+    val rows = remember(c, progress, myList, lf) { buildHomeRows(c) }
     var hero by remember { mutableStateOf<Hero?>(null) }
     var focusedTile by remember { mutableStateOf<Tile?>(null) }
 
@@ -185,9 +186,10 @@ fun TileCard(t: Tile, wide: Boolean, modifier: Modifier, c: Catalog, onFocused: 
             WideCard(t.p.title, t.p.subtitle, img, onClick, modifier, progress = t.p.fraction, onFocused = onFocused, onLongClick = onLongClick)
         }
         is Tile.M -> PosterCard(t.v.title, t.v.icon, onClick, modifier, onFocused = onFocused,
-            badge = if (t.v.year >= Calendar.getInstance().get(Calendar.YEAR) - 1) t.v.year.toString() else null,
+            badge = c.movieLangs(t.v).ifBlank { null },
             progress = Library.progressOf("movie:${t.v.id}")?.fraction, onLongClick = onLongClick)
-        is Tile.S -> PosterCard(t.s.title, t.s.cover, onClick, modifier, onFocused = onFocused, onLongClick = onLongClick)
+        is Tile.S -> PosterCard(t.s.title, t.s.cover, onClick, modifier, onFocused = onFocused, onLongClick = onLongClick,
+            badge = c.showLangs(t.s).ifBlank { null })
         is Tile.L -> PosterCard(t.s.title, t.s.image, onClick, modifier, onFocused = onFocused)
     }
 }
@@ -202,21 +204,22 @@ private fun buildHomeRows(c: Catalog): List<HomeRow> {
     val movies = c.visMovies
     val shows = c.visShows
     val year = Calendar.getInstance().get(Calendar.YEAR)
-    fun List<Vod>.uniq() = distinctBy { it.norm + it.year }
+    fun List<Vod>.uniq() = c.dedupeMovies(this)
+    fun List<Show>.uniqS() = c.dedupeShows(this)
     if (movies.isNotEmpty()) {
         rows += HomeRow("newm", "Películas agregadas recientemente", movies.sortedByDescending { it.added }.uniq().take(40).map { Tile.M(it) })
         val estrenos = movies.filter { it.year >= year - 1 }.sortedWith(compareByDescending<Vod> { it.year }.thenByDescending { it.added }).uniq().take(40)
         if (estrenos.size >= 6) rows += HomeRow("est", "Estrenos ${year - 1}–$year", estrenos.map { Tile.M(it) })
     }
     if (shows.isNotEmpty()) {
-        rows += HomeRow("news", "Series con episodios nuevos", shows.sortedByDescending { it.lastMod }.distinctBy { it.norm }.take(40).map { Tile.S(it) })
+        rows += HomeRow("news", "Series con episodios nuevos", shows.sortedByDescending { it.lastMod }.uniqS().take(40).map { Tile.S(it) })
     }
     if (movies.isNotEmpty()) {
         val top = movies.filter { r -> val x = if (r.rating > 10) r.rating / 10 else r.rating; x >= 7.5f && x < 9.8f }
             .sortedByDescending { it.added }.uniq().take(40)
         if (top.size >= 6) rows += HomeRow("top", "Muy bien calificadas", top.map { Tile.M(it) })
     }
-    val showsTop = shows.filter { val x = if (it.rating > 10) it.rating / 10 else it.rating; x >= 7.8f && x < 9.8f }.sortedByDescending { it.lastMod }.distinctBy { it.norm }.take(40)
+    val showsTop = shows.filter { val x = if (it.rating > 10) it.rating / 10 else it.rating; x >= 7.8f && x < 9.8f }.sortedByDescending { it.lastMod }.uniqS().take(40)
     if (showsTop.size >= 6) rows += HomeRow("tops", "Series muy bien calificadas", showsTop.map { Tile.S(it) })
 
     // Filas por categoría (las más grandes primero, alternando películas y series)
@@ -230,7 +233,7 @@ private fun buildHomeRows(c: Catalog): List<HomeRow> {
             rows += HomeRow("cm${cat.id}", cat.name, byCatM[cat.id].orEmpty().sortedByDescending { it.added }.uniq().take(30).map { Tile.M(it) })
         }
         sc.getOrNull(i)?.let { cat ->
-            rows += HomeRow("cs${cat.id}", "Series · ${cat.name}", byCatS[cat.id].orEmpty().sortedByDescending { it.lastMod }.take(30).map { Tile.S(it) })
+            rows += HomeRow("cs${cat.id}", "Series · ${cat.name}", byCatS[cat.id].orEmpty().sortedByDescending { it.lastMod }.uniqS().take(30).map { Tile.S(it) })
         }
     }
     return rows.filter { it.tiles.isNotEmpty() }

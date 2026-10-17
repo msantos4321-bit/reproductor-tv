@@ -133,7 +133,7 @@ fun PosterCard(
                 .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() },
             shape = ClickableSurfaceDefaults.shape(cardShape),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
-            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Color.White), shape = cardShape)),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, C.Accent), shape = cardShape)),
             colors = ClickableSurfaceDefaults.colors(containerColor = C.Panel2, focusedContainerColor = C.Panel2),
         ) {
             Box(Modifier.fillMaxSize()) {
@@ -184,7 +184,7 @@ fun WideCard(
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() },
             shape = ClickableSurfaceDefaults.shape(cardShape),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Color.White), shape = cardShape)),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, C.Accent), shape = cardShape)),
             colors = ClickableSurfaceDefaults.colors(containerColor = C.Panel2, focusedContainerColor = C.Panel2),
         ) {
             Box(Modifier.fillMaxSize()) {
@@ -202,7 +202,7 @@ fun WideCard(
 
 @Composable
 fun ProgressBar(p: Float, modifier: Modifier = Modifier, height: Dp = 3.dp) {
-    Box(modifier.height(height).background(Color(0x66FFFFFF))) {
+    Box(modifier.height(height).background(Color(0x55888888))) {
         Box(Modifier.fillMaxWidth(p.coerceIn(0f, 1f)).height(height).background(C.Accent))
     }
 }
@@ -223,10 +223,10 @@ fun Pill(
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) C.AccentSoft else C.Panel2,
+            containerColor = if (selected) C.AccentSoft else C.Panel,
             contentColor = if (selected) C.Accent else C.Mid,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
         ),
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -254,10 +254,14 @@ fun ActionButton(
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) C.Accent else Color(0x33FFFFFF),
-            contentColor = if (primary) Color.Black else C.Hi,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            containerColor = if (primary) C.Strong else C.Panel,
+            contentColor = if (primary) C.OnStrong else C.Hi,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = if (primary) Border.None else Border(BorderStroke(1.dp, C.Line), shape = shape),
+            focusedBorder = Border.None,
         ),
     ) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -389,7 +393,7 @@ fun stars(r: Float): String = if (r > 0f) "★ " + (if (r > 10f) r / 10f else r)
 fun MetaLine(parts: List<String>, modifier: Modifier = Modifier, rating: Float = 0f) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (rating > 0f) Text(stars(rating), color = C.Gold, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        parts.filter { it.isNotBlank() }.forEach { Text(it, color = C.Mid, fontSize = 14.sp, maxLines = 1) }
+        parts.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.forEach { Text(it, color = C.Mid, fontSize = 14.sp, maxLines = 1) }
     }
 }
 

@@ -107,8 +107,11 @@ private fun CastRow(cast: String, director: String) {
 }
 
 @Composable
-fun MovieDetailScreen(vod: Vod) {
+fun MovieDetailScreen(vod0: Vod) {
     val nav = LocalNav.current
+    val c0 by Repo.catalog.collectAsState()
+    val variants = remember(c0, vod0.id) { c0.movieVariants(vod0) }
+    var vod by remember { mutableStateOf(vod0) }
     val ctx = LocalContext.current
     val c by Repo.catalog.collectAsState()
     val prog by Library.progress.collectAsState()
@@ -118,12 +121,16 @@ fun MovieDetailScreen(vod: Vod) {
     val p = prog["movie:${vod.id}"]
     val inList = myList.any { it.kind == "movie" && it.id == vod.id }
 
-    LaunchedEffect(vod.id) { if (info == null) info = Repo.vodInfo(vod.id) }
+    LaunchedEffect(vod.id) {
+        info = Repo.cachedVodInfo(vod.id)
+        if (info == null) info = Repo.vodInfo(vod.id)
+    }
     LaunchedEffect(Unit) { delay(50); runCatching { playFr.requestFocus() } }
 
     val i: VodInfo? = info
     val related = remember(c, vod.id) {
-        c.visMovies.filter { it.cat == vod.cat && it.id != vod.id }.sortedByDescending { it.added }.distinctBy { it.norm }.take(24)
+        val mine = variants.map { it.id }.toSet()
+        c.dedupeMovies(c.visMovies.filter { it.cat == vod.cat && it.id !in mine }.sortedByDescending { it.added }).take(24)
     }
 
     DetailFrame(i?.backdrop?.ifBlank { null } ?: vod.icon) {
@@ -167,6 +174,7 @@ fun MovieDetailScreen(vod: Vod) {
                     icon = if (inList) Icons.Filled.Check else Icons.Filled.Add,
                 )
             }
+            if (variants.size > 1) VersionRow(variants.map { versionLabel(it.lang, it.quality) }, variants.indexOf(vod)) { vod = variants[it] }
             if (i != null) CastRow(i.cast, i.director)
             if (related.isNotEmpty()) {
                 Column {
@@ -181,8 +189,11 @@ fun MovieDetailScreen(vod: Vod) {
 }
 
 @Composable
-fun ShowDetailScreen(show: Show) {
+fun ShowDetailScreen(show0: Show) {
     val nav = LocalNav.current
+    val c0 by Repo.catalog.collectAsState()
+    val variants = remember(c0, show0.id) { c0.showVariants(show0) }
+    var show by remember { mutableStateOf(show0) }
     val ctx = LocalContext.current
     val prog by Library.progress.collectAsState()
     val watched by Library.watched.collectAsState()
@@ -195,6 +206,7 @@ fun ShowDetailScreen(show: Show) {
     val inList = myList.any { it.kind == "series" && it.id == show.id }
 
     LaunchedEffect(show.id) {
+        info = null; failed = false; season = -1
         info = Repo.seriesInfo(show.id)
         failed = info == null
     }
@@ -247,6 +259,7 @@ fun ShowDetailScreen(show: Show) {
                     icon = if (inList) Icons.Filled.Check else Icons.Filled.Add,
                 )
             }
+            if (variants.size > 1) VersionRow(variants.map { versionLabel(it.lang, it.quality) }, variants.indexOf(show)) { show = variants[it] }
             if (inf != null && inf.seasons.isNotEmpty()) {
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(inf.seasons) { s ->
@@ -292,6 +305,24 @@ fun ShowDetailScreen(show: Show) {
                 Text("No se pudieron cargar los episodios. Revisa tu conexión y presiona Reintentar.", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 48.dp))
             }
             CastRow(inf?.cast?.ifBlank { null } ?: show.cast, inf?.director?.ifBlank { null } ?: show.director)
+        }
+    }
+}
+
+fun versionLabel(lang: com.mauricio.cinecasa.data.Lang?, quality: String): String {
+    val l = lang?.label?.ifBlank { null } ?: "Sin etiqueta"
+    return if (quality.isNotBlank()) "$l · $quality" else l
+}
+
+/** Selector de versión: Latino, Subtitulado, Inglés, 4K… del mismo título. */
+@Composable
+private fun VersionRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    // Si dos versiones se llaman igual, se numeran
+    val shown = labels.mapIndexed { i, l -> if (labels.count { it == l } > 1) "$l (${labels.take(i + 1).count { it == l }})" else l }
+    Column {
+        Text("Versiones disponibles · elige idioma o calidad", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(start = 48.dp, bottom = 6.dp))
+        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            itemsIndexed(shown) { i, l -> Pill(l, i == selected, { onSelect(i) }, icon = if (i == selected) Icons.Filled.Check else null) }
         }
     }
 }

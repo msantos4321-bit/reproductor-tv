@@ -12,6 +12,8 @@ import com.mauricio.cinecasa.ui.CineTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.mauricio.cinecasa.ui.C.apply(com.mauricio.cinecasa.data.Prefs.themeMode)
+        com.mauricio.cinecasa.data.LangFilter.load()
         setContent {
             // Todas las teles reportan tamaños distintos; fijamos el lienzo a 960 de ancho
             // para que el diseño se vea igual en cualquier pantalla (720p, 1080p o 4K).

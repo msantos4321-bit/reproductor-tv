@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.mauricio.cinecasa.BuildConfig
 import com.mauricio.cinecasa.data.AccountInfo
+import com.mauricio.cinecasa.data.LangFilter
 import com.mauricio.cinecasa.data.LoadState
 import com.mauricio.cinecasa.data.Prefs
 import com.mauricio.cinecasa.data.Repo
@@ -53,6 +54,7 @@ fun SettingsScreen() {
     var infoFailed by remember { mutableStateOf(false) }
     var liveFmt by remember { mutableStateOf(Prefs.liveFormat) }
     var adult by remember { mutableStateOf(Prefs.showAdult) }
+    var theme by remember { mutableStateOf(Prefs.themeMode) }
     var tmdb by remember { mutableStateOf(Prefs.tmdbKey) }
     var tmdbMsg by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -92,6 +94,30 @@ fun SettingsScreen() {
                 if (st is LoadState.Loading) Text((st as LoadState.Loading).msg, color = C.Mid, fontSize = 13.sp)
             }
             Text("El catálogo se actualiza solo cada 8 horas al abrir la app.", color = C.Low, fontSize = 12.sp)
+        }
+
+        Section("Apariencia") {
+            Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for ((k, label) in listOf("light" to "Claro", "dark" to "Grafito", "auto" to "Automático")) {
+                    Pill(label, theme == k, { theme = k; Prefs.themeMode = k; C.apply(k) })
+                }
+            }
+        }
+
+        Section("Idioma de películas y series") {
+            Text(
+                "Cuando una película está varias veces (latino, subtitulada, inglés, 4K…), solo verás una tarjeta; " +
+                    "las versiones se eligen dentro de la ficha. Este filtro decide cuáles se muestran y cuál va primero.",
+                color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(0.85f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LangFilter.presets.forEach { p -> Pill(p.label, LangFilter.current.id == p.id, { LangFilter.set(p.id) }) }
+            }
+            val stats = c.langStats.entries.sortedByDescending { it.value }
+                .joinToString("  ·  ") { "${it.key.label.ifBlank { "Sin etiqueta" }}: ${"%,d".format(it.value)}" }
+            if (stats.isNotBlank()) Text("Detectado en tu catálogo: $stats", color = C.Low, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(0.9f))
+            Text("Las que no traen etiqueta de idioma se muestran siempre.", color = C.Low, fontSize = 12.sp)
         }
 
         Section("TV en vivo") {

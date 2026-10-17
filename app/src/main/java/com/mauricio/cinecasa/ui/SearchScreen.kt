@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -87,7 +88,8 @@ fun SearchScreen(initial: String) {
     }
 
     // Resultados mientras se escribe
-    LaunchedEffect(query, c) {
+    val lf = com.mauricio.cinecasa.data.LangFilter.current
+    LaunchedEffect(query, c, lf) {
         nav.state["search_q"] = query
         if (query.trim().length < 2) { results = SearchResults(); return@LaunchedEffect }
         delay(220)
@@ -118,6 +120,7 @@ fun SearchScreen(initial: String) {
                 )
                 if (canVoice) RoundIcon(Icons.Filled.Mic, "Buscar por voz", primary = true) { listen() }
                 if (query.isNotEmpty()) RoundIcon(Icons.Filled.Clear, "Borrar") { query = "" }
+                Pill(lf.label, lf.id != "all", { com.mauricio.cinecasa.data.LangFilter.next() }, icon = Icons.Filled.Translate)
             }
         }
         val q = query.trim()
@@ -223,10 +226,10 @@ fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: Strin
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) C.Accent else C.Panel2,
-            contentColor = if (primary) Color.Black else C.Hi,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            containerColor = if (primary) C.Strong else C.Panel,
+            contentColor = if (primary) C.OnStrong else C.Hi,
+            focusedContainerColor = C.Accent,
+            focusedContentColor = C.OnAccent,
         ),
     ) {
         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(icon, desc, Modifier.size(24.dp)) }

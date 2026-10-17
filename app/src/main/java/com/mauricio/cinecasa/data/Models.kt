@@ -16,6 +16,9 @@ class Vod(
     val title: String = TextUtil.cleanTitle(name)
     val year: Int = if (yearField > 1900) yearField else TextUtil.yearOf(name)
     val norm: String = TextUtil.norm(title)
+    /** Idioma y calidad de esta versión (se calculan al armar el catálogo). */
+    var lang: Lang? = null
+    var quality: String = ""
 }
 
 class Show(
@@ -38,6 +41,8 @@ class Show(
     val year: Int = TextUtil.yearOf(release).takeIf { it > 0 } ?: TextUtil.yearOf(name)
     val norm: String = TextUtil.norm(title)
     val normPeople: String = TextUtil.norm("$cast $director")
+    var lang: Lang? = null
+    var quality: String = ""
 }
 
 class Channel(
