@@ -398,7 +398,7 @@ fun stars(r: Float): String = if (r > 0f) "★ " + (if (r > 10f) r / 10f else r)
 fun MetaLine(parts: List<String>, modifier: Modifier = Modifier, rating: Float = 0f) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (rating > 0f) Text(stars(rating), color = C.Gold, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        parts.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.forEach { Text(it, color = C.Mid, fontSize = 14.sp, maxLines = 1) }
+        parts.map { genreEs(it.trim()) }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.forEach { Text(it, color = C.Mid, fontSize = 14.sp, maxLines = 1) }
     }
 }
 
@@ -444,3 +444,26 @@ fun Modifier.paneWidth(w: Dp): Modifier = if (LocalCompact.current) this.fillMax
 /** Ancho de tarjetas/diálogos: fijo en la tele, casi a todo lo ancho en el celular. */
 @Composable
 fun Modifier.cardWidth(w: Dp): Modifier = if (LocalCompact.current) this.fillMaxWidth().padding(horizontal = 16.dp) else this.width(w)
+
+/** Devuelve el texto en español: lo muestra tal cual y, si viene en otro idioma, lo cambia por la traducción en cuanto llega. */
+@Composable
+fun rememberSpanish(text: String): String {
+    var out by remember(text) { mutableStateOf(com.mauricio.cinecasa.data.Translate.cached(text) ?: text) }
+    LaunchedEffect(text) { if (out == text && !com.mauricio.cinecasa.data.Translate.isSpanish(text)) out = com.mauricio.cinecasa.data.Translate.toSpanish(text) }
+    return out
+}
+
+private val GENRES = mapOf(
+    "action & adventure" to "Acción y aventura", "sci-fi & fantasy" to "Ciencia ficción y fantasía", "science fiction" to "Ciencia ficción",
+    "sci-fi" to "Ciencia ficción", "war & politics" to "Guerra y política", "tv movie" to "Película de TV",
+    "action" to "Acción", "adventure" to "Aventura", "animation" to "Animación", "comedy" to "Comedia", "crime" to "Crimen",
+    "documentary" to "Documental", "family" to "Familia", "fantasy" to "Fantasía", "history" to "Historia", "horror" to "Terror",
+    "music" to "Música", "mystery" to "Misterio", "thriller" to "Suspenso", "war" to "Bélica", "western" to "Wéstern",
+    "kids" to "Infantil", "soap" to "Telenovela", "talk" to "Entrevistas", "news" to "Noticias", "biography" to "Biografía",
+    "sport" to "Deportes", "sports" to "Deportes", "musical" to "Musical", "romance" to "Romance", "drama" to "Drama", "reality" to "Reality",
+)
+
+/** Traduce géneros que vienen en inglés ("Action, Comedy" → "Acción, Comedia"). */
+fun genreEs(g: String): String = g.split(',', '/').joinToString(", ") { part ->
+    val t = part.trim(); GENRES[t.lowercase()] ?: t
+}.trim().trimEnd(',')

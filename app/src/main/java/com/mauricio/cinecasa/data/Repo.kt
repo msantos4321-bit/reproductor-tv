@@ -178,6 +178,7 @@ object Repo {
         Cloud.init(ctx)
         Profiles.init(ctx)
         Downloads.init(ctx)
+        Translate.init(ctx)
     }
 
     fun xtream(): Xtream? = Prefs.account.value?.let { Xtream(it) }

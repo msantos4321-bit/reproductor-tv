@@ -180,7 +180,7 @@ fun MovieDetailScreen(vod0: Vod) {
                 when {
                     i == null -> Text("Cargando sinopsis…", color = C.Low, fontSize = 15.sp)
                     i.plot.isBlank() -> Text("El proveedor no incluyó sinopsis para esta película.", color = C.Low, fontSize = 15.sp)
-                    else -> Text(i.plot, color = C.Mid, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                    else -> Text(rememberSpanish(i.plot), color = C.Mid, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
                 }
                 if (p != null) {
                     Spacer(Modifier.height(14.dp))
@@ -268,7 +268,7 @@ fun ShowDetailScreen(show0: Show) {
                 Spacer(Modifier.height(12.dp))
                 val plot = inf?.plot?.ifBlank { null } ?: show.plot
                 Text(
-                    plot.ifBlank { if (inf == null && !failed) "Cargando…" else "Sin sinopsis del proveedor." },
+                    rememberSpanish(plot).ifBlank { if (inf == null && !failed) "Cargando…" else "Sin sinopsis del proveedor." },
                     color = C.Mid, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -331,7 +331,7 @@ fun ShowDetailScreen(show0: Show) {
                     val fe = focusedEp
                     if (fe != null && fe.season == season) {
                         Text("T${fe.season}:E${fe.num} · ${episodeName(fe, show.title)}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        if (fe.plot.isNotBlank()) Text(fe.plot, color = C.Mid, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+                        if (fe.plot.isNotBlank()) Text(rememberSpanish(fe.plot), color = C.Mid, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
                     }
                     Text("Mantén presionado OK sobre un episodio para marcarlo como visto o no visto.", color = C.Low, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
                 }

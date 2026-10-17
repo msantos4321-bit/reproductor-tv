@@ -217,6 +217,14 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
                 when (e.key) {
                     Key.DirectionLeft -> { player.seekBack(); seekHint = "−10 s  ·  " + TextUtil.clock(player.currentPosition); seekTick++; true }
                     Key.DirectionRight -> { player.seekForward(); seekHint = "+10 s  ·  " + TextUtil.clock(player.currentPosition); seekTick++; true }
+                    // OK, arriba o abajo: vuelven a mostrar los controles (pausa, avance, barra)
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionUp, Key.DirectionDown, Key.Menu, Key.Info -> {
+                        viewRef?.let { v -> v.requestFocus(); v.showController() }; true
+                    }
+                    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                        if (player.isPlaying) player.pause() else player.play()
+                        viewRef?.let { v -> v.requestFocus(); v.showController() }; true
+                    }
                     else -> false
                 }
             },
@@ -236,7 +244,11 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
                     setShowRewindButton(true)
                     keepScreenOn = true
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { vis -> ctrlVisible = vis == View.VISIBLE })
+                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { vis ->
+                        ctrlVisible = vis == View.VISIBLE
+                        // Al ocultarse, el foco se quedaba en los botones invisibles y el control remoto ya no los volvía a mostrar
+                        if (vis != View.VISIBLE) post { requestFocus() }
+                    })
                     isFocusable = true
                     isFocusableInTouchMode = true
                     viewRef = this
