@@ -86,7 +86,7 @@ fun SettingsScreen() {
                 i != null -> {
                     Line("Estado", (if (i.status.equals("Active", true)) "Activa" else i.status) + if (i.trial) " (prueba)" else "")
                     Line("Vence", i.expires?.let { SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es", "MX")).format(Date(it)) } ?: "Sin fecha")
-                    Line("Pantallas en uso", "${i.activeCons} de ${i.maxCons}")
+                    Line("Pantallas al mismo tiempo", "${i.maxCons} permitidas")
                 }
                 infoFailed -> Line("Estado", "No se pudo consultar ahora")
                 else -> Line("Estado", "Consultando…")

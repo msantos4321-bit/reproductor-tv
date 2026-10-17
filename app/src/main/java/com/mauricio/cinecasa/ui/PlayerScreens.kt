@@ -124,7 +124,7 @@ fun buildPlayer(ctx: Context, live: Boolean): ExoPlayer {
 }
 
 private fun errorText(e: PlaybackException): String = when (e.errorCode) {
-    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "El servidor rechazó la conexión (puede que tengas todas las pantallas en uso)."
+    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "El servidor rechazó la conexión. Puede que ya haya otras pantallas viendo al mismo tiempo; cierra alguna y vuelve a intentar."
     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "No hay conexión con el servidor."
     PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> "Formato de video no compatible."
     PlaybackException.ERROR_CODE_DECODER_INIT_FAILED, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> "Esta tele no puede decodificar este video (códec no compatible)."

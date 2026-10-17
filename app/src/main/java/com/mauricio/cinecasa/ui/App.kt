@@ -180,12 +180,10 @@ private fun Shell() {
     }
 
     fun withConnectionCheck(action: () -> Unit) {
-        scope.launch {
-            val info = Repo.accountInfo()
-            if (info != null && info.maxCons > 0 && info.activeCons >= info.maxCons) {
-                askPlay = "Ya hay ${info.activeCons} de ${info.maxCons} pantallas en uso. Si continúas, el servidor podría cortar otra reproducción." to action
-            } else action()
-        }
+        // El conteo de "pantallas en uso" del proveedor no es confiable (cuenta sesiones viejas
+        // que ya se cerraron), así que ya no se pregunta antes de reproducir. Si de verdad
+        // se rebasa el límite, el reproductor muestra el aviso del servidor.
+        action()
     }
 
     val nav = remember {
