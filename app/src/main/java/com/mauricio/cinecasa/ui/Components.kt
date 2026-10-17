@@ -175,6 +175,7 @@ fun WideCard(
     watched: Boolean = false,
     onFocused: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
+    fit: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     Column(modifier.width(width)) {
@@ -189,8 +190,11 @@ fun WideCard(
         ) {
             Box(Modifier.fillMaxSize()) {
                 Text(title, Modifier.align(Alignment.Center).padding(10.dp), color = C.Mid, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 3)
-                Img(image, Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xCC000000))))
+                if (fit) Img(image, Modifier.fillMaxSize().padding(18.dp), ContentScale.Fit)
+                else {
+                    Img(image, Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xCC000000))))
+                }
                 if (watched) Icon(Icons.Filled.CheckCircle, null, Modifier.align(Alignment.TopEnd).padding(6.dp).size(18.dp), tint = C.Good)
                 if (progress != null && progress > 0f) ProgressBar(progress, Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             }

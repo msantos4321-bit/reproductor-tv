@@ -56,6 +56,7 @@ fun SettingsScreen() {
     var liveFmt by remember { mutableStateOf(Prefs.liveFormat) }
     var adult by remember { mutableStateOf(Prefs.showAdult) }
     var theme by remember { mutableStateOf(Prefs.themeMode) }
+    var startLive by remember { mutableStateOf(Prefs.startOnLive) }
     var tmdb by remember { mutableStateOf(Prefs.tmdbKey) }
     var tmdbMsg by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -121,6 +122,22 @@ fun SettingsScreen() {
                 .joinToString("  ·  ") { "${it.key.label.ifBlank { "Sin etiqueta" }}: ${"%,d".format(it.value)}" }
             if (stats.isNotBlank()) Text("Detectado en tu catálogo: $stats", color = C.Low, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(0.9f))
             Text("Las que no traen etiqueta de idioma se muestran siempre.", color = C.Low, fontSize = 12.sp)
+        }
+
+        Section("Al abrir y al dormir") {
+            Text("Qué mostrar al abrir la app:", color = C.Mid, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Pill("Inicio", !startLive, { startLive = false; Prefs.startOnLive = false })
+                Pill("Último canal en vivo", startLive, { startLive = true; Prefs.startOnLive = true })
+            }
+            Text("Temporizador para apagar (te pregunta antes de cerrar):", color = C.Mid, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val left = SleepTimer.minutesLeft()
+                Pill("Apagado", left == 0, { SleepTimer.set(0) })
+                for (m in listOf(30, 60, 90, 120)) Pill("$m min", false, { SleepTimer.set(m) })
+            }
+            val left = SleepTimer.minutesLeft()
+            if (left > 0) Text("Se apagará en $left min.", color = C.Accent, fontSize = 13.sp)
         }
 
         Section("TV en vivo") {

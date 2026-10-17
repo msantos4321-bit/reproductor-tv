@@ -501,3 +501,35 @@ private fun LiveBanner(ch: Channel, catName: String, fav: Boolean) {
         }
     }
 }
+
+/** Formatos a probar para canales en vivo, en orden. */
+fun liveFormats(): List<String> = when (Prefs.liveFormat) {
+    "ts" -> listOf("ts", "m3u8")
+    "m3u8" -> listOf("m3u8", "ts")
+    else -> {
+        val allowed = Prefs.serverFormats
+        if (allowed.isNotEmpty() && "ts" !in allowed && "m3u8" in allowed) listOf("m3u8", "ts") else listOf("ts", "m3u8")
+    }
+}
+
+fun liveMediaItem(ch: Channel, tryN: Int = 0): MediaItem? {
+    val x = Repo.xtream() ?: return null
+    val fmts = liveFormats()
+    val fmt = fmts[tryN % fmts.size]
+    return MediaItem.Builder().setUri(x.liveUrl(ch.id, fmt)).apply { if (fmt == "m3u8") setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
+}
+
+/** Video pequeño (vista previa o cuadro de pantalla múltiple). */
+@Composable
+fun MiniVideo(player: ExoPlayer, modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { cx ->
+            (android.view.LayoutInflater.from(cx).inflate(com.mauricio.cinecasa.R.layout.texture_player, null) as PlayerView).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                this.player = player
+            }
+        },
+        update = { it.player = player },
+        modifier = modifier,
+    )
+}

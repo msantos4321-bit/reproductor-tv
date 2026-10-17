@@ -86,6 +86,11 @@ object Prefs {
         get() = sp.getBoolean("adult", false)
         set(v) = sp.edit().putBoolean("adult", v).apply()
 
+    /** Al abrir la app: true = entra directo al último canal en vivo. */
+    var startOnLive: Boolean
+        get() = sp.getBoolean("startOnLive", false)
+        set(v) = sp.edit().putBoolean("startOnLive", v).apply()
+
     /** Tema: "light" | "dark" | "auto" */
     var themeMode: String
         get() = sp.getString("theme", "light") ?: "light"

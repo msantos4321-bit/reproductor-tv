@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.mauricio.cinecasa.data.Catalog
+import com.mauricio.cinecasa.data.Channel
 import com.mauricio.cinecasa.data.Library
 import com.mauricio.cinecasa.data.Progress
 import com.mauricio.cinecasa.data.Repo
@@ -55,11 +56,13 @@ sealed interface Tile {
     data class S(val s: Show) : Tile { override val key = "s${s.id}" }
     data class P(val p: Progress) : Tile { override val key = "p${p.key}" }
     data class L(val s: Saved) : Tile { override val key = "l${s.kind}${s.id}" }
+    data class Ch(val ch: Channel, val list: List<Channel>) : Tile { override val key = "c${ch.id}" }
 }
 
 data class HomeRow(val id: String, val title: String, val tiles: List<Tile>, val wide: Boolean = false)
 
 fun heroFor(t: Tile, c: Catalog): Hero = when (t) {
+    is Tile.Ch -> Hero(t.key, t.ch.name, listOf("En vivo", c.liveCatName[t.ch.cat].orEmpty()), 0f, "Presiona OK para volver a este canal.", "")
     is Tile.M -> {
         val i = Repo.cachedVodInfo(t.v.id)
         Hero(t.key, t.v.title, listOf(yearStr(t.v.year), TextUtil.duration(i?.durationSecs ?: 0), i?.genre.orEmpty(), c.vodCatName[t.v.cat].orEmpty()),
@@ -87,6 +90,7 @@ fun openTile(t: Tile, nav: Nav, c: Catalog) {
         is Tile.L -> if (t.s.kind == "movie") c.movieById[t.s.id]?.let { nav.go(Route.MovieDetail(it)) }
         else c.showById[t.s.id]?.let { nav.go(Route.ShowDetail(it)) }
         is Tile.P -> resumeProgress(t.p, nav, c)
+        is Tile.Ch -> nav.playLive(t.list, t.list.indexOf(t.ch).coerceAtLeast(0))
     }
 }
 
@@ -180,6 +184,7 @@ fun HomeScreen() {
 @Composable
 fun TileCard(t: Tile, wide: Boolean, modifier: Modifier, c: Catalog, onFocused: () -> Unit = {}, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     when (t) {
+        is Tile.Ch -> WideCard(t.ch.name, c.liveCatName[t.ch.cat].orEmpty(), t.ch.icon, onClick, modifier, width = 170.dp, fit = true, onFocused = onFocused)
         is Tile.P -> {
             val img = if (t.p.kind == "movie") Repo.cachedVodInfo(t.p.id)?.backdrop?.ifBlank { null } ?: t.p.image
             else c.showById[t.p.seriesId]?.backdrop?.ifBlank { null } ?: t.p.image
@@ -198,6 +203,8 @@ private fun buildHomeRows(c: Catalog): List<HomeRow> {
     val rows = ArrayList<HomeRow>()
     val cw = Library.continueWatching()
     if (cw.isNotEmpty()) rows += HomeRow("cw", "Continuar viendo", cw.map { Tile.P(it) }, wide = true)
+    val recentCh = Library.recentChannels.value.mapNotNull { c.channelById[it] }.filter { c.visibleCat(it.cat) }.take(15)
+    if (recentCh.isNotEmpty()) rows += HomeRow("rch", "Canales que viste", recentCh.map { Tile.Ch(it, recentCh) }, wide = true)
     val ml = Library.myList.value
     if (ml.isNotEmpty()) rows += HomeRow("ml", "Mi lista", ml.map { Tile.L(it) })
 

@@ -30,6 +30,14 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material.icons.filled.GridView
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -89,6 +97,35 @@ fun LiveScreen() {
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     val chState = remember(cat) { nav.state.getOrPut("live_list_$cat") { LazyListState() } as LazyListState }
     val firstFr = remember { FocusRequester() }
+    val ctx = LocalContext.current
+
+    // Vista previa: al detenerte en un canal, se reproduce en chico a la derecha
+    val preview = remember { buildPlayer(ctx, live = true) }
+    var previewCh by remember { mutableStateOf<Channel?>(null) }
+    var previewReady by remember { mutableStateOf(false) }
+    var previewFail by remember { mutableStateOf(false) }
+    var previewTry by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        val l = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) previewReady = true }
+            override fun onPlayerError(error: PlaybackException) {
+                val ch = previewCh ?: return
+                if (previewTry < 1) { previewTry++; liveMediaItem(ch, previewTry)?.let { preview.setMediaItem(it); preview.prepare() } }
+                else previewFail = true
+            }
+        }
+        preview.addListener(l)
+        onDispose { preview.removeListener(l); preview.release() }
+    }
+    LaunchedEffect(focusedCh) {
+        val ch = focusedCh ?: return@LaunchedEffect
+        if (ch.id == previewCh?.id) return@LaunchedEffect
+        preview.stop()
+        previewReady = false; previewFail = false
+        delay(650) // solo si te detienes en el canal
+        previewCh = ch; previewTry = 0
+        liveMediaItem(ch)?.let { preview.setMediaItem(it); preview.prepare(); preview.playWhenReady = true }
+    }
 
     val cats = remember(c, favs, recent) {
         buildList {
@@ -113,6 +150,9 @@ fun LiveScreen() {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             item { Text("TV en vivo", color = C.Hi, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 10.dp)) }
+            item {
+                ActionButton("Pantalla múltiple", { preview.stop(); nav.state.remove("mv_slots"); nav.go(Route.MultiView(list, focusedCh)) }, Modifier.fillMaxWidth().padding(bottom = 10.dp), icon = Icons.Filled.GridView)
+            }
             items(cats, key = { it.first }) { (id, name) ->
                 val n = when (id) { FAVS -> favs.size; RECENT -> recent.size; ALLCH -> c.visChannels.size; else -> counts[id] ?: 0 }
                 if (n > 0) LiveCatItem(name, n, cat == id, Modifier.rememberFocus(mem, "cat:$id")) {
@@ -122,7 +162,7 @@ fun LiveScreen() {
         }
         LazyColumn(
             state = chState,
-            modifier = Modifier.width(400.dp).fillMaxHeight(),
+            modifier = Modifier.width(350.dp).fillMaxHeight(),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -132,13 +172,25 @@ fun LiveScreen() {
                     Modifier.rememberFocus(mem, "ch:$cat:${ch.id}").then(if (i == 0) Modifier.focusRequester(firstFr) else Modifier),
                     onFocused = { focusedCh = ch },
                     onLongClick = { Library.toggleFavChannel(ch.id) },
-                ) { nav.playLive(list, i) }
+                ) { preview.stop(); nav.playLive(list, i) }
             }
         }
         // Panel de información del canal enfocado
-        Box(Modifier.fillMaxSize().padding(24.dp)) {
+        Box(Modifier.fillMaxSize().padding(start = 12.dp, end = 20.dp, top = 24.dp, bottom = 20.dp)) {
             val ch = focusedCh
-            if (ch != null) ChannelInfoPanel(ch, c.liveCatName[ch.cat].orEmpty())
+            if (ch != null) ChannelInfoPanel(ch, c.liveCatName[ch.cat].orEmpty()) {
+                // Vista previa 16:9
+                Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
+                    if (previewCh?.id == ch.id && !previewFail) MiniVideo(preview, Modifier.fillMaxSize())
+                    if (previewCh?.id != ch.id || !previewReady || previewFail) {
+                        Box(Modifier.fillMaxSize().background(C.Panel2), contentAlignment = Alignment.Center) {
+                            Img(ch.icon, Modifier.fillMaxSize(0.5f), ContentScale.Fit)
+                            if (previewFail) Text("Vista previa no disponible", color = C.Low, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp))
+                            else if (previewCh?.id == ch.id) Spinner(Modifier.align(Alignment.BottomEnd).padding(8.dp), 22.dp)
+                        }
+                    }
+                }
+            }
             else Text("Elige un canal. Mantén presionado OK para agregarlo a Favoritos.", color = C.Low, fontSize = 14.sp)
         }
     }
@@ -146,12 +198,11 @@ fun LiveScreen() {
 }
 
 @Composable
-private fun ChannelInfoPanel(ch: Channel, catName: String) {
+private fun ChannelInfoPanel(ch: Channel, catName: String, video: @Composable () -> Unit) {
     val epg = rememberEpg(ch, 300)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.size(width = 160.dp, height = 90.dp).background(C.Panel2, RoundedCornerShape(10.dp)).padding(10.dp), contentAlignment = Alignment.Center) {
-            Img(ch.icon, Modifier.fillMaxSize(), ContentScale.Fit)
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        video()
+        Text("OK para ver en pantalla completa", color = C.Low, fontSize = 11.sp)
         Text(ch.name, color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)
         Text(listOfNotNull(if (ch.num > 0) "Canal ${ch.num}" else null, catName.ifBlank { null }, if (ch.archiveDays > 0) "Guarda ${ch.archiveDays} días" else null).joinToString(" · "), color = C.Low, fontSize = 12.sp)
         Spacer(Modifier.height(6.dp))

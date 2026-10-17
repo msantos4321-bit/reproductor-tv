@@ -75,6 +75,7 @@ sealed interface Route {
     data class ShowDetail(val show: Show) : Route
     data class Play(val items: List<PlayItem>, val start: Int, val startPos: Long) : Route
     data class LivePlay(val channels: List<Channel>, val index: Int) : Route
+    data class MultiView(val pool: List<Channel>, val first: Channel?) : Route
 }
 
 /** Acciones de navegación disponibles para todas las pantallas. */
@@ -95,6 +96,7 @@ fun App() {
     Box(Modifier.fillMaxSize().background(C.Bg)) {
         if (account == null) LoginScreen() else Shell()
         AutoUpdateCheck()
+        SleepTimerWatcher()
     }
     LaunchedEffect(Unit) {
         while (true) { C.apply(Prefs.themeMode); kotlinx.coroutines.delay(60_000) }
@@ -112,6 +114,17 @@ private fun Shell() {
     val loadState by Repo.state.collectAsState()
 
     LaunchedEffect(Unit) { Repo.start() }
+    // Abrir directo en el último canal (si se eligió en Ajustes)
+    val catalogNow by Repo.catalog.collectAsState()
+    var autoStarted by remember { mutableStateOf(false) }
+    LaunchedEffect(catalogNow.channels.isNotEmpty()) {
+        if (autoStarted || catalogNow.channels.isEmpty()) return@LaunchedEffect
+        autoStarted = true
+        if (!Prefs.startOnLive) return@LaunchedEffect
+        val last = catalogNow.channelById[com.mauricio.cinecasa.data.Library.lastChannel] ?: return@LaunchedEffect
+        val list = com.mauricio.cinecasa.data.Library.recentChannels.value.mapNotNull { catalogNow.channelById[it] }.ifEmpty { listOf(last) }
+        stack.add(Route.LivePlay(list, list.indexOf(last).coerceAtLeast(0)))
+    }
 
     fun withConnectionCheck(action: () -> Unit) {
         scope.launch {
@@ -159,7 +172,8 @@ private fun Shell() {
                     }
                 }
             top is Route.Play -> PlayerScreen(top.items, top.start, top.startPos)
-            top is Route.LivePlay -> LivePlayerScreen(top.channels, top.index)
+            top is Route.LivePlay -> key(top) { LivePlayerScreen(top.channels, top.index) }
+            top is Route.MultiView -> MultiViewScreen(top.pool, top.first)
             top is Route.MovieDetail -> key(top) { MovieDetailScreen(top.vod) }
             top is Route.ShowDetail -> key(top) { ShowDetailScreen(top.show) }
             else -> Box(Modifier.fillMaxSize()) {
@@ -176,6 +190,7 @@ private fun Shell() {
                     }
                 }
                 Sidebar(top) { nav.go(it) }
+                ClockLabel(Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 24.dp))
             }
         }
     }
