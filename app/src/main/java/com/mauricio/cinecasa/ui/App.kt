@@ -108,6 +108,7 @@ private fun Shell() {
     val state = remember { HashMap<String, Any>() }
     val scope = rememberCoroutineScope()
     var askPlay by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    var serverDlg by remember { mutableStateOf(false) }
     val loadState by Repo.state.collectAsState()
 
     LaunchedEffect(Unit) { Repo.start() }
@@ -153,6 +154,7 @@ private fun Shell() {
                 CenterMessage("No se pudo cargar", ls.msg) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("Reintentar", { Repo.start(force = true) }, primary = true)
+                        ActionButton("Cambiar servidor", { serverDlg = true })
                         ActionButton("Cambiar cuenta", { Repo.logout() })
                     }
                 }
@@ -178,6 +180,7 @@ private fun Shell() {
         }
     }
 
+    if (serverDlg) ServerDialog { serverDlg = false }
     askPlay?.let { (msg, action) ->
         ConfirmDialog(
             title = "Pantallas ocupadas",

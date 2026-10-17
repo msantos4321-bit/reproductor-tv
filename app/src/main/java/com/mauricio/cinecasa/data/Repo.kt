@@ -197,7 +197,10 @@ object Repo {
             saveCache(c)
         } catch (e: Exception) {
             if (_catalog.value.movies.isEmpty() && _catalog.value.channels.isEmpty()) {
-                _state.value = LoadState.Error("No se pudo descargar el catálogo: ${e.message ?: e.javaClass.simpleName}")
+                _state.value = LoadState.Error(
+                    if (e is java.net.UnknownHostException) "No se encuentra el servidor. Es probable que tu proveedor haya cambiado la dirección: pídele la nueva y elige «Cambiar servidor»."
+                    else "No se pudo descargar el catálogo: ${e.message ?: e.javaClass.simpleName}",
+                )
             } else {
                 _state.value = LoadState.Ready
             }

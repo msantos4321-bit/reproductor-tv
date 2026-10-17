@@ -38,6 +38,7 @@ import com.mauricio.cinecasa.data.Prefs
 import com.mauricio.cinecasa.data.Repo
 import com.mauricio.cinecasa.data.Tmdb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -58,6 +59,7 @@ fun SettingsScreen() {
     var tmdb by remember { mutableStateOf(Prefs.tmdbKey) }
     var tmdbMsg by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
+    var serverDlg by remember { mutableStateOf(false) }
     val firstFr = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -90,6 +92,7 @@ fun SettingsScreen() {
             if (Prefs.lastRefresh > 0) Line("Actualizado", SimpleDateFormat("d MMM, HH:mm", Locale("es", "MX")).format(Date(Prefs.lastRefresh)))
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 ActionButton("Actualizar catálogo", { Repo.start(force = true) }, Modifier.focusRequester(firstFr), icon = Icons.Filled.Refresh)
+                ActionButton("Cambiar servidor", { serverDlg = true })
                 ActionButton("Cambiar de cuenta", { confirmLogout = true })
                 if (st is LoadState.Loading) Text((st as LoadState.Loading).msg, color = C.Mid, fontSize = 13.sp)
             }
@@ -177,6 +180,7 @@ fun SettingsScreen() {
         }
     }
 
+    if (serverDlg) ServerDialog { serverDlg = false }
     if (confirmLogout) {
         ConfirmDialog(
             title = "¿Cambiar de cuenta?",
@@ -205,4 +209,55 @@ private fun Line(label: String, value: String) {
         Text(label, Modifier.width(170.dp), color = C.Low, fontSize = 14.sp)
         Text(value, color = C.Hi, fontSize = 14.sp)
     }
+}
+
+/**
+ * Cambiar solo la dirección del servidor (los proveedores la cambian seguido).
+ * Conserva usuario y contraseña, prueba la nueva dirección y recarga el catálogo.
+ */
+@Composable
+fun ServerDialog(onClose: () -> Unit) {
+    val acc = Prefs.account.value ?: return
+    var server by remember { mutableStateOf(acc.server) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val fr = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Column(
+            Modifier.width(520.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Cambiar servidor", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Escribe la nueva dirección que te dio tu proveedor. Tu usuario y contraseña se conservan.", color = C.Mid, fontSize = 14.sp)
+            TvTextField(server, { server = it }, "http://servidor.com:8080", Modifier.fillMaxWidth(),
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri, boxRequester = fr)
+            if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (busy) { Spinner(size = 26.dp); Text("Probando…", color = C.Mid, fontSize = 14.sp) }
+                else {
+                    ActionButton("Guardar y probar", {
+                        busy = true; msg = ""
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) {
+                                runCatching { com.mauricio.cinecasa.data.Xtream.Login.login(acc.copy(server = server.trim())) }
+                            }
+                            busy = false
+                            r.onSuccess { (ok, info) ->
+                                Prefs.serverFormats = info.formats
+                                Repo.clearAll()
+                                Prefs.setAccount(ok)
+                                Repo.start(force = true)
+                                onClose()
+                            }.onFailure { e ->
+                                msg = (e as? com.mauricio.cinecasa.data.Xtream.Login.LoginException)?.let { it.title + "\n" + it.detail } ?: (e.message ?: "No funcionó")
+                            }
+                        }
+                    }, primary = true)
+                    ActionButton("Cancelar", onClose)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(80); runCatching { fr.requestFocus() } }
 }
