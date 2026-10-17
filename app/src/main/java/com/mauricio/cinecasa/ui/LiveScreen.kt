@@ -119,7 +119,7 @@ fun LiveScreen() {
     }
     LaunchedEffect(focusedCh) {
         val ch = focusedCh ?: return@LaunchedEffect
-        if (ch.id == previewCh?.id) return@LaunchedEffect
+        if (ch.id == previewCh?.id && preview.playbackState != Player.STATE_IDLE) return@LaunchedEffect
         preview.stop()
         previewReady = false; previewFail = false
         delay(650) // solo si te detienes en el canal
