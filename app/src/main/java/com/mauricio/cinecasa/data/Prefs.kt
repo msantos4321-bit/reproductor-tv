@@ -27,7 +27,7 @@ data class Account(val server: String, val user: String, val pass: String) {
 }
 
 object Net {
-    const val UA = "IPTVSmartersPro"
+    @Volatile var UA = "IPTVSmartersPro"
 
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -67,12 +67,13 @@ object Prefs {
         val u = sp.getString("user", null)
         val p = sp.getString("pass", null)
         _account.value = if (s != null && u != null && p != null) Account(s, u, p) else null
+        sp.getString("ua", null)?.let { Net.UA = it }
     }
 
     fun setAccount(a: Account?) {
         sp.edit().apply {
             if (a == null) { remove("server"); remove("user"); remove("pass") }
-            else { putString("server", a.server); putString("user", a.user); putString("pass", a.pass) }
+            else { putString("server", a.server); putString("user", a.user); putString("pass", a.pass); putString("ua", Net.UA) }
         }.apply()
         _account.value = a
     }

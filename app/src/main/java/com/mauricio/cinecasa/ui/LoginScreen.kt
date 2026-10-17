@@ -48,26 +48,26 @@ fun LoginScreen() {
     var pass by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     val userFr = remember { FocusRequester() }
     val passFr = remember { FocusRequester() }
 
     fun submit() {
-        if (server.isBlank() || user.isBlank() || pass.isBlank()) { error = "Llena los tres datos."; return }
-        busy = true; error = ""
+        if (server.isBlank() || user.isBlank() || pass.isBlank()) { error = "Llena los tres datos."; detail = ""; return }
+        busy = true; error = ""; detail = ""
         scope.launch {
             val acc = Account(server.trim(), user.trim(), pass.trim())
-            val result = withContext(Dispatchers.IO) { runCatching { Xtream(acc).accountInfo() } }
+            val result = withContext(Dispatchers.IO) { runCatching { Xtream.Login.login(acc) } }
             busy = false
-            result.onSuccess { info ->
-                if (info.ok) {
-                    Prefs.serverFormats = info.formats
-                    Repo.clearAll()
-                    Prefs.setAccount(acc)
-                } else error = "El servidor respondió, pero el usuario o la contraseña no son correctos."
-            }.onFailure {
-                error = "No se pudo conectar con el servidor. Revisa la dirección (incluye http:// y el puerto si te lo dieron)."
+            result.onSuccess { (okAcc, info) ->
+                Prefs.serverFormats = info.formats
+                Repo.clearAll()
+                Prefs.setAccount(okAcc)
+            }.onFailure { e ->
+                if (e is Xtream.Login.LoginException) { error = e.title; detail = e.detail }
+                else { error = "No se pudo conectar con el servidor."; detail = "${e.javaClass.simpleName}: ${e.message}" }
             }
         }
     }
@@ -96,9 +96,10 @@ fun LoginScreen() {
                     onImeAction = { runCatching { userFr.requestFocus() } })
                 TvTextField(user, { user = it }, "Usuario", Modifier.fillMaxWidth(), imeAction = ImeAction.Next,
                     leading = Icons.Filled.Person, boxRequester = userFr, onImeAction = { runCatching { passFr.requestFocus() } })
-                TvTextField(pass, { pass = it }, "Contraseña", Modifier.fillMaxWidth(), password = true, imeAction = ImeAction.Go,
+                TvTextField(pass, { pass = it }, "Contraseña", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Go,
                     leading = Icons.Filled.Lock, boxRequester = passFr, onImeAction = { submit() })
                 if (error.isNotEmpty()) Text(error, color = C.Accent, fontSize = 13.sp)
+                if (detail.isNotEmpty()) Text("Detalle técnico (mándame foto de esto si sigue fallando):\n$detail", color = C.Low, fontSize = 11.sp, lineHeight = 15.sp)
                 Spacer(Modifier.height(4.dp))
                 if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Spinner(size = 28.dp); Text("Conectando…", color = C.Mid, fontSize = 14.sp)

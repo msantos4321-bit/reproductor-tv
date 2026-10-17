@@ -30,19 +30,95 @@ class Xtream(private val acc: Account) {
     // ---------- Cuenta ----------
     fun accountInfo(quick: Boolean = false): AccountInfo {
         val txt = Net.get(api(null), if (quick) Net.quick else Net.client)
-        val root = JSONObject(txt)
-        val ui = root.optJSONObject("user_info") ?: JSONObject()
-        val auth = ui.optString("auth", "0")
-        val formats = ui.optJSONArray("allowed_output_formats")?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty()
-        return AccountInfo(
-            ok = auth == "1" || auth == "true",
-            status = ui.optString("status", ""),
-            expires = ui.optString("exp_date", "").toLongOrNull()?.times(1000),
-            maxCons = ui.optString("max_connections", "0").toIntOrNull() ?: 0,
-            activeCons = ui.optString("active_cons", "0").toIntOrNull() ?: 0,
-            formats = formats,
-            trial = ui.optString("is_trial", "0") == "1",
+        return Login.parseAccount(Login.parseObj(txt))
+    }
+
+    object Login {
+        class LoginException(val title: String, val detail: String) : Exception(title)
+
+        /** Agentes con los que se presentan las apps más comunes; algunos paneles solo aceptan ciertas apps. */
+        private val agents = listOf(
+            "IPTVSmartersPro",
+            "IPTV Smarters Pro",
+            "okhttp/4.12.0",
+            "VLC/3.0.20 LibVLC/3.0.20",
+            "Mozilla/5.0 (Linux; Android 12; Smart TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         )
+
+        /**
+         * Prueba la cuenta con varias combinaciones (agente, http/https) y devuelve la que funcionó.
+         * Si nada funciona, explica por qué con el detalle técnico de cada intento.
+         */
+        fun login(acc: Account): Pair<Account, AccountInfo> {
+            val bases = buildList {
+                add(acc.base)
+                if (acc.base.startsWith("http://")) add("https://" + acc.base.removePrefix("http://"))
+            }
+            val attempts = ArrayList<String>()
+            var authFailed = false
+            for (base in bases) {
+                val a = acc.copy(server = base)
+                for (ua in agents) {
+                    try {
+                        val url = "${a.base}/player_api.php".toHttpUrl().newBuilder()
+                            .addQueryParameter("username", a.user).addQueryParameter("password", a.pass).build()
+                        val req = Request.Builder().url(url).header("User-Agent", ua).build()
+                        Net.quick.newCall(req).execute().use { r ->
+                            val body = r.body?.string().orEmpty()
+                            if (!r.isSuccessful) {
+                                attempts += "${base.substringBefore("://")} · ${ua.take(18)} → HTTP ${r.code}"
+                                if (r.code == 401 || r.code == 403) authFailed = true
+                                return@use
+                            }
+                            val obj = try { parseObj(body) } catch (e: Exception) {
+                                attempts += "${base.substringBefore("://")} · ${ua.take(18)} → respuesta rara: ${body.take(60).replace('\n', ' ')}"
+                                return@use
+                            }
+                            val info = parseAccount(obj)
+                            if (!info.ok) {
+                                authFailed = true
+                                attempts += "${base.substringBefore("://")} · ${ua.take(18)} → usuario/contraseña rechazados (estado: ${info.status.ifBlank { "sin datos" }})"
+                                return@use
+                            }
+                            Net.UA = ua
+                            return a to info
+                        }
+                    } catch (e: java.net.UnknownHostException) {
+                        attempts += "No se encontró el servidor «${java.net.URI(base).host}» (revisa que esté bien escrito)."
+                        break
+                    } catch (e: java.net.SocketTimeoutException) {
+                        attempts += "${base.substringBefore("://")} · ${ua.take(18)} → el servidor no respondió a tiempo"
+                    } catch (e: Exception) {
+                        attempts += "${base.substringBefore("://")} · ${ua.take(18)} → ${e.javaClass.simpleName}: ${e.message?.take(80)}"
+                    }
+                }
+            }
+            val title = if (authFailed) "El servidor respondió, pero rechazó el usuario o la contraseña. Revísalos letra por letra (mayúsculas y minúsculas cuentan)."
+            else "No se pudo conectar con el servidor."
+            throw LoginException(title, attempts.distinct().take(8).joinToString("\n"))
+        }
+
+        /** Algunos paneles agregan avisos de PHP antes del JSON: tomamos desde la primera llave. */
+        fun parseObj(txt: String): JSONObject {
+            val i = txt.indexOf('{')
+            if (i < 0) throw org.json.JSONException("sin JSON")
+            return JSONObject(txt.substring(i))
+        }
+
+        fun parseAccount(root: JSONObject): AccountInfo {
+            val ui = root.optJSONObject("user_info") ?: JSONObject()
+            val auth = ui.str("auth")
+            val formats = ui.optJSONArray("allowed_output_formats")?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty()
+            return AccountInfo(
+                ok = auth == "1" || auth.equals("true", true),
+                status = ui.str("status"),
+                expires = ui.str("exp_date").toLongOrNull()?.times(1000),
+                maxCons = ui.str("max_connections").toIntOrNull() ?: 0,
+                activeCons = ui.str("active_cons").toIntOrNull() ?: 0,
+                formats = formats,
+                trial = ui.str("is_trial") == "1",
+            )
+        }
     }
 
     // ---------- Listas (lectura en streaming para no agotar memoria en la tele) ----------
