@@ -98,10 +98,18 @@ val LocalNav = staticCompositionLocalOf<Nav> { error("sin navegación") }
 fun App() {
     val account by Prefs.account.collectAsState()
     var pairing by remember { mutableStateOf(false) }
+    val lic by com.mauricio.cinecasa.data.License.state.collectAsState()
+    LaunchedEffect(Unit) { com.mauricio.cinecasa.data.License.verify() }
     Box(Modifier.fillMaxSize().background(C.Bg)) {
-        if (account == null) {
-            if (pairing) PairScreen { pairing = false } else LoginScreen(onPair = { pairing = true })
-        } else ProfileGate()
+        when (val l = lic) {
+            com.mauricio.cinecasa.data.License.State.Checking -> CenterMessage("CineCasa", "Revisando activación…", loading = true)
+            is com.mauricio.cinecasa.data.License.State.Need ->
+                if (pairing) PairScreen { pairing = false } else ActivationScreen(l.msg, onPair = { pairing = true })
+            com.mauricio.cinecasa.data.License.State.Ok ->
+                if (account == null) {
+                    if (pairing) PairScreen { pairing = false } else LoginScreen(onPair = { pairing = true })
+                } else ProfileGate()
+        }
         AutoUpdateCheck()
         SleepTimerWatcher()
     }

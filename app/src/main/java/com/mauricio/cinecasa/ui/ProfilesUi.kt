@@ -61,6 +61,7 @@ import androidx.tv.material3.Text
 import com.mauricio.cinecasa.data.Account
 import com.mauricio.cinecasa.data.Cloud
 import com.mauricio.cinecasa.data.Devices
+import com.mauricio.cinecasa.data.License
 import com.mauricio.cinecasa.data.Net
 import com.mauricio.cinecasa.data.Prefs
 import com.mauricio.cinecasa.data.Profile
@@ -384,9 +385,13 @@ fun PairScreen(onCancel: () -> Unit) {
                 delay(3000)
                 val p = Cloud.pairPoll(o) ?: continue
                 Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
+                // Si el hogar que lo aprobó usa código, este aparato se activa con el mismo
+                p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
                 if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
                 Repo.clearAll()
                 Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
+                License.verify()
+                onCancel()
                 return@LaunchedEffect
             }
         }

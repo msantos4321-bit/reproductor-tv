@@ -46,6 +46,8 @@ object Cloud {
     private val _revoked = MutableStateFlow(false)
     val revoked: StateFlow<Boolean> get() = _revoked
 
+    internal val prefs: SharedPreferences get() = sp
+
     fun init(ctx: Context) {
         sp = ctx.getSharedPreferences("cloud", Context.MODE_PRIVATE)
         if (deviceId.isBlank()) sp.edit().putString("deviceId", UUID.randomUUID().toString()).apply()
@@ -198,8 +200,10 @@ object Cloud {
         if (loopJob?.isActive == true) return
         loopJob = io.launch {
             registerDevice()
+            var n = 0
             while (true) {
                 try { syncNow() } catch (_: Exception) {}
+                if (n++ % 20 == 0) try { License.verify(quiet = true) } catch (_: Exception) {}
                 delay(45_000)
             }
         }
@@ -213,6 +217,33 @@ object Cloud {
     }
 
     fun removeDevice(id: String) = enqueue("_", "device", id, null, true)
+
+    // ---------------- Licencias ----------------
+    /** true/false, o null si no se pudo preguntar (sin internet). */
+    suspend fun isOwner(): Boolean? = withContext(Dispatchers.IO) {
+        if (!hasHousehold) return@withContext false
+        try { rpc("cc_is_owner", JSONObject().put("p_h", householdId).put("p_s", householdSecret)).trim() == "true" } catch (_: Exception) { null }
+    }
+
+    suspend fun licActivate(code: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_activate", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_name", deviceName)).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    suspend fun licCheck(code: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_check", JSONObject().put("p_code", code).put("p_device", deviceId)).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    suspend fun licCreate(note: String, devices: Int): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_create", JSONObject().put("p_h", householdId).put("p_s", householdSecret).put("p_note", note).put("p_devices", devices)).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    suspend fun licList(): JSONArray? = withContext(Dispatchers.IO) {
+        try { JSONArray(rpc("cc_lic_list", JSONObject().put("p_h", householdId).put("p_s", householdSecret))) } catch (_: Exception) { null }
+    }
+
+    suspend fun licSet(code: String, revoked: Boolean, reset: Boolean): Boolean = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_set", JSONObject().put("p_h", householdId).put("p_s", householdSecret).put("p_code", code).put("p_revoked", revoked).put("p_reset", reset)); true } catch (_: Exception) { false }
+    }
 
     // ---------------- Emparejar aparatos ----------------
     data class PairOffer(val code: String, val token: String)
@@ -245,7 +276,7 @@ object Cloud {
         try {
             val payload = JSONObject()
                 .put("server", acc.server).put("user", acc.user).put("pass", acc.pass).put("ua", Net.UA)
-                .put("hh", householdId).put("hs", householdSecret)
+                .put("hh", householdId).put("hs", householdSecret).put("lic", License.code)
             rpc("cc_pair_approve", JSONObject().put("p_h", householdId).put("p_s", householdSecret)
                 .put("p_code", code.trim()).put("p_payload", payload)).trim() == "true"
         } catch (_: Exception) { false }
