@@ -113,6 +113,12 @@ fun SettingsScreen() {
         if (isAdmin && owner) Section("Centro de control") { ControlCenterSection() }
         if (!owner && com.mauricio.cinecasa.data.License.code.isNotBlank()) Section("Tu suscripción") { SubscriptionSection() }
 
+        if (isAdmin && !DeviceUi.realTv) Section("Presentaciones") {
+            Text("Muestra en este celular el diseño de la tele (pantalla acostada, sin barras) para grabar videos de demostración con la grabadora de pantalla.", color = C.Mid, fontSize = 13.sp)
+            Wrap {
+                ActionButton(if (DeviceUi.tvLayout) "Volver al diseño de celular" else "Ver diseño de tele", { DeviceUi.setTvLayout(!DeviceUi.tvLayout) }, primary = !DeviceUi.tvLayout)
+            }
+        }
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)
             Wrap {

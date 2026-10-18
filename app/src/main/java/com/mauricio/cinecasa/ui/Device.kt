@@ -17,7 +17,14 @@ import java.lang.ref.WeakReference
 val LocalCompact = staticCompositionLocalOf { false }
 
 object DeviceUi {
+    /** Diseño de tele (tele real, o celular en modo presentación). */
     var isTv = false
+        private set
+    /** Es una tele de verdad (control remoto). */
+    var realTv = false
+        private set
+    /** Celular mostrando el diseño de tele, para grabar demostraciones. */
+    var tvLayout = false
         private set
     private var act: WeakReference<Activity>? = null
     private var playing = false
@@ -29,12 +36,21 @@ object DeviceUi {
     fun init(a: Activity) {
         act = WeakReference(a)
         val ui = (a.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
-        isTv = ui || a.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        realTv = ui || a.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        tvLayout = !realTv && a.getSharedPreferences("cinecasa", Context.MODE_PRIVATE).getBoolean("tvLayout", false)
+        isTv = realTv || tvLayout
         rotationLocked = a.getSharedPreferences("cinecasa", Context.MODE_PRIVATE).getBoolean("rotLock", false)
         apply()
     }
 
     fun isCompact(a: Activity) = !isTv && a.resources.configuration.smallestScreenWidthDp < 600
+
+    /** Activa o quita el diseño de tele en el celular y reinicia la pantalla. */
+    fun setTvLayout(on: Boolean) {
+        val a = act?.get() ?: return
+        a.getSharedPreferences("cinecasa", Context.MODE_PRIVATE).edit().putBoolean("tvLayout", on).commit()
+        a.recreate()
+    }
 
     fun toggleRotationLock() {
         rotationLocked = !rotationLocked
@@ -67,7 +83,15 @@ object DeviceUi {
 
     private fun apply() {
         val a = act?.get() ?: return
-        if (isTv) return
+        if (realTv) return
+        if (tvLayout) {
+            a.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            androidx.core.view.WindowCompat.getInsetsController(a.window, a.window.decorView).apply {
+                hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            return
+        }
         a.requestedOrientation = when {
             playing -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             rotationLocked -> ActivityInfo.SCREEN_ORIENTATION_LOCKED

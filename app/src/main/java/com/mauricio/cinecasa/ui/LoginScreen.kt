@@ -105,6 +105,9 @@ fun LoginScreen(onPair: () -> Unit = {}) {
                     Spinner(size = 28.dp); Text("Conectando…", color = C.Mid, fontSize = 14.sp)
                 } else ActionButton("Entrar", { submit() }, Modifier.fillMaxWidth(), primary = true)
                 ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
+                ActionButton("Ver demostración", {
+                    server = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"; user = "demo"; pass = "demo"; submit()
+                }, Modifier.fillMaxWidth())
             }
         }
     }

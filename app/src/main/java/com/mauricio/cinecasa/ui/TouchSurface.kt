@@ -36,7 +36,7 @@ fun Surface(
     val source = remember { MutableInteractionSource() }
     val click by rememberUpdatedState(onClick)
     val long by rememberUpdatedState(onLongClick)
-    val touch = if (DeviceUi.isTv || !enabled) Modifier else Modifier.pointerInput(Unit) {
+    val touch = if (DeviceUi.realTv || !enabled) Modifier else Modifier.pointerInput(Unit) {
         detectTapGestures(
             onPress = { o ->
                 val p = PressInteraction.Press(o)
