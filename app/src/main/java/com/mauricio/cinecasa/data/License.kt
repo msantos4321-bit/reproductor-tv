@@ -92,6 +92,7 @@ object License {
         return when (Cloud.licActivate(c)) {
             "ok" -> { code = c; ok(false); info.value = Cloud.licInfo(c); null }
             "expired" -> "Ese código ya venció. Pide que lo renueven."
+            "trial_used" -> "Este aparato ya usó su prueba gratis. Pide un código anual a quien te la compartió."
             "full" -> "Ese código ya se usó en todos los aparatos que permite."
             "revoked" -> "Ese código está desactivado."
             "unknown" -> "Ese código no existe. Revísalo letra por letra."

@@ -48,9 +48,19 @@ object Cloud {
 
     internal val prefs: SharedPreferences get() = sp
 
+    /** Huella del aparato que sobrevive a desinstalar (Android la da por app y aparato). */
+    var hardwareId: String = ""
+        private set
+
     fun init(ctx: Context) {
         sp = ctx.getSharedPreferences("cloud", Context.MODE_PRIVATE)
-        if (deviceId.isBlank()) sp.edit().putString("deviceId", UUID.randomUUID().toString()).apply()
+        hardwareId = try {
+            val raw = android.provider.Settings.Secure.getString(ctx.contentResolver, android.provider.Settings.Secure.ANDROID_ID).orEmpty()
+            if (raw.isBlank()) "" else java.security.MessageDigest.getInstance("SHA-256").digest("cinecasa:$raw".toByteArray()).joinToString("") { "%02x".format(it) }
+        } catch (_: Exception) { "" }
+        // El mismo aparato conserva su identidad aunque se desinstale la app
+        if (deviceId.isBlank()) sp.edit().putString("deviceId", hardwareId.take(32).ifBlank { UUID.randomUUID().toString() }).apply()
+
         try {
             val a = JSONArray(sp.getString("outbox", "[]"))
             for (i in 0 until a.length()) a.optJSONObject(i)?.let { outbox[itemKey(it)] = it }
@@ -231,8 +241,9 @@ object Cloud {
     }
 
     suspend fun licActivate(code: String): String? = withContext(Dispatchers.IO) {
-        try { rpc("cc_lic_activate", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_name", deviceName)).trim().trim('"') } catch (_: Exception) { null }
+        try { rpc("cc_lic_activate2", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_name", deviceName).put("p_fp", hardwareId)).trim().trim('"') } catch (_: Exception) { null }
     }
+
 
     /** Enlace de un solo uso para entrar al Centro de control (solo el hogar dueño). */
     suspend fun mgrLink(): String? = withContext(Dispatchers.IO) {
