@@ -258,7 +258,7 @@ begin
       'sold_month', (select coalesce(-sum(delta), 0) from g where delta < 0 and created_at > date_trunc('month', now())),
       'sold_year', (select coalesce(-sum(delta), 0) from g where delta < 0 and created_at > now() - interval '365 days'),
       'income_month', (select coalesce(sum(amount_mxn), 0) from g where amount_mxn is not null and created_at > date_trunc('month', now())),
-      'trials_month', (select count(*) from l where kind = 'trial' and created_at > date_trunc('month', now())),
+      'trials_month', (select count(*) from l where created_at > date_trunc('month', now()) and (kind = 'trial' or exists (select 1 from ledger x where x.code = l.code and x.reason = 'conversion'))),
       'converted_month', (select count(*) from g where reason = 'conversion' and created_at > date_trunc('month', now())),
       'resellers', (case when rs is null then (select count(*) from resellers) else null end),
       'credits_out', (case when rs is null then (select coalesce(sum(credits), 0) from resellers) else (select credits from resellers where id = rs) end)
