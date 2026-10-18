@@ -82,6 +82,11 @@ object Cloud {
     }
 
     // ---------------- Llamadas ----------------
+    /** Envía el motivo de un cierre inesperado para poder corregirlo. */
+    fun reportCrash(text: String): Boolean = try {
+        rpc("cc_crash", JSONObject().put("p_device", deviceId).put("p_text", text)); true
+    } catch (_: Throwable) { false }
+
     private fun rpc(fn: String, body: JSONObject): String {
         val req = Request.Builder().url(URL + fn)
             .header("apikey", KEY)

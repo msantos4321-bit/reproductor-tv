@@ -11,7 +11,23 @@ import com.mauricio.cinecasa.data.Repo
 class CineApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        // Si la app se cierra sola, guarda el motivo para enviarlo al abrir de nuevo
+        val crash = getSharedPreferences("crash", MODE_PRIVATE)
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                crash.edit().putString("last",
+                    "v${BuildConfig.VERSION_NAME} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} · hilo ${t.name}\n" +
+                        android.util.Log.getStackTraceString(e).take(8000)).commit()
+            } catch (_: Throwable) {}
+            prev?.uncaughtException(t, e)
+        }
         Repo.init(this)
+        crash.getString("last", null)?.let { text ->
+            Thread {
+                if (com.mauricio.cinecasa.data.Cloud.reportCrash(text)) crash.edit().remove("last").apply()
+            }.start()
+        }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
