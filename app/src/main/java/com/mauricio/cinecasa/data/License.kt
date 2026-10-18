@@ -24,6 +24,9 @@ object License {
     private val _state = MutableStateFlow<State>(State.Checking)
     val state: StateFlow<State> get() = _state
 
+    /** Datos de la activación de este aparato (tipo, vencimiento, vendedor). */
+    val info = MutableStateFlow<org.json.JSONObject?>(null)
+
     private val _owner = MutableStateFlow(false)
     val owner: StateFlow<Boolean> get() = _owner
 
@@ -69,7 +72,8 @@ object License {
         val c = code
         if (c.isBlank()) { _state.value = State.Need(""); return }
         when (Cloud.licCheck(c)) {
-            "ok" -> ok(false)
+            "ok" -> { ok(false); info.value = Cloud.licInfo(c) }
+            "expired" -> _state.value = State.Need("Tu periodo de CineCasa terminó. Pide a quien te la vendió que la renueve; tu código sigue siendo el mismo.")
             "revoked" -> _state.value = State.Need("Este código fue desactivado. Pide uno nuevo a quien te compartió CineCasa.")
             "removed" -> {
                 // Se reiniciaron los aparatos de este código: intenta volver a activarse
@@ -86,7 +90,8 @@ object License {
     suspend fun activate(input: String): String? {
         val c = input.trim().uppercase().replace(" ", "").let { if (it.startsWith("CC") && !it.startsWith("CC-") && it.length == 10) "CC-" + it.drop(2).take(4) + "-" + it.drop(6) else it }
         return when (Cloud.licActivate(c)) {
-            "ok" -> { code = c; ok(false); null }
+            "ok" -> { code = c; ok(false); info.value = Cloud.licInfo(c); null }
+            "expired" -> "Ese código ya venció. Pide que lo renueven."
             "full" -> "Ese código ya se usó en todos los aparatos que permite."
             "revoked" -> "Ese código está desactivado."
             "unknown" -> "Ese código no existe. Revísalo letra por letra."

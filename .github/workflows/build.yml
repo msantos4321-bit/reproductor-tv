@@ -3,6 +3,10 @@ name: Compilar APK
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'supabase/**'
+      - '**.md'
   workflow_dispatch:
 
 permissions:

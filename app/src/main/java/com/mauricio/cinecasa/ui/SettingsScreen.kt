@@ -110,7 +110,8 @@ fun SettingsScreen() {
         if (!isAdmin) Text("La cuenta, los perfiles y los aparatos solo los cambia el administrador.", color = C.Low, fontSize = 12.sp)
 
         val owner by com.mauricio.cinecasa.data.License.owner.collectAsState()
-        if (isAdmin && owner) Section("Códigos de activación") { LicensesSection() }
+        if (isAdmin && owner) Section("Centro de control") { ControlCenterSection() }
+        if (!owner && com.mauricio.cinecasa.data.License.code.isNotBlank()) Section("Tu suscripción") { SubscriptionSection() }
 
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)

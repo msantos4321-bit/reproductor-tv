@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,92 +106,55 @@ fun ActivationScreen(msg: String, onPair: () -> Unit) {
     LaunchedEffect(Unit) { delay(80); runCatching { fr.requestFocus() } }
 }
 
-/** Panel del dueño para crear y controlar códigos. */
+const val CONTROL_URL = "https://msantos4321-bit.github.io/reproductor-tv/control/"
+
+/** Para el dueño: abre el Centro de control (panel web) ya con la sesión iniciada. */
 @Composable
-fun LicensesSection() {
-    val scope = rememberCoroutineScope()
-    var note by remember { mutableStateOf("") }
-    var devices by remember { mutableIntStateOf(1) }
-    var created by remember { mutableStateOf("") }
-    var createdFor by remember { mutableStateOf("") }
-    var createdMax by remember { mutableIntStateOf(1) }
-    var list by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var msg by remember { mutableStateOf("") }
+fun ControlCenterSection() {
     val ctx = LocalContext.current
-    fun share(code: String, max: Int, name: String, email: Boolean) {
-        if (!shareInvite(ctx, code, max, name, email)) msg = "Este aparato no puede compartir; hazlo desde tu celular."
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    Text(
+        "Distribuidores, códigos, pruebas gratis, créditos, renovaciones y reglas de precios, todo en un solo lugar. " +
+            "Se abre en el navegador; guárdalo en tu pantalla de inicio para tenerlo como app.",
+        color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp,
+    )
+    Wrap {
+        ActionButton(if (busy) "Abriendo…" else "Abrir Centro de control", {
+            if (busy) return@ActionButton
+            busy = true; msg = ""
+            scope.launch {
+                val t = Cloud.mgrLink()
+                busy = false
+                if (t == null) { msg = "No se pudo conectar. Revisa tu internet."; return@launch }
+                val ok = try {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$CONTROL_URL#e=$t")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+                } catch (_: Exception) { false }
+                if (!ok) msg = "Este aparato no tiene navegador. Ábrelo desde tu celular."
+            }
+        }, icon = Icons.Filled.Key, primary = true)
     }
-    val fmt = remember { SimpleDateFormat("d MMM yyyy, HH:mm", Locale("es", "MX")) }
+    if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
+}
+
+/** Para clientes: qué tipo de activación tienen y cuándo vence. */
+@Composable
+fun SubscriptionSection() {
+    val info by License.info.collectAsState()
+    val i = info
+    val fmt = remember { SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es", "MX")) }
     val iso = remember { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") } }
-    fun date(s: String) = try { fmt.format(iso.parse(s.take(19))!!) } catch (_: Exception) { s.take(16) }
-
-    fun reload() {
-        loading = true
-        scope.launch {
-            val a = Cloud.licList()
-            list = a?.let { arr -> (0 until arr.length()).mapNotNull { arr.optJSONObject(it) } } ?: list
-            msg = if (a == null) "No se pudo cargar (¿sin internet?)" else ""
-            loading = false
-        }
+    LaunchedEffect(Unit) { if (License.code.isNotBlank()) License.info.value = Cloud.licInfo(License.code) }
+    if (i == null) { Text("Código ${License.code}", color = C.Mid, fontSize = 14.sp); return }
+    val kind = when (i.optString("kind")) { "trial" -> "Prueba gratis"; "gift" -> "Cortesía"; else -> "Anual" }
+    val exp = i.optString("expires").takeIf { it.isNotBlank() && it != "null" }?.let { runCatching { fmt.format(iso.parse(it.take(19))!!) }.getOrNull() }
+    Text("$kind · código ${License.code}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    Text(if (exp != null) "Vence el $exp" else "Sin vencimiento", color = C.Mid, fontSize = 13.sp)
+    Text("${i.optInt("used")} de ${i.optInt("max")} aparatos en uso", color = C.Mid, fontSize = 13.sp)
+    i.optString("seller").takeIf { it.isNotBlank() && it != "null" }?.let { seller ->
+        val ph = i.optString("seller_phone").takeIf { it.isNotBlank() && it != "null" }
+        Text("Te la vendió: $seller" + (ph?.let { " · $it" } ?: ""), color = C.Low, fontSize = 12.sp)
     }
-    LaunchedEffect(Unit) { reload() }
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "Cada aparato que no sea de tu hogar necesita un código para abrir la app. Tus aparatos y los que emparejas con «Agregar aparato» nunca lo piden. " +
-                "Si desactivas un código, esos aparatos dejan de funcionar la próxima vez que revisen (al abrir o cada media hora).",
-            color = C.Mid, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(0.9f),
-        )
-        Wrap {
-            TvTextField(note, { note = it }, "¿Para quién es? (ej. Primo Luis)", Modifier.paneWidth(300.dp))
-            for (n in listOf(1, 2, 3, 5)) Pill("$n ${if (n == 1) "aparato" else "aparatos"}", devices == n, { devices = n })
-        }
-        Wrap {
-            ActionButton("Generar código", {
-                scope.launch {
-                    val c = Cloud.licCreate(note.trim(), devices)
-                    if (c == null) msg = "No se pudo generar (¿sin internet?)" else { created = c; createdFor = note.trim(); createdMax = devices; note = ""; reload() }
-                }
-            }, icon = Icons.Filled.Add, primary = true)
-            ActionButton("Actualizar lista", { reload() }, icon = Icons.Filled.Refresh)
-            if (loading) Spinner(size = 22.dp)
-        }
-        if (created.isNotEmpty()) {
-            Column(Modifier.background(C.AccentSoft, RoundedCornerShape(12.dp)).padding(16.dp)) {
-                Text("Código nuevo", color = C.Accent, fontSize = 12.sp)
-                Text(created, color = C.Hi, fontSize = 30.sp, fontWeight = FontWeight.Light, letterSpacing = 3.sp)
-                Text("Mándalo junto con la liga de descarga: la invitación ya lleva las dos cosas y los pasos.", color = C.Mid, fontSize = 12.sp)
-                Spacer(Modifier.height(10.dp))
-                Wrap {
-                    ActionButton("Enviar invitación", { share(created, createdMax, createdFor, false) }, icon = Icons.Filled.Share, primary = true)
-                    ActionButton("Por correo", { share(created, createdMax, createdFor, true) }, icon = Icons.Filled.Email)
-                }
-            }
-        }
-        if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
-        list.forEach { o ->
-            val code = o.optString("code")
-            val revoked = o.optBoolean("revoked")
-            val devs = o.optJSONArray("devices")
-            val used = devs?.length() ?: 0
-            Column(Modifier.fillMaxWidth().background(C.Panel2, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column {
-                    Text(code + "  ·  " + o.optString("note").ifBlank { "sin nombre" }, color = if (revoked) C.Low else C.Hi, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    val names = devs?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.joinToString(", ") { d -> d.optString("name").ifBlank { "aparato" } + " (visto " + date(d.optString("seen")) + ")" } }.orEmpty()
-                    Text(
-                        (if (revoked) "DESACTIVADO · " else "") + "$used de ${o.optInt("max")} aparatos" + if (names.isNotBlank()) " · $names" else " · sin usar",
-                        color = if (revoked) C.Warn else C.Low, fontSize = 11.sp,
-                    )
-                }
-                Wrap(gap = 8.dp) {
-                    if (!revoked) Pill("Enviar invitación", false, { share(code, o.optInt("max"), o.optString("note"), false) })
-                    if (!revoked) Pill("Correo", false, { share(code, o.optInt("max"), o.optString("note"), true) })
-                    Pill(if (revoked) "Activar" else "Desactivar", false, { scope.launch { Cloud.licSet(code, !revoked, false); reload() } })
-                    if (used > 0) Pill("Liberar aparatos", false, { scope.launch { Cloud.licSet(code, revoked, true); reload() } })
-                }
-            }
-        }
-        if (list.isEmpty() && !loading && msg.isEmpty()) Text("Aún no has generado códigos.", color = C.Low, fontSize = 12.sp)
-    }
+    if (i.optString("kind") == "trial") Text("Para seguir usándola después de la prueba, pide tu plan anual a quien te la compartió.", color = C.Low, fontSize = 12.sp)
 }

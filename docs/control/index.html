@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>CineCasa · Centro de control</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#141416; --panel:#1f1f22; --panel2:#2a2a2e; --line:#36363b; --hi:#f5f5f7; --mid:#a1a1a8; --low:#6e6e75;
+  --acc:#0a84ff; --accsoft:rgba(10,132,255,.16); --gold:#d4b071; --good:#30d158; --warn:#ff9f0a; --bad:#ff453a;
+  --r:14px; --font:-apple-system,"SF Pro Text",Roboto,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--hi);font-family:var(--font);font-size:16px;line-height:1.4}
+body{min-height:100vh;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+a{color:var(--acc);text-decoration:none}
+.wrap{max-width:860px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left)) 24px max(16px,env(safe-area-inset-right))}
+header{position:sticky;top:0;z-index:5;background:rgba(20,20,22,.86);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding-top:env(safe-area-inset-top)}
+.hd{max-width:860px;margin:0 auto;padding:14px max(16px,env(safe-area-inset-left)) 10px;display:flex;align-items:flex-end;gap:12px}
+.hd h1{font-size:30px;font-weight:700;letter-spacing:-.02em;flex:1}
+.brand{font-size:11px;letter-spacing:.32em;color:var(--gold);font-weight:600;margin-bottom:2px}
+.who{font-size:13px;color:var(--mid);text-align:right}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(22,22,24,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--low);padding:4px 0}
+.tabs button svg{width:24px;height:24px}
+.tabs button.on{color:var(--acc)}
+@media (min-width:900px){
+  body{padding-bottom:0;padding-left:220px}
+  .tabs{top:0;right:auto;width:220px;flex-direction:column;justify-content:flex-start;border-top:0;border-right:1px solid var(--line);padding:90px 12px 12px;gap:4px}
+  .tabs button{flex:none;flex-direction:row;gap:12px;font-size:15px;padding:10px 12px;border-radius:10px;justify-content:flex-start}
+  .tabs button.on{background:var(--accsoft)}
+  .tabs button svg{width:20px;height:20px}
+}
+.sec{font-size:13px;color:var(--mid);text-transform:uppercase;letter-spacing:.06em;margin:22px 4px 8px;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.stat{background:var(--panel);border-radius:var(--r);padding:14px}
+.stat .n{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat .l{font-size:13px;color:var(--mid);margin-top:2px}
+.stat.hl{background:linear-gradient(140deg,#2b2620,#1f1f22);box-shadow:inset 0 0 0 1px #3d3528}
+.stat.hl .n{color:var(--gold)}
+.group{background:var(--panel);border-radius:var(--r);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.row:last-child{border-bottom:0}
+button.row:active{background:var(--panel2)}
+.row .main{flex:1;min-width:0}
+.row .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:13px;color:var(--mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .r{font-size:13px;color:var(--mid);text-align:right;flex:none}
+.chev{color:var(--low);flex:none}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--panel2);color:var(--mid);white-space:nowrap}
+.pill.activo{background:rgba(48,209,88,.16);color:var(--good)}
+.pill.prueba{background:var(--accsoft);color:var(--acc)}
+.pill.vencido,.pill.desactivado{background:rgba(255,69,58,.15);color:var(--bad)}
+.pill.regalo{background:rgba(212,176,113,.16);color:var(--gold)}
+.pill.warn{background:rgba(255,159,10,.16);color:var(--warn)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 18px;border-radius:12px;font-weight:600;background:var(--panel2);min-height:46px}
+.btn.pri{background:var(--hi);color:#111}
+.btn.acc{background:var(--acc);color:#fff}
+.btn.wa{background:#1fa855;color:#fff}
+.btn.danger{color:var(--bad)}
+.btn.full{width:100%}
+.btn:disabled{opacity:.45}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.search{display:flex;gap:8px;margin-top:6px}
+input[type=text],input[type=tel],input[type=email],input[type=number],textarea,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--acc)}
+label{display:block;font-size:13px;color:var(--mid);margin:12px 2px 6px}
+.seg{display:flex;background:var(--panel2);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;padding:9px 6px;border-radius:9px;font-weight:600;font-size:14px;color:var(--mid)}
+.seg button.on{background:#48484e;color:var(--hi)}
+.stepper{display:flex;align-items:center;gap:14px}
+.stepper button{width:44px;height:44px;border-radius:50%;background:var(--panel2);font-size:22px;font-weight:600}
+.stepper .v{font-size:26px;font-weight:700;min-width:36px;text-align:center;font-variant-numeric:tabular-nums}
+.note{font-size:13px;color:var(--mid);margin-top:8px}
+.cost{background:var(--accsoft);color:var(--hi);border-radius:12px;padding:12px 14px;margin-top:14px;font-size:14px}
+.cost b{color:var(--acc)}
+.empty{color:var(--mid);text-align:center;padding:40px 16px}
+.sheetbg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+.sheet{background:#1c1c1f;width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:10px 18px calc(22px + env(safe-area-inset-bottom));animation:up .2s ease-out}
+@media (min-width:700px){.sheetbg{align-items:center}.sheet{border-radius:20px;padding-bottom:22px}}
+.grab{width:38px;height:5px;border-radius:3px;background:#48484e;margin:2px auto 12px}
+.sheet h2{font-size:22px;font-weight:700;margin-bottom:4px}
+.codebig{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:26px;letter-spacing:2px;font-weight:600;margin:6px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:12px 0}
+.kv div:nth-child(odd){color:var(--mid)}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#f5f5f7;color:#111;font-weight:600;padding:10px 16px;border-radius:12px;z-index:40;max-width:90vw;text-align:center;animation:up .2s}
+.toast.err{background:var(--bad);color:#fff}
+.login{max-width:440px;margin:12vh auto 0;text-align:center;padding:0 20px}
+.login .logo{width:84px;height:84px;margin:0 auto 22px}
+.login h1{font-size:26px;letter-spacing:.3em;font-weight:300;margin-bottom:10px}
+.login p{color:var(--mid);margin-bottom:12px}
+.lvl{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden;margin-top:8px}
+.lvl i{display:block;height:100%;background:var(--gold)}
+.spin{width:22px;height:22px;border:2.5px solid var(--panel2);border-top-color:var(--acc);border-radius:50%;animation:rot .8s linear infinite;margin:40px auto}
+@keyframes rot{to{transform:rotate(360deg)}}
+@keyframes up{from{transform:translateY(24px);opacity:0}}
+@keyframes fade{from{opacity:0}}
+.fab{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));z-index:7;width:58px;height:58px;border-radius:50%;background:var(--acc);color:#fff;font-size:30px;box-shadow:0 8px 24px rgba(10,132,255,.4)}
+@media (min-width:900px){.fab{bottom:28px}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const SB = 'https://wnwecaapchcfhcljsvli.supabase.co/rest/v1/rpc/';
+const KEY = 'sb_publishable_vnkSLd5EzN53_LBv76YxUA_QRo2u8ok';
+const PANEL_URL = location.origin + location.pathname;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k){ try { return localStorage.getItem(k) } catch { return null } }, set(k,v){ try { v==null ? localStorage.removeItem(k) : localStorage.setItem(k,v) } catch {} } };
+
+let token = store.get('cc_token');
+let me = null, tab = 'inicio', codes = [], resellers = [], q = '';
+
+async function rpc(fn, args = {}) {
+  const r = await fetch(SB + fn, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body: JSON.stringify(args) });
+  const txt = await r.text();
+  let data = null; try { data = txt ? JSON.parse(txt) : null } catch { data = txt }
+  if (!r.ok) {
+    const msg = (data && data.message) || 'No se pudo completar';
+    if (/sesion invalida/.test(msg)) { logout(true); }
+    throw new Error(nice(msg));
+  }
+  return data;
+}
+function nice(m) {
+  const map = {
+    'creditos insuficientes': 'No tienes créditos suficientes',
+    'llegaste al tope de pruebas': 'Llegaste al tope de pruebas gratis de este mes',
+    'tu cuenta de distribuidor esta en pausa': 'Tu cuenta está en pausa; habla con el gerente',
+    'enlace vencido o ya usado': 'Este enlace ya se usó o venció. Pide uno nuevo.',
+    'sesion invalida': 'Tu sesión terminó. Vuelve a entrar.',
+    'ese codigo ya es anual': 'Ese código ya es anual',
+    'primero conviertela a anual': 'Primero conviértela a anual',
+    'los codigos de regalo no vencen': 'Los códigos de regalo no vencen',
+    'la prueba permite pocos aparatos': 'La prueba permite pocos aparatos; conviértela a anual',
+    'falta el nombre': 'Falta el nombre',
+    'no puede quedar en negativo': 'No puede quedar en negativo',
+  };
+  for (const k in map) if (m.includes(k)) return m.startsWith('creditos insuficientes') ? m.replace('creditos insuficientes: tienes', 'No alcanza: tienes').replace('se necesitan', 'necesitas') : map[k];
+  return m;
+}
+function toast(msg, err) {
+  const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4200 : 2400);
+}
+const money = n => '$' + Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+const num = n => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
+const fdate = s => s ? new Date(s).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' }) : 'Sin vencimiento';
+const ago = s => { if (!s) return 'nunca'; const d = (Date.now() - new Date(s)) / 864e5; return d < 1 ? 'hoy' : d < 2 ? 'ayer' : `hace ${Math.floor(d)} días` };
+const daysLeft = s => s ? Math.ceil((new Date(s) - Date.now()) / 864e5) : null;
+const isMgr = () => me && me.role === 'mgr';
+const rules = () => (me && me.rules) || {};
+const statusLabel = c => c.kind === 'gift' && c.status === 'activo' ? 'regalo' : c.status;
+
+function suggested(n) {
+  const r = rules().retail || {}; if (n <= 1) return r.d1 || 149; if (n === 2) return r.d2 || 249; if (n === 3) return r.d3 || 299;
+  return (r.d3 || 299) + (n - 3) * (r.extra || 79);
+}
+function waLink(phone, text) {
+  let p = String(phone || '').replace(/\D/g, ''); if (p.length === 10) p = '52' + p;
+  return 'https://wa.me/' + p + '?text=' + encodeURIComponent(text);
+}
+function inviteText(c) {
+  const dl = rules().download_url || 'https://github.com/msantos4321-bit/reproductor-tv/releases/latest/download/CineCasa.apk';
+  const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
+  const plan = c.kind === 'trial' ? `Es una prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'No vence' : `Vence el ${fdate(c.expires)}`;
+  return `${who}aquí está tu CineCasa 🎬\n\n1. Descarga la app (celular, tableta o tele Android):\n${dl}\n\n2. Ábrela y escribe tu código:\n${c.code}\n\nSirve para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}. ${plan}.\nEn la tele se instala con la app «Downloader» escribiendo la liga de arriba. Si Android pregunta, permite «instalar apps desconocidas».`;
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copiado'); }
+  catch { prompt('Copia el texto:', text); }
+}
+
+// ---------- entrar ----------
+async function boot() {
+  const h = location.hash.match(/[#&]e=([a-f0-9]{20,})/);
+  if (h) {
+    history.replaceState(null, '', location.pathname);
+    try {
+      const r = await rpc('cc_login', { p_link: h[1], p_label: navigator.userAgent.slice(0, 80) });
+      token = r.token; store.set('cc_token', token);
+    } catch (e) { renderLogin(e.message); return; }
+  }
+  if (!token) { renderLogin(); return; }
+  try { me = await rpc('cc_me', { p_t: token }); } catch (e) { renderLogin(e.message); return; }
+  render();
+}
+function logout(silent) {
+  if (!silent && token) rpc('cc_logout', { p_t: token }).catch(() => {});
+  token = null; me = null; store.set('cc_token', null);
+  renderLogin(silent ? 'Tu sesión terminó.' : '');
+}
+const LOGO = `<svg viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#1f1d1a"/><path d="M68 30 A26 26 0 1 0 68 70" fill="none" stroke="#d4b071" stroke-width="6" stroke-linecap="round"/><path d="M45 40 L62 50 L45 60 Z" fill="#d4b071"/></svg>`;
+function renderLogin(msg) {
+  document.title = 'CineCasa · Centro de control';
+  $('#app').innerHTML = `<div class="login"><div class="logo">${LOGO}</div><h1>CINECASA</h1>
+    <p style="font-size:18px;color:var(--hi);font-weight:600">Centro de control</p>
+    ${msg ? `<p style="color:var(--warn)">${esc(msg)}</p>` : ''}
+    <p>Gerente: abre CineCasa en tu celular y entra a <b>Ajustes → Centro de control</b>.</p>
+    <p>Distribuidor: abre el enlace de acceso que te mandó el gerente.</p></div>`;
+}
+
+// ---------- estructura ----------
+const ICONS = {
+  inicio:'<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+  codigos:'<path d="M15 7a4 4 0 1 1-3.9 4.9L3 20v-3l1-1h2v-2h2l2.1-2.1A4 4 0 0 1 15 7z"/><circle cx="16" cy="8" r="1.2"/>',
+  dist:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.9 3.1-6 7-6s7 2.1 7 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14c3 .2 5 2 5 5"/>',
+  mov:'<path d="M4 7h13l-3-3M20 17H7l3 3"/>',
+  reglas:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  cuenta:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+};
+function tabsFor() {
+  return isMgr()
+    ? [['inicio','Resumen'],['codigos','Códigos'],['dist','Distribuidores'],['mov','Movimientos'],['reglas','Reglas']]
+    : [['inicio','Resumen'],['codigos','Códigos'],['mov','Movimientos'],['cuenta','Mi cuenta']];
+}
+function render() {
+  const t = tabsFor().find(x => x[0] === tab) || tabsFor()[0]; tab = t[0];
+  document.title = 'CineCasa · ' + t[1];
+  const sub = isMgr() ? 'Gerente general' : `${esc(me.name)} · ${num(me.credits)} créditos`;
+  $('#app').innerHTML = `
+    <header><div class="hd"><div style="flex:1"><div class="brand">CINECASA</div><h1>${t[1]}</h1></div><div class="who">${sub}</div></div></header>
+    <main class="wrap" id="view"><div class="spin"></div></main>
+    <nav class="tabs">${tabsFor().map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}</button>`).join('')}</nav>
+    ${tab === 'codigos' || tab === 'inicio' ? `<button class="fab" id="fab" aria-label="Nuevo código">＋</button>` : ''}
+    ${tab === 'dist' ? `<button class="fab" id="fab" aria-label="Nuevo distribuidor">＋</button>` : ''}`;
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+  const fab = $('#fab'); if (fab) fab.onclick = () => tab === 'dist' ? editReseller(null) : newCode();
+  ({ inicio: viewHome, codigos: viewCodes, dist: viewResellers, mov: viewLedger, reglas: viewRules, cuenta: viewAccount })[tab]();
+}
+async function refreshMe() { try { me = await rpc('cc_me', { p_t: token }); } catch {} }
+
+// ---------- resumen ----------
+async function viewHome() {
+  const s = await rpc('cc_summary', { p_t: token }).catch(e => (toast(e.message, 1), null)); if (!s) return;
+  let lvl = '';
+  if (!isMgr()) {
+    const levels = rules().levels || []; const sold = Number(me.level.sold || 0);
+    const next = levels.find(l => Number(l.min) > sold);
+    const pct = next ? Math.min(100, sold / Number(next.min) * 100) : 100;
+    lvl = `<div class="sec">Tu nivel</div><div class="stat"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="n" style="font-size:22px">${esc(me.level.name)}</div><div class="l">crédito a ${money(me.level.price)}</div></div>
+      <div class="lvl"><i style="width:${pct}%"></i></div><div class="note">${next ? `Llevas ${num(sold)} aparatos este año. Con ${num(next.min - sold)} más subes a ${esc(next.name)} (crédito a ${money(next.price)}).` : 'Estás en el nivel más alto.'}</div></div>`;
+  }
+  $('#view').innerHTML = `
+    <div class="sec">Ahora</div>
+    <div class="grid">
+      ${!isMgr() ? `<div class="stat hl"><div class="n">${num(me.credits)}</div><div class="l">Créditos disponibles</div></div>` : ''}
+      <div class="stat"><div class="n">${s.active_homes}</div><div class="l">Clientes activos</div></div>
+      <div class="stat"><div class="n">${s.active_devices}</div><div class="l">Aparatos funcionando</div></div>
+      <div class="stat"><div class="n">${s.trials}</div><div class="l">Pruebas en curso</div></div>
+      <div class="stat"><div class="n" style="color:${s.expiring ? 'var(--warn)' : ''}">${s.expiring}</div><div class="l">Vencen en 15 días</div></div>
+    </div>
+    <div class="sec">Este mes</div>
+    <div class="grid">
+      <div class="stat"><div class="n">${num(s.sold_month)}</div><div class="l">Aparatos vendidos</div></div>
+      <div class="stat"><div class="n">${s.trials_month}</div><div class="l">Pruebas dadas</div></div>
+      <div class="stat"><div class="n">${s.converted_month}</div><div class="l">Pruebas que pagaron</div></div>
+      ${isMgr() ? `<div class="stat hl"><div class="n">${money(s.income_month)}</div><div class="l">Cobrado a distribuidores</div></div>
+      <div class="stat"><div class="n">${s.resellers}</div><div class="l">Distribuidores</div></div>
+      <div class="stat"><div class="n">${num(s.credits_out)}</div><div class="l">Créditos sin usar</div></div>` : ''}
+    </div>
+    ${lvl}
+    <div class="sec">Atajos</div>
+    <div class="btns"><button class="btn acc" id="q1">Nueva prueba gratis</button><button class="btn" id="q2">Nuevo código anual</button>${s.expiring ? `<button class="btn" id="q3">Ver los que vencen</button>` : ''}</div>`;
+  $('#q1').onclick = () => newCode('trial'); $('#q2').onclick = () => newCode('paid');
+  if ($('#q3')) $('#q3').onclick = () => { tab = 'codigos'; q = ''; filterExpiring = true; render(); };
+}
+
+// ---------- códigos ----------
+let filterExpiring = false;
+async function viewCodes() {
+  $('#view').innerHTML = `<div class="search"><input type="text" id="q" placeholder="Buscar cliente, código, teléfono${isMgr() ? ' o distribuidor' : ''}" value="${esc(q)}"></div>
+    <div class="btns" style="margin-top:10px" id="flt"></div><div id="list" style="margin-top:12px"><div class="spin"></div></div>`;
+  let timer; $('#q').oninput = e => { q = e.target.value; clearTimeout(timer); timer = setTimeout(loadCodes, 300); };
+  await loadCodes();
+}
+let fstate = 'todos';
+async function loadCodes() {
+  try { codes = await rpc('cc_code_list', { p_t: token, p_q: q }); } catch (e) { toast(e.message, 1); return; }
+  if (filterExpiring) { fstate = 'vence'; filterExpiring = false; }
+  const counts = { todos: codes.length, activo: 0, prueba: 0, vence: 0, vencido: 0 };
+  codes.forEach(c => { if (counts[c.status] != null) counts[c.status]++; const d = daysLeft(c.expires); if (c.status === 'activo' && d != null && d <= 15) counts.vence++; });
+  const F = [['todos','Todos'],['activo','Activos'],['prueba','En prueba'],['vence','Por vencer'],['vencido','Vencidos']];
+  $('#flt').innerHTML = F.map(([k, l]) => `<button class="pill ${fstate === k ? 'prueba' : ''}" data-f="${k}" style="padding:7px 12px;font-size:13px">${l} ${counts[k]}</button>`).join('');
+  document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { fstate = b.dataset.f; loadCodes(); });
+  const list = codes.filter(c => fstate === 'todos' || (fstate === 'vence' ? (c.status === 'activo' && daysLeft(c.expires) != null && daysLeft(c.expires) <= 15) : c.status === fstate));
+  if (!list.length) { $('#list').innerHTML = `<div class="empty">${codes.length ? 'Nada en este filtro.' : 'Todavía no hay códigos. Toca ＋ para crear el primero.'}</div>`; return; }
+  $('#list').innerHTML = `<div class="group">${list.map((c, i) => {
+    const d = daysLeft(c.expires), st = statusLabel(c);
+    const when = c.kind === 'gift' ? 'No vence' : c.status === 'vencido' ? `Venció ${fdate(c.expires)}` : d != null ? (d <= 15 ? `Vence en ${d} días` : `Vence ${fdate(c.expires)}`) : 'Sin vencimiento';
+    return `<button class="row" data-i="${codes.indexOf(c)}"><div class="main"><div class="t">${esc(c.customer || c.note || 'Sin nombre')}</div>
+      <div class="s">${esc(c.code)} · ${c.devices.length}/${c.max} aparatos · ${when}${isMgr() && c.reseller ? ' · ' + esc(c.reseller) : ''}</div></div>
+      <span class="pill ${st} ${c.status === 'activo' && d != null && d <= 15 ? 'warn' : ''}">${st}</span><span class="chev">›</span></button>`;
+  }).join('')}</div>`;
+  document.querySelectorAll('[data-i]').forEach(b => b.onclick = () => codeSheet(codes[b.dataset.i]));
+}
+
+function sheet(html, onmount) {
+  const bg = document.createElement('div'); bg.className = 'sheetbg';
+  bg.innerHTML = `<div class="sheet"><div class="grab"></div>${html}</div>`;
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  document.body.appendChild(bg); if (onmount) onmount(bg); return bg;
+}
+
+function newCode(kind0) {
+  let kind = kind0 || 'trial', n = 1;
+  const r = rules();
+  const bg = sheet(`<h2>Nuevo código</h2><div class="note" style="margin-top:0">Para un cliente nuevo. Después lo compartes por WhatsApp.</div>
+    <label>Tipo</label><div class="seg" id="kind"><button data-k="trial">Prueba ${r.trial_days || 21} días</button><button data-k="paid">Anual</button>${isMgr() ? '<button data-k="gift">Regalo</button>' : ''}</div>
+    <label>Aparatos</label><div class="stepper"><button id="m">−</button><div class="v" id="n">1</div><button id="p">＋</button><div class="note" id="nhint" style="margin:0"></div></div>
+    <label for="c">Nombre del cliente</label><input type="text" id="c" placeholder="Ej. Juan Pérez" autocomplete="off">
+    <label for="ph">WhatsApp del cliente (opcional)</label><input type="tel" id="ph" placeholder="10 dígitos" inputmode="tel">
+    <div class="cost" id="cost"></div>
+    <button class="btn pri full" style="margin-top:16px" id="go">Crear código</button>`, bg => {
+      const upd = () => {
+        bg.querySelectorAll('#kind button').forEach(b => b.classList.toggle('on', b.dataset.k === kind));
+        const maxT = r.trial_devices || 2; if (kind === 'trial' && n > maxT) n = maxT;
+        bg.querySelector('#n').textContent = n;
+        bg.querySelector('#nhint').textContent = kind === 'trial' ? `máximo ${maxT} en prueba` : '';
+        const c = bg.querySelector('#cost');
+        if (kind === 'trial') c.innerHTML = `Gratis. Funciona <b>${r.trial_days || 21} días</b>; si el cliente paga, la conviertes a anual con un toque.`;
+        else if (kind === 'gift') c.innerHTML = `Sin costo y <b>sin vencimiento</b>. Solo para familia o cortesías.`;
+        else c.innerHTML = isMgr() ? `Venta directa tuya. Precio sugerido al público: <b>${money(suggested(n))} al año</b>.`
+          : `Gasta <b>${n} ${n == 1 ? 'crédito' : 'créditos'}</b> (tienes ${num(me.credits)}). Precio sugerido al público: <b>${money(suggested(n))} al año</b>.`;
+      };
+      bg.querySelectorAll('#kind button').forEach(b => b.onclick = () => { kind = b.dataset.k; upd(); });
+      bg.querySelector('#m').onclick = () => { n = Math.max(1, n - 1); upd(); };
+      bg.querySelector('#p').onclick = () => { n = Math.min(20, n + 1); upd(); };
+      bg.querySelector('#go').onclick = async e => {
+        e.target.disabled = true;
+        try {
+          const c = await rpc('cc_code_create', { p_t: token, p_kind: kind, p_devices: n, p_customer: bg.querySelector('#c').value.trim(), p_phone: bg.querySelector('#ph').value.trim(), p_note: '' });
+          bg.remove(); await refreshMe(); codeSheet(c, true); if (tab === 'codigos' || tab === 'inicio') render();
+        } catch (err) { toast(err.message, 1); e.target.disabled = false; }
+      };
+      upd();
+    });
+}
+
+function codeSheet(c, fresh) {
+  const st = statusLabel(c), d = daysLeft(c.expires);
+  const devs = c.devices.length ? c.devices.map(x => `<div class="row"><div class="main"><div class="t">${esc(x.name || 'Aparato')}</div><div class="s">Visto ${ago(x.seen)}</div></div></div>`).join('') : `<div class="row"><div class="main"><div class="s">Aún no se ha usado en ningún aparato.</div></div></div>`;
+  const kindTxt = { trial: 'Prueba gratis', paid: 'Anual', gift: 'Regalo' }[c.kind] || c.kind;
+  const bg = sheet(`
+    ${fresh ? '<div class="pill activo" style="margin-bottom:8px">Código creado</div>' : ''}
+    <h2>${esc(c.customer || 'Sin nombre')}</h2>
+    <div class="codebig">${esc(c.code)}</div>
+    <span class="pill ${st}">${st}</span>
+    <div class="kv">
+      <div>Tipo</div><div>${kindTxt}</div>
+      <div>Aparatos</div><div>${c.devices.length} de ${c.max} en uso</div>
+      <div>${c.status === 'vencido' ? 'Venció' : 'Vence'}</div><div>${c.kind === 'gift' ? 'No vence' : fdate(c.expires)}${d != null && d > 0 ? ` (en ${d} días)` : ''}</div>
+      ${c.phone ? `<div>WhatsApp</div><div>${esc(c.phone)}</div>` : ''}
+      ${isMgr() ? `<div>Vendió</div><div>${esc(c.reseller || 'Tú (directo)')}</div>` : ''}
+      <div>Creado</div><div>${fdate(c.created)}</div>
+    </div>
+    <div class="btns">
+      <a class="btn wa" target="_blank" rel="noopener" href="${waLink(c.phone, inviteText(c))}">Enviar por WhatsApp</a>
+      <button class="btn" id="cp">Copiar mensaje</button>
+    </div>
+    <div class="sec">Aparatos</div><div class="group">${devs}</div>
+    <div class="sec">Acciones</div>
+    <div class="btns">
+      ${c.kind === 'trial' && c.status !== 'desactivado' ? `<button class="btn acc" id="conv">Cliente pagó: pasar a anual</button>` : ''}
+      ${c.kind === 'paid' ? `<button class="btn acc" id="ren">Renovar 1 año (${c.max} ${c.max == 1 ? 'crédito' : 'créditos'})</button>` : ''}
+      <button class="btn" id="add">Agregar aparato</button>
+      ${c.devices.length ? `<button class="btn" id="rst">Liberar aparatos</button>` : ''}
+      <button class="btn" id="ed">Editar cliente</button>
+      <button class="btn danger" id="rev">${c.revoked ? 'Volver a activar' : 'Desactivar'}</button>
+    </div>
+    <div class="note">Liberar aparatos sirve cuando el cliente cambia de celular o de tele: el código vuelve a quedar libre.</div>`, bg => {
+      const act = async (fn, args, msg) => {
+        try { const nc = await rpc(fn, Object.assign({ p_t: token, p_code: c.code }, args)); bg.remove(); toast(msg); await refreshMe(); codeSheet(nc); if (tab !== 'reglas') render(); }
+        catch (e) { toast(e.message, 1); }
+      };
+      bg.querySelector('#cp').onclick = () => copy(inviteText(c));
+      const conv = bg.querySelector('#conv'); if (conv) conv.onclick = () => askNumber(`¿Cuántos aparatos pagó?`, c.max, n => act('cc_code_convert', { p_devices: n }, 'Ya es anual'), n => isMgr() ? `Venta directa. Sugerido ${money(suggested(n))}` : `Gasta ${n} ${n == 1 ? 'crédito' : 'créditos'} · sugerido ${money(suggested(n))}`);
+      const ren = bg.querySelector('#ren'); if (ren) ren.onclick = () => act('cc_code_renew', {}, 'Renovado 1 año');
+      bg.querySelector('#add').onclick = () => askNumber('¿Cuántos aparatos agregas?', 1, n => act('cc_code_add', { p_n: n }, 'Aparatos agregados'), n => c.kind === 'paid' ? `Gasta ${num(n * (d != null && d < 183 ? .5 : 1))} créditos (proporcional a lo que queda del año)` : c.kind === 'trial' ? 'En prueba no gasta créditos' : 'Sin costo');
+      const rst = bg.querySelector('#rst'); if (rst) rst.onclick = () => confirmIn(bg, 'Los aparatos actuales tendrán que volver a escribir el código. ¿Liberar?', () => act('cc_code_set', { p_revoked: null, p_reset: true, p_customer: null, p_phone: null, p_note: null }, 'Aparatos liberados'));
+      bg.querySelector('#rev').onclick = () => confirmIn(bg, c.revoked ? '¿Volver a activar este código?' : 'La app dejará de funcionar en sus aparatos la próxima vez que revise. ¿Desactivar?', () => act('cc_code_set', { p_revoked: !c.revoked, p_reset: false, p_customer: null, p_phone: null, p_note: null }, c.revoked ? 'Activado' : 'Desactivado'));
+      bg.querySelector('#ed').onclick = () => {
+        bg.remove();
+        sheet(`<h2>Editar cliente</h2><label>Nombre</label><input type="text" id="c" value="${esc(c.customer)}"><label>WhatsApp</label><input type="tel" id="ph" value="${esc(c.phone)}"><label>Nota</label><input type="text" id="nt" value="${esc(c.note)}"><button class="btn pri full" style="margin-top:16px" id="sv">Guardar</button>`, b2 => {
+          b2.querySelector('#sv').onclick = async () => {
+            try { const nc = await rpc('cc_code_set', { p_t: token, p_code: c.code, p_revoked: null, p_reset: false, p_customer: b2.querySelector('#c').value.trim(), p_phone: b2.querySelector('#ph').value.trim(), p_note: b2.querySelector('#nt').value.trim() }); b2.remove(); toast('Guardado'); codeSheet(nc); if (tab === 'codigos') loadCodes(); }
+            catch (e) { toast(e.message, 1); }
+          };
+        });
+      };
+    });
+}
+function confirmIn(bg, msg, ok) {
+  const s = bg.querySelector('.sheet'); const box = document.createElement('div');
+  box.className = 'cost'; box.style.background = 'rgba(255,69,58,.12)';
+  box.innerHTML = `<div>${esc(msg)}</div><div class="btns" style="margin-top:10px"><button class="btn" data-n>Cancelar</button><button class="btn danger" data-y style="background:var(--panel2)">Sí, hacerlo</button></div>`;
+  s.appendChild(box); box.scrollIntoView({ behavior: 'smooth' });
+  box.querySelector('[data-n]').onclick = () => box.remove(); box.querySelector('[data-y]').onclick = () => { box.remove(); ok(); };
+}
+function askNumber(title, start, ok, hint) {
+  let n = start || 1;
+  sheet(`<h2>${esc(title)}</h2><div class="stepper" style="margin:16px 0"><button id="m">−</button><div class="v" id="n">${n}</div><button id="p">＋</button></div><div class="cost" id="h"></div><button class="btn pri full" style="margin-top:16px" id="go">Confirmar</button>`, bg => {
+    const upd = () => { bg.querySelector('#n').textContent = n; bg.querySelector('#h').textContent = hint ? hint(n) : ''; };
+    bg.querySelector('#m').onclick = () => { n = Math.max(1, n - 1); upd(); };
+    bg.querySelector('#p').onclick = () => { n = Math.min(20, n + 1); upd(); };
+    bg.querySelector('#go').onclick = () => { bg.remove(); ok(n); };
+    upd();
+  });
+}
+
+// ---------- distribuidores ----------
+async function viewResellers() {
+  try { resellers = await rpc('cc_rs_list', { p_t: token }); } catch (e) { toast(e.message, 1); return; }
+  if (!resellers.length) { $('#view').innerHTML = `<div class="empty">Aún no tienes distribuidores.<br>Toca ＋ para dar de alta al primero; recibe ${rules().start_credits ?? 3} créditos de regalo.</div>`; return; }
+  $('#view').innerHTML = `<div class="sec">${resellers.length} distribuidores</div><div class="group">${resellers.map((r, i) => `
+    <button class="row" data-r="${i}"><div class="main"><div class="t">${esc(r.name)} ${r.paused ? '<span class="pill desactivado">en pausa</span>' : ''}</div>
+    <div class="s">${esc(r.level.name)} · ${r.homes} clientes · ${r.trials} pruebas${r.expiring ? ` · <span style="color:var(--warn)">${r.expiring} por vencer</span>` : ''} · entró ${ago(r.last_seen)}</div></div>
+    <div class="r"><div style="font-size:18px;font-weight:700;color:var(--gold)">${num(r.credits)}</div>créditos</div><span class="chev">›</span></button>`).join('')}</div>`;
+  document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => resellerSheet(resellers[b.dataset.r]));
+}
+function resellerSheet(r) {
+  sheet(`<h2>${esc(r.name)}</h2><div class="note" style="margin-top:0">${esc(r.phone || 'Sin WhatsApp')}${r.email ? ' · ' + esc(r.email) : ''}</div>
+    <div class="grid" style="margin-top:14px">
+      <div class="stat hl"><div class="n">${num(r.credits)}</div><div class="l">Créditos</div></div>
+      <div class="stat"><div class="n" style="font-size:20px">${esc(r.level.name)}</div><div class="l">${num(r.level.sold)} aparatos en el año · crédito a ${money(r.level.price)}</div></div>
+      <div class="stat"><div class="n">${r.homes}</div><div class="l">Clientes activos</div></div>
+      <div class="stat"><div class="n">${r.trials}</div><div class="l">Pruebas en curso</div></div>
+    </div>
+    <div class="sec">Créditos</div>
+    <div class="btns"><button class="btn acc" id="buy">Abonar créditos (me pagó)</button><button class="btn" id="gift">Regalar créditos</button><button class="btn" id="take">Quitar créditos</button></div>
+    <div class="sec">Acceso</div>
+    <div class="btns"><button class="btn wa" id="acc">Enviar acceso por WhatsApp</button><button class="btn" id="acccp">Copiar enlace de acceso</button></div>
+    <div class="note">El enlace sirve una vez y vence en 7 días. Si cambia de celular, mándale otro.</div>
+    <div class="sec">Más</div>
+    <div class="btns"><button class="btn" id="ed">Editar datos</button><button class="btn" id="mv">Ver movimientos</button><button class="btn danger" id="pz">${r.paused ? 'Quitar pausa' : 'Pausar'}</button></div>
+    <div class="note">En pausa no puede crear códigos ni entrar al panel. Sus clientes que ya pagaron siguen funcionando.</div>`, bg => {
+      const credit = (title, sign, reason, withAmount) => {
+        bg.remove(); let n = 10;
+        sheet(`<h2>${title}</h2><label>Créditos</label><div class="stepper"><button id="m">−</button><input type="number" id="n" value="10" min="1" style="width:110px;text-align:center;font-size:22px;font-weight:700"><button id="p">＋</button></div>
+          ${withAmount ? `<label>¿Cuánto te pagó? (pesos)</label><input type="number" id="amt" inputmode="decimal">` : ''}
+          <div class="note" id="h"></div><button class="btn pri full" style="margin-top:16px" id="go">Confirmar</button>`, b2 => {
+            const inp = b2.querySelector('#n'), amt = b2.querySelector('#amt');
+            const upd = () => { n = Math.max(1, Number(inp.value) || 1); if (withAmount) { amt.placeholder = 'Sugerido ' + money(n * r.level.price); b2.querySelector('#h').textContent = `Nivel ${r.level.name}: ${money(r.level.price)} por crédito.`; } };
+            b2.querySelector('#m').onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 1) - 5); upd(); };
+            b2.querySelector('#p').onclick = () => { inp.value = (Number(inp.value) || 0) + 5; upd(); };
+            inp.oninput = upd;
+            b2.querySelector('#go').onclick = async () => {
+              try {
+                const v = await rpc('cc_rs_credit', { p_t: token, p_id: r.id, p_delta: sign * n, p_reason: reason, p_amount: withAmount ? (Number(amt.value) || n * r.level.price) : null });
+                b2.remove(); toast(`Listo: ahora tiene ${num(v)} créditos`); viewResellers();
+              } catch (e) { toast(e.message, 1); }
+            };
+            upd();
+          });
+      };
+      bg.querySelector('#buy').onclick = () => credit('Abonar créditos', 1, 'compra', true);
+      bg.querySelector('#gift').onclick = () => credit('Regalar créditos', 1, 'regalo', false);
+      bg.querySelector('#take').onclick = () => credit('Quitar créditos', -1, 'ajuste', false);
+      const link = async () => PANEL_URL + '#e=' + await rpc('cc_link_create', { p_t: token, p_reseller: r.id });
+      bg.querySelector('#acc').onclick = async () => {
+        try { const u = await link(); window.open(waLink(r.phone, `Hola ${r.name.split(' ')[0]}, este es tu acceso al Centro de control de CineCasa. Ábrelo en tu celular (sirve una vez, guárdalo en tu pantalla de inicio):\n${u}`), '_blank'); } catch (e) { toast(e.message, 1); }
+      };
+      bg.querySelector('#acccp').onclick = async () => { try { copy(await link()); } catch (e) { toast(e.message, 1); } };
+      bg.querySelector('#ed').onclick = () => { bg.remove(); editReseller(r); };
+      bg.querySelector('#mv').onclick = () => { bg.remove(); ledgerSheet(r); };
+      bg.querySelector('#pz').onclick = () => confirmIn(bg, r.paused ? '¿Quitar la pausa?' : '¿Pausar a este distribuidor?', async () => {
+        try { await rpc('cc_rs_pause', { p_t: token, p_id: r.id, p_paused: !r.paused }); bg.remove(); toast(r.paused ? 'Pausa quitada' : 'En pausa'); viewResellers(); } catch (e) { toast(e.message, 1); }
+      });
+    });
+}
+function editReseller(r) {
+  sheet(`<h2>${r ? 'Editar distribuidor' : 'Nuevo distribuidor'}</h2>
+    <label>Nombre</label><input type="text" id="nm" value="${esc(r?.name)}" placeholder="Ej. Luis Ramírez">
+    <label>WhatsApp</label><input type="tel" id="ph" value="${esc(r?.phone)}" placeholder="10 dígitos" inputmode="tel">
+    <label>Correo (opcional)</label><input type="email" id="em" value="${esc(r?.email)}">
+    <label>Notas (solo las ves tú)</label><textarea id="nt" rows="2">${esc(r?.notes)}</textarea>
+    ${r ? '' : `<div class="cost">Al darlo de alta recibe <b>${rules().start_credits ?? 3} créditos de regalo</b>. Después te pide su enlace de acceso.</div>`}
+    <button class="btn pri full" style="margin-top:16px" id="sv">${r ? 'Guardar' : 'Dar de alta'}</button>`, bg => {
+      bg.querySelector('#sv').onclick = async () => {
+        try {
+          const id = await rpc('cc_rs_save', { p_t: token, p_id: r ? r.id : null, p_name: bg.querySelector('#nm').value, p_phone: bg.querySelector('#ph').value.trim(), p_email: bg.querySelector('#em').value.trim(), p_notes: bg.querySelector('#nt').value });
+          bg.remove(); toast(r ? 'Guardado' : 'Distribuidor creado'); await viewResellers();
+          if (!r) { const nr = resellers.find(x => x.id === id); if (nr) resellerSheet(nr); }
+        } catch (e) { toast(e.message, 1); }
+      };
+    });
+}
+
+// ---------- movimientos ----------
+const REASONS = { venta: 'Código anual', conversion: 'Prueba pasó a anual', renovacion: 'Renovación', aparato_extra: 'Aparato extra', compra: 'Compra de créditos', regalo: 'Regalo', regalo_inicio: 'Regalo de bienvenida', ajuste: 'Ajuste' };
+function ledgerRows(list) {
+  if (!list.length) return `<div class="empty">Sin movimientos todavía.</div>`;
+  return `<div class="group">${list.map(g => `<div class="row"><div class="main"><div class="t">${REASONS[g.reason] || esc(g.reason)}${g.code ? ' · ' + esc(g.code) : ''}</div>
+    <div class="s">${fdate(g.at)}${isMgr() ? ' · ' + esc(g.reseller || 'Venta directa') : ''}${g.amount ? ' · pagó ' + money(g.amount) : ''}</div></div>
+    <div class="r" style="font-weight:700;font-size:16px;color:${g.delta > 0 ? 'var(--good)' : 'var(--hi)'}">${g.delta > 0 ? '+' : ''}${num(g.delta)}</div></div>`).join('')}</div>`;
+}
+async function viewLedger() {
+  try { const l = await rpc('cc_ledger', { p_t: token, p_id: null }); $('#view').innerHTML = `<div class="sec">Créditos que entran y salen</div>` + ledgerRows(l); }
+  catch (e) { toast(e.message, 1); }
+}
+async function ledgerSheet(r) {
+  try { const l = await rpc('cc_ledger', { p_t: token, p_id: r.id }); sheet(`<h2>Movimientos de ${esc(r.name)}</h2>` + ledgerRows(l)); } catch (e) { toast(e.message, 1); }
+}
+
+// ---------- reglas ----------
+function viewRules() {
+  const r = rules(); const lv = r.levels || [];
+  const f = (id, l, v, h) => `<label for="${id}">${l}</label><input type="number" id="${id}" value="${v ?? ''}" inputmode="numeric">${h ? `<div class="note">${h}</div>` : ''}`;
+  $('#view').innerHTML = `
+    <div class="sec">Pruebas gratis</div><div class="stat">
+      ${f('td', 'Días de prueba', r.trial_days)}${f('tdv', 'Aparatos en una prueba', r.trial_devices)}${f('tcap', 'Pruebas por distribuidor al mes', r.trial_month_cap)}</div>
+    <div class="sec">Distribuidores nuevos</div><div class="stat">${f('sc', 'Créditos de regalo al darse de alta', r.start_credits)}</div>
+    <div class="sec">Niveles (precio del crédito)</div><div class="stat">
+      ${lv.map((l, i) => `<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px;margin-top:${i ? 10 : 0}px">
+        <div><label style="margin-top:0">Nivel</label><input type="text" id="ln${i}" value="${esc(l.name)}"></div>
+        <div><label style="margin-top:0">Desde (aparatos/año)</label><input type="number" id="lm${i}" value="${l.min}"></div>
+        <div><label style="margin-top:0">Precio crédito</label><input type="number" id="lp${i}" value="${l.price}"></div></div>`).join('')}
+      <div class="note">Un crédito = un aparato por un año. El nivel sube solo según lo que venda en los últimos 365 días.</div></div>
+    <div class="sec">Precio sugerido al público (al año)</div><div class="stat">
+      ${f('r1', '1 aparato', r.retail?.d1)}${f('r2', '2 aparatos', r.retail?.d2)}${f('r3', '3 aparatos', r.retail?.d3)}${f('rx', 'Cada aparato extra', r.retail?.extra)}</div>
+    <div class="sec">Contacto</div><div class="stat"><label for="mw">Tu WhatsApp (para que los distribuidores te pidan créditos)</label><input type="tel" id="mw" value="${esc(r.manager_whatsapp)}" placeholder="10 dígitos"></div>
+    <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
+    <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
+  $('#sv').onclick = async () => {
+    const v = id => Number($('#' + id).value);
+    const data = { trial_days: v('td'), trial_devices: v('tdv'), trial_month_cap: v('tcap'), start_credits: v('sc'),
+      retail: { d1: v('r1'), d2: v('r2'), d3: v('r3'), extra: v('rx') },
+      levels: lv.map((_, i) => ({ name: $('#ln' + i).value.trim(), min: v('lm' + i), price: v('lp' + i) })).sort((a, b) => a.min - b.min),
+      manager_whatsapp: $('#mw').value.trim() };
+    try { const nr = await rpc('cc_rules_set', { p_t: token, p_data: data }); me.rules = nr; toast('Reglas guardadas'); } catch (e) { toast(e.message, 1); }
+  };
+  $('#other').onclick = async () => {
+    try { const t = await rpc('cc_link_create', { p_t: token, p_reseller: null }); const u = PANEL_URL + '#e=' + t;
+      sheet(`<h2>Abrir en otro aparato</h2><p class="note">Abre este enlace en tu computadora o tableta en los próximos 10 minutos. Sirve una sola vez.</p><div class="cost" style="word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:13px">${esc(u)}</div><div class="btns" style="margin-top:12px"><button class="btn pri" id="c">Copiar enlace</button><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(u)}">Mandármelo por WhatsApp</a></div>`, b => b.querySelector('#c').onclick = () => copy(u));
+    } catch (e) { toast(e.message, 1); }
+  };
+  $('#out').onclick = () => logout();
+}
+
+// ---------- mi cuenta (distribuidor) ----------
+function viewAccount() {
+  const r = rules(); const mw = r.manager_whatsapp;
+  $('#view').innerHTML = `
+    <div class="grid"><div class="stat hl"><div class="n">${num(me.credits)}</div><div class="l">Créditos disponibles</div></div>
+      <div class="stat"><div class="n" style="font-size:22px">${esc(me.level.name)}</div><div class="l">Tu crédito cuesta ${money(me.level.price)}</div></div></div>
+    <div class="sec">Comprar créditos</div>
+    <div class="stat"><div class="note" style="margin-top:0">1 crédito = 1 aparato por 1 año. Precio sugerido para tus clientes: 1 aparato ${money(suggested(1))}, 2 por ${money(suggested(2))}, 3 por ${money(suggested(3))}, cada extra ${money(r.retail?.extra || 79)}.</div>
+      <div class="btns" style="margin-top:12px">${[10, 25, 50].map(n => mw ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(mw, `Hola, soy ${me.name}. Quiero ${n} créditos de CineCasa (${money(n * me.level.price)}).`)}">Pedir ${n} · ${money(n * me.level.price)}</a>` : '').join('') || '<div class="note">Pídele créditos directamente al gerente.</div>'}</div></div>
+    ${me.paused ? '<div class="cost" style="background:rgba(255,69,58,.12)">Tu cuenta está en pausa. Habla con el gerente.</div>' : ''}
+    <div class="sec">Cómo funciona</div>
+    <div class="group">
+      <div class="row"><div class="main"><div class="t">Prueba gratis</div><div class="s" style="white-space:normal">${r.trial_days || 21} días, hasta ${r.trial_devices || 2} aparatos. No gasta créditos. Tienes ${r.trial_month_cap || 20} al mes.</div></div></div>
+      <div class="row"><div class="main"><div class="t">Cuando el cliente paga</div><div class="s" style="white-space:normal">Abre su código y toca «Cliente pagó». Gasta 1 crédito por aparato y queda activo un año.</div></div></div>
+      <div class="row"><div class="main"><div class="t">Renovación</div><div class="s" style="white-space:normal">Antes de que venza, toca «Renovar 1 año». Gasta 1 crédito por aparato.</div></div></div>
+      <div class="row"><div class="main"><div class="t">Niveles</div><div class="s" style="white-space:normal">${(r.levels || []).map(l => `${esc(l.name)}: desde ${l.min} aparatos al año, crédito a ${money(l.price)}`).join(' · ')}</div></div></div>
+    </div>
+    <div class="sec">Sesión</div><button class="btn danger" id="out">Cerrar sesión</button>`;
+  $('#out').onclick = () => logout();
+}
+
+window.addEventListener('hashchange', () => { if (/[#&]e=/.test(location.hash)) boot(); });
+boot();
+</script>
+</body>
+</html>

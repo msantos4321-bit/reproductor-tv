@@ -229,6 +229,16 @@ object Cloud {
         try { rpc("cc_lic_activate", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_name", deviceName)).trim().trim('"') } catch (_: Exception) { null }
     }
 
+    /** Enlace de un solo uso para entrar al Centro de control (solo el hogar dueño). */
+    suspend fun mgrLink(): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_mgr_link", JSONObject().put("p_h", householdId).put("p_s", householdSecret)).trim().trim('"').takeIf { it.length >= 20 } } catch (_: Exception) { null }
+    }
+
+    /** Tipo de activación, vencimiento y quién la vendió (para Ajustes). */
+    suspend fun licInfo(code: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_info", JSONObject().put("p_code", code).put("p_device", deviceId)).trim().let { if (it.isEmpty() || it == "null") null else JSONObject(it) } } catch (_: Exception) { null }
+    }
+
     suspend fun licCheck(code: String): String? = withContext(Dispatchers.IO) {
         try { rpc("cc_lic_check", JSONObject().put("p_code", code).put("p_device", deviceId)).trim().trim('"') } catch (_: Exception) { null }
     }
