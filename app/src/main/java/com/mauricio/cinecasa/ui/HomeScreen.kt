@@ -115,7 +115,10 @@ fun HomeScreen() {
     val firstFr = remember { FocusRequester() }
 
     val lf = com.mauricio.cinecasa.data.LangFilter.current
-    val rows = remember(c, progress, myList, lf) { buildHomeRows(c) }
+    val favCh by Library.favChannels.collectAsState()
+    val recentCh by Library.recentChannels.collectAsState()
+    val who by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
+    val rows = remember(c, progress, myList, lf, favCh, recentCh, who) { buildHomeRows(c) }
     var hero by remember { mutableStateOf<Hero?>(null) }
     var focusedTile by remember { mutableStateOf<Tile?>(null) }
 
@@ -214,12 +217,16 @@ fun TileCard(t: Tile, wide: Boolean, modifier: Modifier, c: Catalog, onFocused: 
 
 private fun buildHomeRows(c: Catalog): List<HomeRow> {
     val rows = ArrayList<HomeRow>()
+    // Lo de cada persona primero: lo que va viendo, su lista y sus canales
+    val who = com.mauricio.cinecasa.data.Profiles.current.value?.name?.takeIf { it.isNotBlank() && it != "Invitado" }
     val cw = Library.continueWatching()
-    if (cw.isNotEmpty()) rows += HomeRow("cw", "Continuar viendo", cw.map { Tile.P(it) }, wide = true)
-    val recentCh = Library.recentChannels.value.mapNotNull { c.channelById[it] }.filter { c.visibleCat(it.cat) }.take(15)
-    if (recentCh.isNotEmpty()) rows += HomeRow("rch", "Canales que viste", recentCh.map { Tile.Ch(it, recentCh) }, wide = true)
+    if (cw.isNotEmpty()) rows += HomeRow("cw", if (who != null) "Continuar viendo, $who" else "Continuar viendo", cw.map { Tile.P(it) }, wide = true)
     val ml = Library.myList.value
-    if (ml.isNotEmpty()) rows += HomeRow("ml", "Mi lista", ml.map { Tile.L(it) })
+    if (ml.isNotEmpty()) rows += HomeRow("ml", if (who != null) "La lista de $who" else "Mi lista", ml.map { Tile.L(it) })
+    val favCh = Library.favChannels.value.mapNotNull { c.channelById[it] }.filter { c.visibleCat(it.cat) }
+    if (favCh.isNotEmpty()) rows += HomeRow("fch", "Tus canales favoritos", favCh.map { Tile.Ch(it, favCh) }, wide = true)
+    val recentCh = Library.recentChannels.value.mapNotNull { c.channelById[it] }.filter { c.visibleCat(it.cat) && it !in favCh }.take(15)
+    if (recentCh.isNotEmpty()) rows += HomeRow("rch", "Canales que viste", recentCh.map { Tile.Ch(it, recentCh) }, wide = true)
 
     val movies = c.visMovies
     val shows = c.visShows

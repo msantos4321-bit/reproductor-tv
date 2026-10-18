@@ -120,7 +120,66 @@ const store = { get(k){ try { return localStorage.getItem(k) } catch { return nu
 let token = store.get('cc_token');
 let me = null, tab = 'inicio', codes = [], resellers = [], q = '';
 
+// ---------- modo demostración (?demo o ?demo=rs): datos inventados, sin tocar la base ----------
+const DEMO = new URLSearchParams(location.search).get('demo');
+const DAY = 864e5, iso = d => new Date(Date.now() + d * DAY).toISOString();
+const DEMO_RULES = { trial_days: 21, trial_devices: 2, trial_month_cap: 20, start_credits: 3, retail: { d1: 169, d2: 279, d3: 349, extra: 89 },
+  levels: [{ name: 'Inicial', min: 0, price: 60 }, { name: 'Plata', min: 100, price: 55 }, { name: 'Oro', min: 400, price: 50 }], manager_whatsapp: '6640000000', downloader_code: '123456' };
+const dev = (n, s) => ({ name: n, seen: iso(-s), activated: iso(-40) });
+let DEMO_CODES = [
+  { code: 'CC-7F3K-92QD', customer: 'Laura Méndez', phone: '6641234567', kind: 'paid', max: 3, status: 'activo', expires: iso(320), created: iso(-45), reseller: 'Luis Ramírez', devices: [dev('Sala · Google TV', 0), dev('Galaxy S23', 1), dev('Tablet', 3)], note: '' },
+  { code: 'CC-H2MP-8XZA', customer: 'Jorge Castillo', phone: '6649876543', kind: 'trial', max: 2, status: 'prueba', expires: iso(9), created: iso(-12), reseller: 'Luis Ramírez', devices: [dev('Fire TV Stick', 0)], note: '' },
+  { code: 'CC-Q9TR-4KDL', customer: 'Familia Ortega', phone: '6645551212', kind: 'paid', max: 4, status: 'activo', expires: iso(11), created: iso(-354), reseller: 'Ana Torres', devices: [dev('TCL 55"', 0), dev('Recámara', 2), dev('iPad', 5), dev('Moto G', 1)], note: '' },
+  { code: 'CC-B6WN-2PZE', customer: 'Ricardo Soto', phone: '6643332211', kind: 'paid', max: 1, status: 'activo', expires: iso(201), created: iso(-164), reseller: 'Ana Torres', devices: [dev('Chromecast', 0)], note: '' },
+  { code: 'CC-M3JX-7HVC', customer: 'Patricia Lara', phone: '6647778899', kind: 'trial', max: 1, status: 'vencido', expires: iso(-2), created: iso(-23), reseller: 'Luis Ramírez', devices: [dev('Galaxy A54', 2)], note: '' },
+  { code: 'CC-K8DP-5ZQW', customer: 'Mamá', phone: '', kind: 'gift', max: 2, status: 'activo', expires: null, created: iso(-60), reseller: null, devices: [dev('Sala', 0)], note: '' },
+];
+const DEMO_RS = [
+  { id: 'r1', name: 'Luis Ramírez', phone: '6641112233', email: '', notes: '', credits: 18, paused: false, created: iso(-90), level: { name: 'Plata', price: 55, sold: 132 }, homes: 41, trials: 6, expiring: 3, last_seen: iso(0) },
+  { id: 'r2', name: 'Ana Torres', phone: '6642223344', email: '', notes: '', credits: 7, paused: false, created: iso(-60), level: { name: 'Inicial', price: 60, sold: 58 }, homes: 19, trials: 4, expiring: 1, last_seen: iso(-1) },
+  { id: 'r3', name: 'Pedro Núñez', phone: '6643334455', email: '', notes: '', credits: 3, paused: false, created: iso(-5), level: { name: 'Inicial', price: 60, sold: 0 }, homes: 0, trials: 2, expiring: 0, last_seen: iso(-2) },
+];
+const DEMO_LEDGER = [
+  { delta: -3, reason: 'conversion', code: 'CC-Q9TR-4KDL', at: iso(0), reseller: 'Ana Torres' },
+  { delta: 25, reason: 'compra', code: null, amount: 1375, at: iso(-1), reseller: 'Luis Ramírez' },
+  { delta: -1, reason: 'venta', code: 'CC-B6WN-2PZE', at: iso(-2), reseller: 'Ana Torres' },
+  { delta: -4, reason: 'renovacion', code: 'CC-Q9TR-4KDL', at: iso(-3), reseller: 'Ana Torres' },
+  { delta: 3, reason: 'regalo_inicio', code: null, at: iso(-5), reseller: 'Pedro Núñez' },
+];
+let demoN = 0;
+async function demoRpc(fn, a) {
+  await new Promise(r => setTimeout(r, 120));
+  const rs = DEMO === 'rs';
+  const mine = c => !rs || c.reseller === 'Luis Ramírez';
+  switch (fn) {
+    case 'cc_login': return { token: 'demo', role: rs ? 'rs' : 'mgr' };
+    case 'cc_me': return rs ? { role: 'rs', id: 'r1', name: 'Luis Ramírez', credits: 18, paused: false, level: DEMO_RS[0].level, rules: DEMO_RULES } : { role: 'mgr', name: 'Gerente general', rules: DEMO_RULES };
+    case 'cc_summary': return rs ? { active_homes: 41, active_devices: 96, trials: 6, expiring: 3, expired: 1, sold_month: 23, sold_year: 132, income_month: 0, trials_month: 14, converted_month: 9, credits_out: 18 }
+      : { active_homes: 63, active_devices: 151, trials: 12, expiring: 4, expired: 2, sold_month: 38, sold_year: 214, income_month: 2750, trials_month: 27, converted_month: 15, resellers: 3, credits_out: 28 };
+    case 'cc_code_list': { const q = (a.p_q || '').toLowerCase(); return DEMO_CODES.filter(mine).filter(c => !q || JSON.stringify(c).toLowerCase().includes(q)); }
+    case 'cc_rs_list': return DEMO_RS;
+    case 'cc_ledger': return DEMO_LEDGER.filter(g => !rs || g.reseller === 'Luis Ramírez');
+    case 'cc_code_create': {
+      const n = a.p_devices || 1, k = a.p_kind;
+      const c = { code: 'CC-' + ['N4VE', 'R7TA', 'X2KM'][demoN % 3] + '-' + ['8QWE', '3HJK', '6PLM'][demoN++ % 3], customer: a.p_customer || 'Cliente nuevo', phone: a.p_phone || '', kind: k,
+        max: k === 'trial' ? Math.min(n, 2) : n, status: k === 'trial' ? 'prueba' : 'activo', expires: k === 'gift' ? null : iso(k === 'trial' ? 21 : 365), created: iso(0), reseller: rs ? 'Luis Ramírez' : null, devices: [], note: '' };
+      DEMO_CODES.unshift(c); return c;
+    }
+    case 'cc_code_convert': case 'cc_code_renew': case 'cc_code_add': case 'cc_code_set': {
+      const c = DEMO_CODES.find(x => x.code === a.p_code);
+      if (fn === 'cc_code_convert') Object.assign(c, { kind: 'paid', status: 'activo', max: a.p_devices, expires: iso(365) });
+      if (fn === 'cc_code_renew') Object.assign(c, { status: 'activo', expires: new Date(Math.max(Date.now(), new Date(c.expires)) + 365 * DAY).toISOString() });
+      if (fn === 'cc_code_add') c.max += a.p_n;
+      if (fn === 'cc_code_set' && a.p_revoked != null) Object.assign(c, { revoked: a.p_revoked, status: a.p_revoked ? 'desactivado' : 'activo' });
+      return c;
+    }
+    case 'cc_rs_credit': { const r = DEMO_RS.find(x => x.id === a.p_id); r.credits += a.p_delta; return r.credits; }
+    case 'cc_link_create': return 'demo' + Math.random().toString(16).slice(2);
+    default: return null;
+  }
+}
 async function rpc(fn, args = {}) {
+  if (DEMO) return demoRpc(fn, args);
   const r = await fetch(SB + fn, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body: JSON.stringify(args) });
   const txt = await r.text();
   let data = null; try { data = txt ? JSON.parse(txt) : null } catch { data = txt }
@@ -173,7 +232,17 @@ function inviteText(c) {
   const dl = rules().download_url || 'https://github.com/msantos4321-bit/reproductor-tv/releases/latest/download/CineCasa.apk';
   const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
   const plan = c.kind === 'trial' ? `Es una prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'No vence' : `Vence el ${fdate(c.expires)}`;
-  return `${who}aquí está tu CineCasa 🎬\n\n1. Descarga la app (celular, tableta o tele Android):\n${dl}\n\n2. Ábrela y escribe tu código:\n${c.code}\n\nSirve para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}. ${plan}.\nEn la tele se instala con la app «Downloader» escribiendo la liga de arriba. Si Android pregunta, permite «instalar apps desconocidas».`;
+  const dc = rules().downloader_code;
+  const tv = dc ? `📺 En la tele (Google TV, Android TV o Fire TV): instala la app «Downloader», ábrela y escribe el número *${dc}*.` : `📺 En la tele: instala la app «Downloader» y escribe la liga de arriba.`;
+  return `${who}aquí está tu CineCasa 🎬\n\n📱 En el celular o tableta, descarga la app aquí:\n${dl}\n\n${tv}\n\n🔑 Al abrirla escribe tu código:\n*${c.code}*\n\nSirve para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}. ${plan}.\nSi Android pregunta, permite «instalar apps desconocidas».`;
+}
+function renewText(c) {
+  const d = daysLeft(c.expires);
+  const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
+  const when = c.status === 'vencido' ? 'ya venció' : d === 0 ? 'vence hoy' : `vence en ${d} ${d === 1 ? 'día' : 'días'} (${fdate(c.expires)})`;
+  const what = c.kind === 'trial' ? 'tu prueba gratis de CineCasa' : 'tu CineCasa';
+  const price = suggested(c.max);
+  return `${who}${what} ${when}. ${c.kind === 'trial' ? 'Para seguir viendo, tu plan anual' : 'La renovación por un año'} para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'} queda en $${price}. Tu código sigue siendo el mismo (${c.code}), no tienes que reinstalar nada. ¿Te lo dejo activo?`;
 }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copiado'); }
@@ -190,6 +259,7 @@ async function boot() {
       token = r.token; store.set('cc_token', token);
     } catch (e) { renderLogin(e.message); return; }
   }
+  if (DEMO) token = 'demo';
   if (!token) { renderLogin(); return; }
   try { me = await rpc('cc_me', { p_t: token }); } catch (e) { renderLogin(e.message); return; }
   render();
@@ -366,6 +436,7 @@ function codeSheet(c, fresh) {
     <div class="btns">
       <a class="btn wa" target="_blank" rel="noopener" href="${waLink(c.phone, inviteText(c))}">Enviar por WhatsApp</a>
       <button class="btn" id="cp">Copiar mensaje</button>
+      ${(c.kind !== 'gift' && (c.status === 'vencido' || (d != null && d <= 15))) ? `<a class="btn acc" target="_blank" rel="noopener" href="${waLink(c.phone, renewText(c))}">Recordar renovación</a>` : ''}
     </div>
     <div class="sec">Aparatos</div><div class="group">${devs}</div>
     <div class="sec">Acciones</div>
@@ -527,7 +598,8 @@ function viewRules() {
       <div class="note">Un crédito = un aparato por un año. El nivel sube solo según lo que venda en los últimos 365 días.</div></div>
     <div class="sec">Precio sugerido al público (al año)</div><div class="stat">
       ${f('r1', '1 aparato', r.retail?.d1)}${f('r2', '2 aparatos', r.retail?.d2)}${f('r3', '3 aparatos', r.retail?.d3)}${f('rx', 'Cada aparato extra', r.retail?.extra)}</div>
-    <div class="sec">Contacto</div><div class="stat"><label for="mw">Tu WhatsApp (para que los distribuidores te pidan créditos)</label><input type="tel" id="mw" value="${esc(r.manager_whatsapp)}" placeholder="10 dígitos"></div>
+    <div class="sec">Contacto y descarga</div><div class="stat"><label for="mw">Tu WhatsApp (para que los distribuidores te pidan créditos)</label><input type="tel" id="mw" value="${esc(r.manager_whatsapp)}" placeholder="10 dígitos">
+      <label for="dc">Código de Downloader para la tele</label><input type="text" id="dc" value="${esc(r.downloader_code || '')}" inputmode="numeric" placeholder="Ej. 123456"><div class="note">Va en todas las invitaciones para instalar en la tele sin escribir la liga.</div></div>
     <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
     <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
   $('#sv').onclick = async () => {
@@ -535,7 +607,7 @@ function viewRules() {
     const data = { trial_days: v('td'), trial_devices: v('tdv'), trial_month_cap: v('tcap'), start_credits: v('sc'),
       retail: { d1: v('r1'), d2: v('r2'), d3: v('r3'), extra: v('rx') },
       levels: lv.map((_, i) => ({ name: $('#ln' + i).value.trim(), min: v('lm' + i), price: v('lp' + i) })).sort((a, b) => a.min - b.min),
-      manager_whatsapp: $('#mw').value.trim() };
+      manager_whatsapp: $('#mw').value.trim(), downloader_code: $('#dc').value.trim() };
     try { const nr = await rpc('cc_rules_set', { p_t: token, p_data: data }); me.rules = nr; toast('Reglas guardadas'); } catch (e) { toast(e.message, 1); }
   };
   $('#other').onclick = async () => {

@@ -254,6 +254,7 @@ private fun Shell() {
     }
 
     if (serverDlg) ServerDialog { serverDlg = false }
+    ExpiryReminder()
     askPlay?.let { (msg, action) ->
         ConfirmDialog(
             title = "Pantallas ocupadas",
@@ -475,5 +476,46 @@ private fun MoreRow(icon: ImageVector, title: String, value: String = "", last: 
             Icon(Icons.Filled.ChevronRight, null, tint = C.Low)
         }
         if (!last) Box(Modifier.fillMaxWidth().padding(start = 56.dp).height(0.5.dp).background(C.Line))
+    }
+}
+
+
+/** Aviso (una vez al día) cuando la suscripción del cliente está por vencer. */
+@Composable
+private fun ExpiryReminder() {
+    val info by com.mauricio.cinecasa.data.License.info.collectAsState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var show by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(info) {
+        val i = info ?: return@LaunchedEffect
+        val exp = i.optString("expires").takeIf { it.length >= 19 && it != "null" } ?: return@LaunchedEffect
+        val t = runCatching { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(exp.take(19))!!.time }.getOrNull() ?: return@LaunchedEffect
+        val days = ((t - System.currentTimeMillis()) / 86_400_000L).toInt()
+        if (days > 7 || days < 0) return@LaunchedEffect
+        val sp = ctx.getSharedPreferences("aviso", android.content.Context.MODE_PRIVATE)
+        val today = System.currentTimeMillis() / 86_400_000L
+        if (sp.getLong("dia", 0) == today) return@LaunchedEffect
+        sp.edit().putLong("dia", today).apply()
+        val trial = i.optString("kind") == "trial"
+        val seller = i.optString("seller").takeIf { it.isNotBlank() && it != "null" }
+        show = (if (trial) "Tu prueba gratis" else "Tu CineCasa") + (if (days == 0) " vence hoy." else " vence en $days ${if (days == 1) "día" else "días"}.") +
+            (if (seller != null) " Pídele a $seller tu ${if (trial) "plan anual" else "renovación"} para no quedarte sin ver." else " Pide tu ${if (trial) "plan anual" else "renovación"} a quien te la vendió.") +
+            " Tu código sigue siendo el mismo."
+    }
+    show?.let { msg ->
+        val phone = info?.optString("seller_phone")?.filter { it.isDigit() }.orEmpty()
+        ConfirmDialog(
+            title = "Tu suscripción está por vencer", message = msg,
+            confirm = if (phone.length >= 10) "Escribirle por WhatsApp" else "Entendido",
+            onConfirm = {
+                show = null
+                if (phone.length >= 10) runCatching {
+                    val p = if (phone.length == 10) "52$phone" else phone
+                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/$p?text=" + android.net.Uri.encode("Hola, quiero renovar mi CineCasa (código ${com.mauricio.cinecasa.data.License.code}).")))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            },
+            onDismiss = { show = null }, cancel = "Después",
+        )
     }
 }
