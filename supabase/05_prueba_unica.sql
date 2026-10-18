@@ -12,12 +12,12 @@ language plpgsql security definer set search_path = public as $$
 declare l licenses; r text;
 begin
   select * into l from licenses where code = upper(trim(p_code));
-  if found and l.kind = 'trial' and length(coalesce(p_fp, '')) >= 16
+  if l.code is not null and l.kind = 'trial' and length(coalesce(p_fp, '')) >= 16
      and exists (select 1 from trial_devices where fp = p_fp and code <> l.code) then
     return 'trial_used';
   end if;
   r := cc_lic_activate(p_code, p_device, p_name);
-  if r = 'ok' and found and l.kind = 'trial' and length(coalesce(p_fp, '')) >= 16 then
+  if r = 'ok' and l.code is not null and l.kind = 'trial' and length(coalesce(p_fp, '')) >= 16 then
     insert into trial_devices(fp, code) values (p_fp, l.code) on conflict (fp) do nothing;
   end if;
   return r;
