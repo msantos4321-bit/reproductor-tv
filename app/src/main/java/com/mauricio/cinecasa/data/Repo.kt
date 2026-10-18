@@ -155,7 +155,7 @@ data class Catalog(
 
 object Repo {
     private lateinit var dir: File
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> android.util.Log.w("CineCasa", "error en segundo plano", e) })
 
     private val _catalog = MutableStateFlow(Catalog())
     val catalog: StateFlow<Catalog> get() = _catalog
@@ -197,19 +197,29 @@ object Repo {
         }
     }
 
+    private suspend fun <T> retrying(times: Int = 3, block: () -> T): T {
+        var last: Exception? = null
+        repeat(times) { i ->
+            try { return block() } catch (e: Exception) { last = e; kotlinx.coroutines.delay(1500L * (i + 1)) }
+        }
+        throw last ?: java.io.IOException("sin respuesta")
+    }
+
     private suspend fun refresh(showProgress: Boolean) = withContext<Unit>(Dispatchers.IO) {
         val x = xtream() ?: return@withContext
         try {
             if (showProgress) _state.value = LoadState.Loading("Conectando con tu servidor…")
             try { Prefs.serverFormats = x.accountInfo().formats } catch (_: Exception) {}
-            val cats = async { Triple(x.categories("get_vod_categories"), x.categories("get_series_categories"), x.categories("get_live_categories")) }
+            // Uno por uno y con reintentos: si el servidor corta la conexión, no debe cerrar la app
+            val vc = retrying { x.categories("get_vod_categories") }
+            val sc = retrying { x.categories("get_series_categories") }
+            val lc = retrying { x.categories("get_live_categories") }
             if (showProgress) _state.value = LoadState.Loading("Descargando películas…")
-            val movies = x.vods()
+            val movies = retrying { x.vods() }
             if (showProgress) _state.value = LoadState.Loading("Descargando series… (${"%,d".format(movies.size)} películas listas)")
-            val shows = x.shows()
+            val shows = retrying { x.shows() }
             if (showProgress) _state.value = LoadState.Loading("Descargando canales…")
-            val channels = x.channels()
-            val (vc, sc, lc) = cats.await()
+            val channels = retrying { x.channels() }
             val c = Catalog(movies, shows, channels, vc, sc, lc)
             _catalog.value = c
             Prefs.lastRefresh = System.currentTimeMillis()

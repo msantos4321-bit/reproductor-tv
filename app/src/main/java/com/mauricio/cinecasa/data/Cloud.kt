@@ -33,7 +33,7 @@ object Cloud {
     private const val KEY = "sb_publishable_vnkSLd5EzN53_LBv76YxUA_QRo2u8ok"
 
     private lateinit var sp: SharedPreferences
-    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> android.util.Log.w("CineCasa", "error en segundo plano", e) })
     private val mutex = Mutex()
     private val outbox = LinkedHashMap<String, JSONObject>()
     private var flushJob: Job? = null

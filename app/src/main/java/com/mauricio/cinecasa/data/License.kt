@@ -31,7 +31,7 @@ object License {
     val owner: StateFlow<Boolean> get() = _owner
 
     /** Trabajo que no debe cancelarse si la pantalla cambia (p. ej. al pasar a "Revisando…"). */
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> android.util.Log.w("CineCasa", "error en segundo plano", e) })
 
     /** Revisa la licencia fuera de cualquier pantalla, con límite de tiempo. */
     fun refresh(quiet: Boolean = false) {
