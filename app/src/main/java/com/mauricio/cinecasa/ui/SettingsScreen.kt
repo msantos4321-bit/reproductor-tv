@@ -119,6 +119,17 @@ fun SettingsScreen() {
                 ActionButton(if (DeviceUi.tvLayout) "Volver al diseño de celular" else "Ver diseño de tele", { DeviceUi.setTvLayout(!DeviceUi.tvLayout) }, primary = !DeviceUi.tvLayout)
             }
         }
+        if (isAdmin) Section("Demostración") {
+            Text(
+                if (Prefs.inDemo) "Estás usando el catálogo de demostración. Tu cuenta real está guardada; regresa a ella cuando termines."
+                else "Cambia a un catálogo de demostración con películas libres para grabar videos o enseñar la app. Tu cuenta real se guarda y regresas con un toque.",
+                color = C.Mid, fontSize = 13.sp,
+            )
+            Wrap {
+                if (Prefs.inDemo) ActionButton("Volver a mi cuenta", { Repo.clearAll(); Prefs.exitDemo(); Repo.start(force = true) }, primary = true)
+                else ActionButton("Usar la demostración", { Repo.clearAll(); Prefs.enterDemo(); Repo.start(force = true) })
+            }
+        }
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)
             Wrap {

@@ -78,6 +78,28 @@ object Prefs {
         _account.value = a
     }
 
+    const val DEMO_SERVER = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"
+
+    /** True mientras se usa la demostración y la cuenta real está guardada aparte. */
+    val inDemo: Boolean get() = sp.contains("bk_server")
+
+    /** Guarda la cuenta real aparte y pone la de demostración (para grabar videos sin perder tus datos). */
+    fun enterDemo() {
+        val cur = _account.value
+        if (!inDemo && cur != null) sp.edit().putString("bk_server", cur.server).putString("bk_user", cur.user)
+            .putString("bk_pass", cur.pass).putString("bk_formats", sp.getString("formats", "")).apply()
+        serverFormats = listOf("m3u8")
+        setAccount(Account(DEMO_SERVER, "demo", "demo"))
+    }
+
+    /** Regresa a la cuenta real guardada. */
+    fun exitDemo() {
+        val s = sp.getString("bk_server", null); val u = sp.getString("bk_user", null); val p = sp.getString("bk_pass", null)
+        val f = sp.getString("bk_formats", "")
+        sp.edit().remove("bk_server").remove("bk_user").remove("bk_pass").remove("bk_formats").putString("formats", f).apply()
+        setAccount(if (s != null && u != null && p != null) Account(s, u, p) else null)
+    }
+
     var tmdbKey: String
         get() = sp.getString("tmdb", "") ?: ""
         set(v) = sp.edit().putString("tmdb", v.trim()).apply()
