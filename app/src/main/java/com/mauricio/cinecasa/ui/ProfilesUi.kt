@@ -481,7 +481,7 @@ fun DevicesSection() {
             }
         }
     }
-    if (addOpen) AddDeviceDialog { addOpen = false }
+    if (addOpen) AddDeviceDialog(onClose = { addOpen = false })
     if (rename) {
         val fr = remember { FocusRequester() }
         Dialog(onDismissRequest = { rename = false }) {
