@@ -87,7 +87,8 @@ Deno.serve((req) => {
     if (m[1] === "movie") to = movies.find((x) => x.id === id)?.src ?? "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm";
     else if (m[1] === "live") to = live.find((x) => x.id === id)?.src ?? live[0].src;
     else { for (const s of series) s.eps.forEach((e, i) => { if (s.series_id * 10 + i + 1 === id) to = e[1]; }); if (!to) to = "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm"; }
-    return new Response(null, { status: 302, headers: { location: to } });
+    if (q.has("dbg")) return json({ path, to });
+    return new Response(null, { status: 302, headers: { location: to, "access-control-allow-origin": "*" } });
   }
 
   if (!/player_api\.php$/.test(path)) return json({ ok: true, demo: "CineCasa" });
