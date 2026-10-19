@@ -72,7 +72,7 @@ fun SettingsScreen() {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 60.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = if (LocalCompact.current) 12.dp else 32.dp, end = if (LocalCompact.current) 12.dp else 32.dp, top = 28.dp, bottom = 60.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("Ajustes", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -255,9 +255,10 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun Line(label: String, value: String) {
+    val compact = LocalCompact.current
     Row {
-        Text(label, Modifier.width(170.dp), color = C.Low, fontSize = 14.sp)
-        Text(value, color = C.Hi, fontSize = 14.sp)
+        Text(label, Modifier.width(if (compact) 112.dp else 170.dp), color = C.Low, fontSize = 14.sp)
+        Text(value, Modifier.weight(1f), color = C.Hi, fontSize = 14.sp)
     }
 }
 

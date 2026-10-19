@@ -93,12 +93,12 @@ fun openTrailer(ctx: Context, youtubeId: String, title: String, year: Int, tmdb:
 }
 
 @Composable
-private fun DetailFrame(backdrop: String?, content: @Composable () -> Unit) {
+private fun DetailFrame(backdrop: String?, fallback: String? = null, content: @Composable () -> Unit) {
     if (LocalCompact.current) {
         // Celular: la imagen arriba y el texto debajo (como en la app de TV de Apple)
         Box(Modifier.fillMaxSize().background(C.Bg)) {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
-                Img(backdrop, Modifier.fillMaxSize())
+                Img(backdrop, Modifier.fillMaxSize(), fallback = fallback)
                 Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.5f to androidx.compose.ui.graphics.Color.Transparent, 1f to C.Bg)))
             }
             content()
@@ -112,7 +112,7 @@ private fun DetailFrame(backdrop: String?, content: @Composable () -> Unit) {
         return
     }
     Box(Modifier.fillMaxSize()) {
-        Img(backdrop, Modifier.fillMaxSize())
+        Img(backdrop, Modifier.fillMaxSize(), fallback = fallback)
         Scrim()
         content()
     }
@@ -163,7 +163,7 @@ fun MovieDetailScreen(vod0: Vod) {
         c.dedupeMovies(c.visMovies.filter { it.cat == vod.cat && it.id !in mine }.sortedByDescending { it.added }).take(24)
     }
 
-    DetailFrame(i?.backdrop?.ifBlank { null } ?: vod.icon) {
+    DetailFrame(i?.backdrop?.ifBlank { null } ?: vod.icon, vod.icon) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = detailTop(), bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.fillMaxWidth(wide(0.58f)).padding(start = sidePad())) {
                 Text(vod.title, color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -258,7 +258,7 @@ fun ShowDetailScreen(show0: Show) {
     if (inf != null && season == -1) season = target?.season ?: inf.seasons.firstOrNull() ?: 1
     val anyWatched = all.any { it.id in watched } || latest != null
 
-    DetailFrame((inf?.backdrop?.ifBlank { null }) ?: show.backdrop.ifBlank { show.cover }) {
+    DetailFrame((inf?.backdrop?.ifBlank { null }) ?: show.backdrop.ifBlank { show.cover }, show.cover) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = detailTop(), bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(Modifier.fillMaxWidth(wide(0.6f)).padding(start = sidePad())) {
                 Text(show.title, color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)

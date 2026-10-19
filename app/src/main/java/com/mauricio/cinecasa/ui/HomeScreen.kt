@@ -58,7 +58,7 @@ import com.mauricio.cinecasa.data.Vod
 import kotlinx.coroutines.delay
 import java.util.Calendar
 
-data class Hero(val key: String, val title: String, val meta: List<String>, val rating: Float, val plot: String, val image: String)
+data class Hero(val key: String, val title: String, val meta: List<String>, val rating: Float, val plot: String, val image: String, val fallback: String = "")
 
 sealed interface Tile {
     val key: String
@@ -76,13 +76,13 @@ fun heroFor(t: Tile, c: Catalog): Hero = when (t) {
     is Tile.M -> {
         val i = Repo.cachedVodInfo(t.v.id)
         Hero(t.key, t.v.title, listOf(yearStr(t.v.year), TextUtil.duration(i?.durationSecs ?: 0), i?.genre.orEmpty(), c.vodCatName[t.v.cat].orEmpty()),
-            i?.rating?.takeIf { it > 0 } ?: t.v.rating, i?.plot.orEmpty(), i?.backdrop?.ifBlank { null } ?: t.v.icon)
+            i?.rating?.takeIf { it > 0 } ?: t.v.rating, i?.plot.orEmpty(), i?.backdrop?.ifBlank { null } ?: t.v.icon, t.v.icon)
     }
     is Tile.S -> Hero(t.key, t.s.title, listOf(yearStr(t.s.year), t.s.genre, c.seriesCatName[t.s.cat].orEmpty()), t.s.rating, t.s.plot,
-        t.s.backdrop.ifBlank { t.s.cover })
+        t.s.backdrop.ifBlank { t.s.cover }, t.s.cover)
     is Tile.P -> {
         val bg = if (t.p.kind == "movie") Repo.cachedVodInfo(t.p.id)?.backdrop.orEmpty() else c.showById[t.p.seriesId]?.backdrop.orEmpty()
-        Hero(t.key, t.p.title, listOf(t.p.subtitle, "Quedan ${TextUtil.duration(((t.p.dur - t.p.pos) / 1000).toInt())}"), 0f, "", bg.ifBlank { t.p.image })
+        Hero(t.key, t.p.title, listOf(t.p.subtitle, "Quedan ${TextUtil.duration(((t.p.dur - t.p.pos) / 1000).toInt())}"), 0f, "", bg.ifBlank { t.p.image }, t.p.image)
     }
     is Tile.L -> when (t.s.kind) {
         "movie" -> c.movieById[t.s.id]?.let { heroFor(Tile.M(it), c) }
@@ -143,10 +143,10 @@ fun HomeScreen() {
     val side = if (compact) 16.dp else 28.dp
     Box(Modifier.fillMaxSize()) {
         // Fondo del destacado
-        if (!compact) AnimatedContent(hero?.image, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "bg",
-            modifier = Modifier.fillMaxWidth(0.72f).fillMaxHeight(0.62f).align(Alignment.TopEnd)) { img ->
+        if (!compact) AnimatedContent(hero, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "bg",
+            modifier = Modifier.fillMaxWidth(0.72f).fillMaxHeight(0.62f).align(Alignment.TopEnd)) { hh ->
             Box(Modifier.fillMaxSize()) {
-                Img(img, Modifier.fillMaxSize())
+                Img(hh?.image, Modifier.fillMaxSize(), fallback = hh?.fallback)
                 Scrim()
             }
         }
@@ -292,7 +292,7 @@ private fun PhoneHomeHeader(rows: List<HomeRow>, c: Catalog) {
                 Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp)).background(C.Panel2)
                     .clickable { openTile(featured, nav, c) },
             ) {
-                Img(h.image, Modifier.fillMaxSize())
+                Img(h.image, Modifier.fillMaxSize(), fallback = h.fallback)
                 Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.45f to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color(0xE6000000))))
                 Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
                     Text(h.title, color = androidx.compose.ui.graphics.Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)

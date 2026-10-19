@@ -102,9 +102,12 @@ fun RestoreFocus(mem: FocusMemory, fallback: FocusRequester? = null) {
 }
 
 @Composable
-fun Img(url: String?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
-    if (url.isNullOrBlank()) return
-    AsyncImage(model = url, contentDescription = null, modifier = modifier, contentScale = contentScale)
+fun Img(url: String?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, fallback: String? = null) {
+    var failed by remember(url) { mutableStateOf(false) }
+    val model = if (url.isNullOrBlank() || failed) fallback else url
+    if (model.isNullOrBlank()) return
+    AsyncImage(model = model, contentDescription = null, modifier = modifier, contentScale = contentScale,
+        onError = { if (!failed && !fallback.isNullOrBlank() && model == url) failed = true })
 }
 
 private val cardShape = RoundedCornerShape(8.dp)
