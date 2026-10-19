@@ -86,6 +86,23 @@ object License {
         }
     }
 
+    /** Pide la prueba gratis automática. Devuelve un mensaje de error o null si funcionó. */
+    suspend fun startTrial(ref: String): String? {
+        val r = Cloud.trialAuto(ref) ?: return "Sin conexión. Revisa tu internet."
+        return when (r.optString("error")) {
+            "" -> when (r.optString("result")) {
+                "ok" -> { code = r.optString("code"); ok(false); info.value = Cloud.licInfo(code); null }
+                "trial_used" -> "Este aparato ya usó su prueba gratis. Para seguir, pide tu plan anual."
+                else -> "No se pudo activar la prueba."
+            }
+            "trial_used" -> "Este aparato ya usó su prueba gratis. Para seguir, pide tu plan anual."
+            "bad_ref" -> "Ese código de recomendación no existe. Revísalo o déjalo vacío."
+            "off" -> "Las pruebas gratis no están disponibles ahora. Pide tu código a quien te compartió la app."
+            "busy" -> "Hay muchas solicitudes en este momento. Intenta en unos minutos."
+            else -> "Este aparato no se pudo identificar para la prueba."
+        }
+    }
+
     /** Activa este aparato con un código. Devuelve un mensaje de error o null si funcionó. */
     suspend fun activate(input: String): String? {
         val c = input.trim().uppercase().replace(" ", "").let { if (it.startsWith("CC") && !it.startsWith("CC-") && it.length == 10) "CC-" + it.drop(2).take(4) + "-" + it.drop(6) else it }

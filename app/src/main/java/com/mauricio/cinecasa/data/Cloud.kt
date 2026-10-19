@@ -245,6 +245,16 @@ object Cloud {
     }
 
 
+    /** Prueba gratis automática: el servidor crea el código y activa este aparato. */
+    suspend fun trialAuto(ref: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { JSONObject(rpc("cc_trial_auto", JSONObject().put("p_device", deviceId).put("p_name", deviceName).put("p_fp", hardwareId).put("p_ref", ref.trim().uppercase()))) } catch (_: Exception) { null }
+    }
+
+    /** Registra quién recomendó a este cliente. */
+    suspend fun setRef(code: String, ref: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_set_ref", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_ref", ref.trim().uppercase())).trim().trim('"') } catch (_: Exception) { null }
+    }
+
     /** Enlace de un solo uso para entrar al Centro de control (solo el hogar dueño). */
     suspend fun mgrLink(): String? = withContext(Dispatchers.IO) {
         try { rpc("cc_mgr_link", JSONObject().put("p_h", householdId).put("p_s", householdSecret)).trim().trim('"').takeIf { it.length >= 20 } } catch (_: Exception) { null }

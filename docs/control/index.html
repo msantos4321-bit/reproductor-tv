@@ -175,6 +175,7 @@ async function demoRpc(fn, a) {
       return c;
     }
     case 'cc_code_refer': { const r = DEMO_CODES.find(x => x.code === String(a.p_ref).toUpperCase().trim()); if (!r) throw new Error('no existe ese código'); r.expires = new Date(new Date(r.expires || Date.now()).getTime() + 30 * DAY).toISOString(); return r; }
+    case 'cc_rs_self': return Object.assign({ role: 'rs', id: 'r1', name: 'Luis Ramírez', credits: 18, paused: false, level: DEMO_RS[0].level, rules: DEMO_RULES }, { phone: a.p_phone, pay_link: a.p_pay_link });
     case 'cc_rs_credit': { const r = DEMO_RS.find(x => x.id === a.p_id); r.credits += a.p_delta; return r.credits; }
     case 'cc_link_create': return 'demo' + Math.random().toString(16).slice(2);
     default: return null;
@@ -257,6 +258,29 @@ function emailText(c) {
   const x = inviteParts(c);
   const L = '────────────────────────';
   return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a CineCasa.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Entra aquí y toca "Descargar":\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code} y listo.\n\nRECOMIENDA Y GANA\n  Por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}. Solo que nos diga tu código.\n${x.help ? `\n¿Dudas? Escríbenos por WhatsApp al ${x.help}.\n` : ''}\n¡Que la disfrutes!`;
+}
+function emailHtml(c) {
+  const x = inviteParts(c);
+  const st = 'font-family:Arial,Helvetica,sans-serif;color:#1c1c1e';
+  const step = (n, t) => `<tr><td style="vertical-align:top;padding:4px 10px 4px 0"><span style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#0a84ff;color:#fff;text-align:center;font-weight:700;font-size:13px">${n}</span></td><td style="padding:4px 0;font-size:15px">${t}</td></tr>`;
+  return `<div style="${st};max-width:560px">
+  <div style="background:#0b0c12;border-radius:16px 16px 0 0;padding:22px 24px"><span style="font-size:28px;font-weight:900;color:#fff">Cine</span><span style="font-size:28px;font-weight:900;color:#3d9bff">Casa</span><div style="color:#c3cbe0;font-size:14px;margin-top:4px">Tu reproductor para la tele y el celular</div></div>
+  <div style="border:1px solid #e5e5ea;border-top:0;border-radius:0 0 16px 16px;padding:24px">
+   <p style="font-size:16px;margin:0 0 14px">Hola${x.first ? ' ' + esc(x.first) : ''}, aquí está tu acceso a CineCasa.</p>
+   <div style="background:#0a84ff;border-radius:14px;padding:18px;text-align:center;color:#fff"><div style="font-size:13px;opacity:.85;letter-spacing:1px">TU CÓDIGO DE ACTIVACIÓN</div><div style="font-size:30px;font-weight:900;letter-spacing:3px;font-family:Consolas,Menlo,monospace;margin-top:6px">${esc(c.code)}</div><div style="font-size:13px;margin-top:6px">${esc(x.plan)} · ${esc(x.devs)}</div></div>
+   <h3 style="font-size:16px;margin:22px 0 6px">📺 En la tele (Google TV, Android TV o Fire TV)</h3>
+   <table style="border-collapse:collapse">${step(1, 'Instala la app <b>Downloader</b> desde la tienda de la tele.')}${step(2, `Ábrela y escribe este número: <span style="display:inline-block;background:#eaf3ff;color:#0a5fd6;border:2px dashed #0a84ff;border-radius:8px;padding:2px 10px;font-size:20px;font-weight:900;letter-spacing:2px">${esc(x.dc || '—')}</span>`)}${step(3, 'Toca <b>Ir</b> y luego <b>Instalar</b>. Si pide permiso, actívalo para Downloader.')}</table>
+   <h3 style="font-size:16px;margin:18px 0 6px">📱 En celular o tableta</h3>
+   <table style="border-collapse:collapse">${step(1, `Entra a <a href="${x.dl}" style="color:#0a84ff">${x.dl}</a> y toca <b>Descargar</b>.`)}${step(2, 'Abre el archivo y toca <b>Instalar</b>. Si Android pregunta, permite «instalar apps desconocidas».')}</table>
+   <h3 style="font-size:16px;margin:18px 0 6px">✅ Al abrir la app</h3><p style="font-size:15px;margin:0">Escribe tu código <b>${esc(c.code)}</b> y listo.</p>
+   <div style="background:#f2f2f7;border-radius:12px;padding:14px;margin-top:18px;font-size:14px">🎁 <b>Recomienda y gana:</b> por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}.${x.help ? `<br>💬 ¿Dudas? WhatsApp <b>${esc(x.help)}</b>` : ''}</div>
+   <p style="font-size:12px;color:#8e8e93;margin:16px 0 0">CineCasa es un reproductor; funciona con el servicio que tú ya tienes.</p>
+  </div></div>`;
+}
+async function copyEmailHtml(c) {
+  const html = emailHtml(c);
+  try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([emailText(c)], { type: 'text/plain' }) })]); toast('Correo copiado: pégalo en Gmail o Outlook'); return true; }
+  catch { toast('Tu navegador no deja copiar con diseño; se abrirá en texto simple', 1); return false; }
 }
 function mailLink(email, c) {
   return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de CineCasa: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
@@ -487,6 +511,8 @@ function codeSheet(c, fresh) {
       <button class="btn" id="cp">Copiar mensaje</button>
     </div>
     <div class="mailrow"><input type="email" id="em" placeholder="Correo del cliente (opcional)" value="${esc(mailOf(c.code))}" autocomplete="off"><a class="btn" id="ml" href="${mailLink(mailOf(c.code), c)}">Enviar por correo</a></div>
+    <div class="btns" style="margin-top:6px"><button class="btn" id="mlh">Copiar correo con diseño</button></div>
+    <div class="note">«Copiar correo con diseño» copia la invitación con el código en el cuadro azul; abre Gmail u Outlook, pon el correo del cliente y pega (Ctrl+V o mantener presionado → Pegar).</div>
     <div class="btns">
       ${(c.kind !== 'gift' && (c.status === 'vencido' || (d != null && d <= 15))) ? `<a class="btn acc" target="_blank" rel="noopener" href="${waLink(c.phone, renewText(c))}">Recordar renovación</a>` : ''}
     </div>
@@ -508,6 +534,7 @@ function codeSheet(c, fresh) {
       };
       bg.querySelector('#cp').onclick = () => copy(inviteText(c));
       const em = bg.querySelector('#em'), ml = bg.querySelector('#ml');
+      bg.querySelector('#mlh').onclick = () => copyEmailHtml(c);
       em.oninput = () => { ml.href = mailLink(em.value.trim(), c); saveMail(c.code, em.value.trim()); };
       const conv = bg.querySelector('#conv'); if (conv) conv.onclick = () => askNumber(`¿Cuántos aparatos pagó?`, c.max, n => act('cc_code_convert', { p_devices: n }, 'Ya es anual'), n => isMgr() ? `Venta directa. Sugerido ${money(suggested(n))}` : `Gasta ${n} ${n == 1 ? 'crédito' : 'créditos'} · sugerido ${money(suggested(n))}`);
       const refb = bg.querySelector('#ref'); if (refb) refb.onclick = () => {
@@ -667,7 +694,13 @@ function viewRules() {
     <div class="sec">Contacto y descarga</div><div class="stat"><label for="mw">Tu WhatsApp (para que los distribuidores te pidan créditos)</label><input type="tel" id="mw" value="${esc(r.manager_whatsapp)}" placeholder="10 dígitos">
       <label for="dc">Código de Downloader para la tele</label><input type="text" id="dc" value="${esc(r.downloader_code || '')}" inputmode="numeric" placeholder="Ej. 123456"><div class="note">Va en todas las invitaciones para instalar en la tele sin escribir la liga.</div>
       <label for="du">Liga de descarga para celular</label><input type="text" id="du" value="${esc(r.download_url || '')}" placeholder="https://msantos4321-bit.github.io/reproductor-tv/app/"><div class="note">Si compras un dominio corto (ej. cinecasa.mx), ponlo aquí y todas las invitaciones lo usarán.</div>
+      <label for="pl">Tu liga de pago (clientes directos y de distribuidores sin liga)</label><input type="text" id="pl" value="${esc(r.pay_link || '')}" placeholder="https://mpago.la/...">
       <label for="rd">Días de regalo por recomendado</label><input type="number" id="rd" value="${esc(r.referral_days || 30)}" min="0"></div>
+    <div class="sec">Prueba automática en la app</div><div class="stat">
+      <label for="at">¿La app da la prueba sola al instalarla?</label><select id="at"><option value="on"${(r.auto_trial || 'on') === 'on' ? ' selected' : ''}>Sí, sin pedir código</option><option value="off"${r.auto_trial === 'off' ? ' selected' : ''}>No, solo con código</option></select>
+      <label for="atd">Días de la prueba automática</label><input type="number" id="atd" value="${esc(r.auto_trial_days || 21)}" min="1">
+      <label for="atn">Aparatos de la prueba automática</label><input type="number" id="atn" value="${esc(r.auto_trial_devices || 5)}" min="1" max="10">
+      <div class="note">Una sola prueba por aparato. Si escriben el código de quien los recomendó, quedan con el distribuidor de esa persona; si no, son clientes tuyos directos.</div></div>
     <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
     <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
   $('#sv').onclick = async () => {
@@ -676,7 +709,8 @@ function viewRules() {
       retail: { d1: v('r1'), d2: v('r2'), d3: v('r3'), extra: v('rx') },
       levels: lv.map((_, i) => ({ name: $('#ln' + i).value.trim(), min: v('lm' + i), price: v('lp' + i) })).sort((a, b) => a.min - b.min),
       manager_whatsapp: $('#mw').value.trim(), downloader_code: $('#dc').value.trim(),
-      download_url: $('#du').value.trim(), referral_days: v('rd') };
+      download_url: $('#du').value.trim(), referral_days: v('rd'), pay_link: $('#pl').value.trim(),
+      auto_trial: $('#at').value, auto_trial_days: v('atd'), auto_trial_devices: v('atn') };
     try { const nr = await rpc('cc_rules_set', { p_t: token, p_data: data }); me.rules = nr; toast('Reglas guardadas'); } catch (e) { toast(e.message, 1); }
   };
   $('#other').onclick = async () => {
@@ -697,6 +731,11 @@ function viewAccount() {
     <div class="stat"><div class="note" style="margin-top:0">1 crédito = 1 aparato por 1 año. Precio sugerido para tus clientes: 1 aparato ${money(suggested(1))}, 2 por ${money(suggested(2))}, 3 por ${money(suggested(3))}, cada extra ${money(r.retail?.extra || 79)}.</div>
       <div class="btns" style="margin-top:12px">${[10, 25, 50].map(n => mw ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(mw, `Hola, soy ${me.name}. Quiero ${n} créditos de CineCasa (${money(n * me.level.price)}).`)}">Pedir ${n} · ${money(n * me.level.price)}</a>` : '').join('') || '<div class="note">Pídele créditos directamente al gerente.</div>'}</div></div>
     ${me.paused ? '<div class="cost" style="background:rgba(255,69,58,.12)">Tu cuenta está en pausa. Habla con el gerente.</div>' : ''}
+    <div class="sec">Tus datos para clientes</div>
+    <div class="stat"><label for="aph">Tu WhatsApp</label><input type="tel" id="aph" value="${esc(me.phone || '')}" placeholder="10 dígitos">
+      <label for="apl">Tu liga de pago (Mercado Pago, transferencia, etc.)</label><input type="text" id="apl" value="${esc(me.pay_link || '')}" placeholder="https://mpago.la/...">
+      <div class="note">Tus clientes ven el botón «Pagar» en la app con esta liga, y el dinero te llega directo a ti. Cuando te paguen, abre su código y toca «Cliente pagó».</div>
+      <button class="btn pri full" style="margin-top:12px" id="asv">Guardar mis datos</button></div>
     <div class="sec">Cómo funciona</div>
     <div class="group">
       <div class="row"><div class="main"><div class="t">Prueba gratis</div><div class="s" style="white-space:normal">${r.trial_days || 21} días, hasta ${r.trial_devices || 2} aparatos. No gasta créditos. Tienes ${r.trial_month_cap || 20} al mes.</div></div></div>
@@ -706,6 +745,10 @@ function viewAccount() {
     </div>
     <div class="sec">Sesión</div><button class="btn danger" id="out">Cerrar sesión</button>`;
   $('#out').onclick = () => logout();
+  $('#asv').onclick = async () => {
+    try { me = await rpc('cc_rs_self', { p_t: token, p_phone: $('#aph').value, p_pay_link: $('#apl').value }); toast('Datos guardados'); }
+    catch (e) { toast(e.message, 1); }
+  };
 }
 
 window.addEventListener('hashchange', () => { if (/[#&]e=/.test(location.hash)) boot(); });
