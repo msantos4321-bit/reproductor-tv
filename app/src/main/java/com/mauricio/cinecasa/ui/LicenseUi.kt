@@ -187,7 +187,7 @@ fun SubscriptionSection() {
     var note by remember { mutableStateOf("") }
     val isTrial = i.optString("kind") == "trial"
     if (i.optString("kind") != "gift") {
-        Text(if (isTrial) "Plan anual para ${i.optInt("max")} aparatos: $$price al año." else "Renovación por un año: $$price.", color = C.Hi, fontSize = 14.sp)
+        Text(if (isTrial) "Plan anual desde $$price al año (1 aparato)." else "Renovación por un año: $$price.", color = C.Hi, fontSize = 14.sp)
         Wrap {
             if (pay != null) ActionButton(if (isTrial) "Pagar plan anual" else "Pagar renovación", { if (!open(pay)) note = "Abre esta liga en tu celular: $pay" }, primary = true)
             if (help.length >= 10) ActionButton("Escribir por WhatsApp", {
