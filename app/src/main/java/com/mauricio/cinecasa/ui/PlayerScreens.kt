@@ -123,7 +123,17 @@ fun buildPlayer(ctx: Context, live: Boolean): ExoPlayer {
     return p
 }
 
-private fun errorText(e: PlaybackException): String = when (e.errorCode) {
+private fun errorText(e: PlaybackException): String {
+    var c: Throwable? = e
+    var http: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException? = null
+    while (c != null && http == null) { http = c as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException; c = c.cause }
+    val extra = http?.let { " (código ${it.responseCode})" } ?: ""
+    val where = http?.dataSpec?.uri?.host.orEmpty()
+    Thread { com.mauricio.cinecasa.data.Cloud.reportCrash("PLAY ${e.errorCodeName}$extra $where") }.start()
+    return baseErrorText(e) + extra
+}
+
+private fun baseErrorText(e: PlaybackException): String = when (e.errorCode) {
     PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "El servidor rechazó la conexión. Puede que ya haya otras pantallas viendo al mismo tiempo; cierra alguna y vuelve a intentar."
     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "No hay conexión con el servidor."
     PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> "Formato de video no compatible."
