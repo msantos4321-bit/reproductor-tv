@@ -7,3 +7,4 @@ local.properties
 app/signing/
 *.jks
 *.keystore
+roku/out/

@@ -1,0 +1,1 @@
+{ "rootDir": ".", "files": ["manifest", "source/**/*", "components/**/*", "images/**/*"], "stagingDir": "/tmp/rokustage", "retainStagingDir": true, "createPackage": true, "outFile": "/home/claude/reproductor-tv/roku/out/CineCasa-roku.zip" }

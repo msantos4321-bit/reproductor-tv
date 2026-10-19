@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="MainScene" extends="Scene">
+  <script type="text/brightscript" uri="MainScene.brs" />
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0B0C12FF" />
+    <Rectangle id="glow" width="1920" height="300" color="0x14244AFF" opacity="0.55" />
+
+    <!-- Encabezado -->
+    <Label id="brand" text="CineCasa" translation="[80,50]" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+    <Label id="sub" text="" translation="[80,118]" width="1600" font="font:SmallSystemFont" color="0x9AA3B8FF" />
+
+    <!-- Formulario genérico (inicio de sesión / activación) -->
+    <Group id="form" visible="false">
+      <Label id="formTitle" translation="[80,220]" width="1100" wrap="true" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+      <Label id="formText" translation="[80,300]" width="1100" wrap="true" font="font:SmallSystemFont" color="0xB9C2D6FF" lineSpacing="6" />
+      <LabelList id="formList" translation="[80,470]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="6"
+        color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+      <Label id="formMsg" translation="[80,960]" width="1700" wrap="true" font="font:SmallSystemFont" color="0xFF9F0AFF" />
+    </Group>
+
+    <!-- Inicio: secciones | categorías | contenido -->
+    <Group id="home" visible="false">
+      <LabelList id="sections" translation="[80,200]" itemSize="[300,70]" itemSpacing="[0,10]" numRows="6"
+        color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+      <LabelList id="cats" translation="[420,200]" itemSize="[420,58]" itemSpacing="[0,6]" numRows="13"
+        color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+      <PosterGrid id="grid" translation="[880,200]" basePosterSize="[220,330]" itemSpacing="[22,60]" numColumns="4" numRows="2"
+        caption1NumLines="1" posterDisplayMode="scaleToZoom" loadingBitmapUri="pkg:/images/poster.png" failedBitmapUri="pkg:/images/poster.png"
+        />
+      <LabelList id="eps" translation="[880,200]" itemSize="[960,62]" itemSpacing="[0,8]" numRows="12" visible="false"
+        color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+      <Label id="info" translation="[880,1020]" width="960" wrap="false" font="font:SmallSystemFont" color="0x9AA3B8FF" />
+    </Group>
+
+    <Video id="video" width="1920" height="1080" visible="false" enableUI="true" />
+  </children>
+</component>
