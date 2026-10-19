@@ -250,6 +250,16 @@ object Cloud {
         try { JSONObject(rpc("cc_trial_auto", JSONObject().put("p_device", deviceId).put("p_name", deviceName).put("p_fp", hardwareId).put("p_ref", ref.trim().uppercase()))) } catch (_: Exception) { null }
     }
 
+    /** Configurar la tele desde el celular: pide un código de 6 dígitos para el QR. */
+    suspend fun pairNew(): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_pair_new", JSONObject()).trim().trim('"').takeIf { it.length == 6 } } catch (_: Exception) { null }
+    }
+
+    /** Revisa si el celular ya mandó servidor/usuario/contraseña para ese código. */
+    suspend fun pairGet(code: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { JSONObject(rpc("cc_pair_get", JSONObject().put("p_code", code))) } catch (_: Exception) { null }
+    }
+
     /** Registra quién recomendó a este cliente. */
     suspend fun setRef(code: String, ref: String): String? = withContext(Dispatchers.IO) {
         try { rpc("cc_lic_set_ref", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_ref", ref.trim().uppercase())).trim().trim('"') } catch (_: Exception) { null }

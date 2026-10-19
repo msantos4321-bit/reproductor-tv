@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Configurar CineCasa</title>
+<meta name="theme-color" content="#0b0b0f">
+<style>
+:root{--bg:#0b0b0f;--panel:#17171c;--line:#2a2a33;--hi:#fff;--mid:#b6bccb;--acc:#0a84ff;--ok:#30d158;--warn:#ff9f0a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(120% 60% at 50% 0%,#1b2747 0%,var(--bg) 62%) fixed,var(--bg);color:var(--hi);font:16px/1.45 -apple-system,"SF Pro Text",Inter,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+main{max-width:480px;margin:0 auto;padding:40px 16px 48px}
+.logo{font-size:38px;font-weight:900;letter-spacing:-1px}.logo span{color:var(--acc)}
+p{color:var(--mid);margin-top:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:20px}
+label{display:block;font-size:14px;color:var(--mid);margin:14px 0 6px}
+input{width:100%;background:#22222a;border:1px solid var(--line);border-radius:12px;padding:14px;color:#fff;font-size:17px;outline:none}
+input:focus{border-color:var(--acc)}
+.code{font:800 30px ui-monospace,Menlo,monospace;letter-spacing:6px;color:var(--acc)}
+button{width:100%;margin-top:20px;padding:16px;border:0;border-radius:14px;background:var(--acc);color:#fff;font-size:18px;font-weight:800}
+button:disabled{opacity:.6}
+.msg{margin-top:14px;font-weight:600}
+.small{font-size:13px;color:#7c8396;margin-top:14px}
+</style></head><body><main>
+<div class="logo">Cine<span>Casa</span></div>
+<p>Escribe aquí los datos que te dio tu proveedor y tu tele quedará lista sola.</p>
+<div class="card">
+  <div style="font-size:14px;color:var(--mid)">Código que aparece en tu tele</div>
+  <input id="c" inputmode="numeric" maxlength="6" placeholder="000000" class="code" style="margin-top:6px">
+  <label for="s">Servidor</label><input id="s" placeholder="http://servidor.com:8080" autocapitalize="off" autocorrect="off" inputmode="url">
+  <label for="u">Usuario</label><input id="u" autocapitalize="off" autocorrect="off">
+  <label for="p">Contraseña</label><input id="p" type="password" autocapitalize="off" autocorrect="off">
+  <button id="go">Enviar a mi tele</button>
+  <div class="msg" id="m"></div>
+</div>
+<p class="small">Tus datos van directo a tu tele y se borran al llegar. CineCasa es un reproductor: funciona con el servicio que tú ya tienes.</p>
+</main>
+<script>
+const K = 'sb_publishable_vnkSLd5EzN53_LBv76YxUA_QRo2u8ok', U = 'https://wnwecaapchcfhcljsvli.supabase.co/rest/v1/rpc/';
+const $ = id => document.getElementById(id);
+$('c').value = (new URLSearchParams(location.search).get('c') || '').replace(/\D/g, '').slice(0, 6);
+if (!$('c').value) $('c').focus(); else $('s').focus();
+$('go').onclick = async () => {
+  const c = $('c').value.trim(), s = $('s').value.trim(), u = $('u').value.trim(), p = $('p').value;
+  const m = $('m');
+  if (c.length !== 6 || !s || !u || !p) { m.style.color = 'var(--warn)'; m.textContent = 'Llena el código y los tres datos.'; return; }
+  $('go').disabled = true; m.style.color = 'var(--mid)'; m.textContent = 'Enviando…';
+  try {
+    const r = await fetch(U + 'cc_pair_set', { method: 'POST', headers: { apikey: K, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_code: c, p_server: s, p_user: u, p_pass: p }) }).then(r => r.json());
+    if (r === 'ok') { m.style.color = 'var(--ok)'; m.textContent = '¡Listo! Mira tu tele: en unos segundos entra sola.'; return; }
+    m.style.color = 'var(--warn)'; m.textContent = 'Ese código ya venció. En la tele aparece uno nuevo; escríbelo aquí.';
+  } catch { m.style.color = 'var(--warn)'; m.textContent = 'Sin conexión. Intenta de nuevo.'; }
+  $('go').disabled = false;
+};
+</script></body></html>

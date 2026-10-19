@@ -25,6 +25,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -80,12 +82,11 @@ fun LoginScreen(onPair: () -> Unit = {}) {
             Column(Modifier.paneWidth(300.dp)) {
                 Text("CineCasa", color = C.Hi, fontSize = 40.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    "Escribe los datos que te dio tu proveedor. Solo se guardan en esta tele.",
-                    color = C.Mid, fontSize = 15.sp,
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("Presiona OK sobre cada campo para escribir. También puedes dictar con el micrófono del teclado.", color = C.Low, fontSize = 13.sp)
+                if (DeviceUi.isTv) {
+                    PhoneSetup { s, u, p -> server = s; user = u; pass = p; submit() }
+                } else {
+                    Text("Escribe los datos que te dio tu proveedor. Solo se guardan en este aparato.", color = C.Mid, fontSize = 15.sp)
+                }
             }
             Column(
                 Modifier.paneWidth(420.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
@@ -112,4 +113,54 @@ fun LoginScreen(onPair: () -> Unit = {}) {
         }
     }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+}
+
+
+/** En la tele: QR para escribir los datos desde el celular (sin batallar con el control). */
+@Composable
+private fun PhoneSetup(onData: (String, String, String) -> Unit) {
+    var code by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val c = com.mauricio.cinecasa.data.Cloud.pairNew()
+            if (c == null) { failed = true; kotlinx.coroutines.delay(10_000); continue }
+            failed = false; code = c
+            val until = System.currentTimeMillis() + 14 * 60_000
+            var done = false
+            while (System.currentTimeMillis() < until && !done) {
+                kotlinx.coroutines.delay(3_000)
+                val r = com.mauricio.cinecasa.data.Cloud.pairGet(c) ?: continue
+                when (r.optString("status")) {
+                    "ok" -> { done = true; onData(r.optString("server"), r.optString("user"), r.optString("pass")) }
+                    "expired" -> break
+                }
+            }
+            if (done) break
+        }
+    }
+    Text("Escanea con tu celular", color = C.Hi, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(4.dp))
+    Text("y escribe ahí los datos de tu proveedor. La tele entra sola.", color = C.Mid, fontSize = 14.sp)
+    Spacer(Modifier.height(12.dp))
+    val c = code
+    if (c != null) {
+        val url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=$c"
+        val bmp = remember(url) { qrBitmap(url, 480) }
+        Box(Modifier.size(190.dp).background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(14.dp)).padding(10.dp)) {
+            androidx.compose.foundation.Image(bmp.asImageBitmap(), "Código QR", Modifier.fillMaxSize())
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("O entra a msantos4321-bit.github.io/reproductor-tv/tv", color = C.Low, fontSize = 12.sp)
+        Text("y escribe el código  ${c.chunked(3).joinToString(" ")}", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    } else Text(if (failed) "Sin conexión para el QR. Escribe tus datos a la derecha." else "Preparando el código…", color = C.Low, fontSize = 13.sp)
+    Spacer(Modifier.height(10.dp))
+    Text("También puedes escribirlos aquí con el control.", color = C.Low, fontSize = 12.sp)
+}
+
+private fun qrBitmap(text: String, size: Int): android.graphics.Bitmap {
+    val m = com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size,
+        mapOf(com.google.zxing.EncodeHintType.MARGIN to 0))
+    val px = IntArray(size * size) { i -> if (m[i % size, i / size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
+    return android.graphics.Bitmap.createBitmap(px, size, size, android.graphics.Bitmap.Config.ARGB_8888)
 }
