@@ -154,7 +154,7 @@ async function demoRpc(fn, a) {
   const mine = c => !rs || c.reseller === 'Luis Ramírez';
   switch (fn) {
     case 'cc_login': return { token: 'demo', role: rs ? 'rs' : 'mgr' };
-    case 'cc_me': return rs ? { role: 'rs', id: 'r1', name: 'Luis Ramírez', credits: 18, paused: false, level: DEMO_RS[0].level, rules: DEMO_RULES } : { role: 'mgr', name: 'Gerente general', rules: DEMO_RULES };
+    case 'cc_me': return rs ? { role: 'rs', id: 'r1', name: 'Luis Ramírez', phone: '6641112233', credits: 18, paused: false, level: DEMO_RS[0].level, rules: DEMO_RULES } : { role: 'mgr', name: 'Gerente general', rules: DEMO_RULES };
     case 'cc_summary': return rs ? { active_homes: 41, active_devices: 96, trials: 6, expiring: 3, expired: 1, sold_month: 23, sold_year: 132, income_month: 0, trials_month: 14, converted_month: 9, credits_out: 18 }
       : { active_homes: 63, active_devices: 151, trials: 12, expiring: 4, expired: 2, sold_month: 38, sold_year: 214, income_month: 2750, trials_month: 27, converted_month: 15, resellers: 3, credits_out: 28 };
     case 'cc_code_list': { const q = (a.p_q || '').toLowerCase(); return DEMO_CODES.filter(mine).filter(c => !q || JSON.stringify(c).toLowerCase().includes(q)); }
@@ -174,6 +174,7 @@ async function demoRpc(fn, a) {
       if (fn === 'cc_code_set' && a.p_revoked != null) Object.assign(c, { revoked: a.p_revoked, status: a.p_revoked ? 'desactivado' : 'activo' });
       return c;
     }
+    case 'cc_code_refer': { const r = DEMO_CODES.find(x => x.code === String(a.p_ref).toUpperCase().trim()); if (!r) throw new Error('no existe ese código'); r.expires = new Date(new Date(r.expires || Date.now()).getTime() + 30 * DAY).toISOString(); return r; }
     case 'cc_rs_credit': { const r = DEMO_RS.find(x => x.id === a.p_id); r.credits += a.p_delta; return r.credits; }
     case 'cc_link_create': return 'demo' + Math.random().toString(16).slice(2);
     default: return null;
@@ -232,27 +233,30 @@ function waLink(phone, text) {
 function inviteParts(c) {
   const r = rules();
   return {
-    dl: r.download_url || 'https://github.com/msantos4321-bit/reproductor-tv/releases/latest/download/CineCasa.apk',
+    dl: r.download_url || 'https://msantos4321-bit.github.io/reproductor-tv/app/',
     first: c.customer ? c.customer.split(' ')[0] : '',
     plan: c.kind === 'trial' ? `Prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'Sin vencimiento' : `Vigente hasta el ${fdate(c.expires)}`,
     devs: `${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}`,
     dc: r.downloader_code || '',
-    help: r.manager_whatsapp ? String(r.manager_whatsapp) : '',
+    help: prettyPhone(isMgr() ? r.manager_whatsapp : (me.phone || r.manager_whatsapp)),
+    refDays: Number(r.referral_days || 30),
   };
 }
+function prettyPhone(p) { p = String(p || '').replace(/\D/g, ''); return p.length === 10 ? `${p.slice(0, 3)} ${p.slice(3, 6)} ${p.slice(6)}` : p; }
+const refTxt = d => d % 30 === 0 ? `${d / 30} ${d === 30 ? 'mes' : 'meses'}` : `${d} días`;
 // WhatsApp: *negritas*, ```monoespaciado``` y líneas cortas para que se lea bien en el celular
 function inviteText(c) {
   const x = inviteParts(c);
   const tv = x.dc
     ? `📺 *EN LA TELE* (Google TV · Android TV · Fire TV)\n1. Instala la app *Downloader* desde la tienda de la tele.\n2. Ábrela y en el cuadro escribe este número:\n\n       ━━━━━━━━━━━━\n       *${x.dc}*\n       ━━━━━━━━━━━━\n\n3. Toca *Ir* → *Instalar*. Si te pide permiso, actívalo para Downloader.`
     : `📺 *EN LA TELE*\n1. Instala la app *Downloader*.\n2. Escribe la liga de abajo y toca *Instalar*.`;
-  return `🎬 *CineCasa*${x.first ? ` · Hola ${x.first}` : ''}\n\n🔑 *TU CÓDIGO DE ACTIVACIÓN*\n\`\`\`${c.code}\`\`\`\n${x.plan} · ${x.devs}\n\n${tv}\n\n📱 *EN CELULAR O TABLETA*\n1. Descarga aquí:\n${x.dl}\n2. Abre el archivo y toca *Instalar* (si Android pregunta, permite «instalar apps desconocidas»).\n\n✅ *AL ABRIR LA APP*\nEscribe tu código *${c.code}* y listo.${x.help ? `\n\n¿Dudas? Escríbeme por aquí 🙌` : ''}`;
+  return `🎬 *CineCasa*${x.first ? ` · Hola ${x.first}` : ''}\n\n🔑 *TU CÓDIGO DE ACTIVACIÓN*\n\`\`\`${c.code}\`\`\`\n${x.plan} · ${x.devs}\n\n${tv}\n\n📱 *EN CELULAR O TABLETA*\n1. Entra aquí y toca *Descargar*:\n${x.dl}\n2. Abre el archivo y toca *Instalar* (si Android pregunta, permite «instalar apps desconocidas»).\n\n✅ *AL ABRIR LA APP*\nEscribe tu código *${c.code}* y listo.\n\n🎁 *RECOMIENDA Y GANA*\nPor cada amigo que contrate con tu recomendación te regalamos *${refTxt(x.refDays)}*. Solo que me diga tu código.${x.help ? `\n\n💬 ¿Dudas? WhatsApp *${x.help}*` : ''}`;
 }
 // Correo: texto simple (sin asteriscos) que se ve bien en Gmail, Outlook o el correo del celular
 function emailText(c) {
   const x = inviteParts(c);
   const L = '────────────────────────';
-  return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a CineCasa.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Descarga la app aquí:\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code} y listo.\n\n¡Que la disfrutes!`;
+  return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a CineCasa.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Entra aquí y toca "Descargar":\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code} y listo.\n\nRECOMIENDA Y GANA\n  Por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}. Solo que nos diga tu código.\n${x.help ? `\n¿Dudas? Escríbenos por WhatsApp al ${x.help}.\n` : ''}\n¡Que la disfrutes!`;
 }
 function mailLink(email, c) {
   return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de CineCasa: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
@@ -353,6 +357,7 @@ async function viewHome() {
       <div class="stat"><div class="n">${s.trials}</div><div class="l">Pruebas en curso</div></div>
       <div class="stat"><div class="n" style="color:${s.expiring ? 'var(--warn)' : ''}">${s.expiring}</div><div class="l">Vencen en 15 días</div></div>
     </div>
+    <div id="todo"></div>
     <div class="sec">Este mes</div>
     <div class="grid">
       <div class="stat"><div class="n">${num(s.sold_month)}</div><div class="l">Aparatos vendidos</div></div>
@@ -367,6 +372,25 @@ async function viewHome() {
     <div class="btns"><button class="btn acc" id="q1">Nueva prueba gratis</button><button class="btn" id="q2">Nuevo código anual</button>${s.expiring ? `<button class="btn" id="q3">Ver los que vencen</button>` : ''}</div>`;
   $('#q1').onclick = () => newCode('trial'); $('#q2').onclick = () => newCode('paid');
   if ($('#q3')) $('#q3').onclick = () => { tab = 'codigos'; q = ''; filterExpiring = true; render(); };
+  loadTodo();
+}
+// Clientes a los que conviene escribir hoy: vencen en 7 días o vencieron hace menos de 7
+const notedKey = c => 'cc_aviso_' + c.code + '_' + (c.expires || '').slice(0, 10);
+function noted(c) { try { return !!localStorage.getItem(notedKey(c)); } catch { return false; } }
+async function loadTodo() {
+  let list; try { list = await rpc('cc_code_list', { p_t: token, p_q: '' }); } catch { return; }
+  const due = (list || []).filter(c => c.kind !== 'gift' && !c.revoked && c.expires && (() => { const d = daysLeft(c.expires); return d != null && d <= 7 && d >= -7; })())
+    .sort((a, b) => new Date(a.expires) - new Date(b.expires));
+  const el = $('#todo'); if (!el) return;
+  if (!due.length) { el.innerHTML = ''; return; }
+  const pend = due.filter(c => !noted(c)).length;
+  el.innerHTML = `<div class="sec">Avisar hoy ${pend ? `<span class="pill vence" style="margin-left:6px">${pend}</span>` : ''}</div><div class="group">${due.map((c, i) => {
+    const d = daysLeft(c.expires), done = noted(c);
+    const when = d < 0 ? `venció hace ${-d} ${d === -1 ? 'día' : 'días'}` : d === 0 ? 'vence hoy' : `vence en ${d} ${d === 1 ? 'día' : 'días'}`;
+    return `<div class="row"><div class="main"><div class="t">${esc(c.customer || c.code)}${done ? ' · <span style="color:var(--ok,#30d158)">avisado</span>' : ''}</div><div class="s">${c.kind === 'trial' ? 'Prueba · ' : ''}${when} · ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'} · ${money(suggested(c.max))}</div></div>
+      <a class="btn ${done ? '' : 'wa'}" style="min-height:38px;padding:8px 12px" target="_blank" rel="noopener" data-i="${i}" href="${waLink(c.phone, renewText(c))}">${done ? 'Otra vez' : 'Avisar'}</a></div>`;
+  }).join('')}</div><div class="note">Abre WhatsApp con el mensaje listo. Se marca como avisado en este aparato.</div>`;
+  el.querySelectorAll('a[data-i]').forEach(a => a.addEventListener('click', () => { try { localStorage.setItem(notedKey(due[+a.dataset.i]), '1'); } catch {} setTimeout(loadTodo, 400); }));
 }
 
 // ---------- códigos ----------
@@ -471,6 +495,7 @@ function codeSheet(c, fresh) {
     <div class="btns">
       ${c.kind === 'trial' && c.status !== 'desactivado' ? `<button class="btn acc" id="conv">Cliente pagó: pasar a anual</button>` : ''}
       ${c.kind === 'paid' ? `<button class="btn acc" id="ren">Renovar 1 año (${c.max} ${c.max == 1 ? 'crédito' : 'créditos'})</button>` : ''}
+      ${c.kind === 'paid' ? `<button class="btn" id="ref">Lo recomendó un cliente</button>` : ''}
       <button class="btn" id="add">Agregar aparato</button>
       ${c.devices.length ? `<button class="btn" id="rst">Liberar aparatos</button>` : ''}
       <button class="btn" id="ed">Editar cliente</button>
@@ -485,6 +510,17 @@ function codeSheet(c, fresh) {
       const em = bg.querySelector('#em'), ml = bg.querySelector('#ml');
       em.oninput = () => { ml.href = mailLink(em.value.trim(), c); saveMail(c.code, em.value.trim()); };
       const conv = bg.querySelector('#conv'); if (conv) conv.onclick = () => askNumber(`¿Cuántos aparatos pagó?`, c.max, n => act('cc_code_convert', { p_devices: n }, 'Ya es anual'), n => isMgr() ? `Venta directa. Sugerido ${money(suggested(n))}` : `Gasta ${n} ${n == 1 ? 'crédito' : 'créditos'} · sugerido ${money(suggested(n))}`);
+      const refb = bg.querySelector('#ref'); if (refb) refb.onclick = () => {
+        const days = Number(rules().referral_days || 30);
+        const s2 = sheet(`<h2>¿Quién lo recomendó?</h2><p class="note">Escribe el código del cliente que lo recomendó. A ese cliente se le regalan ${refTxt(days)} sin gastar créditos. Solo se puede una vez por cliente nuevo.</p>
+          <input type="text" id="rc" placeholder="CC-XXXX-XXXX" autocapitalize="characters" style="margin-top:10px;font-family:ui-monospace,Menlo,monospace">
+          <div class="btns" style="margin-top:12px"><button class="btn pri" id="ok">Regalar ${refTxt(days)}</button></div>`, b2 => {
+          b2.querySelector('#ok').onclick = async () => {
+            try { const r = await rpc('cc_code_refer', { p_t: token, p_code: c.code, p_ref: b2.querySelector('#rc').value }); b2.remove(); bg.remove(); toast(`Listo: ${r.customer || r.code} ahora vence el ${fdate(r.expires)}`); render(); }
+            catch (e) { toast(e.message, 1); }
+          };
+        });
+      };
       const ren = bg.querySelector('#ren'); if (ren) ren.onclick = () => act('cc_code_renew', {}, 'Renovado 1 año');
       bg.querySelector('#add').onclick = () => askNumber('¿Cuántos aparatos agregas?', 1, n => act('cc_code_add', { p_n: n }, 'Aparatos agregados'), n => c.kind === 'paid' ? `Gasta ${num(n * (d != null && d < 183 ? .5 : 1))} créditos (proporcional a lo que queda del año)` : c.kind === 'trial' ? 'En prueba no gasta créditos' : 'Sin costo');
       const rst = bg.querySelector('#rst'); if (rst) rst.onclick = () => confirmIn(bg, 'Los aparatos actuales tendrán que volver a escribir el código. ¿Liberar?', () => act('cc_code_set', { p_revoked: null, p_reset: true, p_customer: null, p_phone: null, p_note: null }, 'Aparatos liberados'));
@@ -629,7 +665,9 @@ function viewRules() {
     <div class="sec">Precio sugerido al público (al año)</div><div class="stat">
       ${f('r1', '1 aparato', r.retail?.d1)}${f('r2', '2 aparatos', r.retail?.d2)}${f('r3', '3 aparatos', r.retail?.d3)}${f('rx', 'Cada aparato extra', r.retail?.extra)}</div>
     <div class="sec">Contacto y descarga</div><div class="stat"><label for="mw">Tu WhatsApp (para que los distribuidores te pidan créditos)</label><input type="tel" id="mw" value="${esc(r.manager_whatsapp)}" placeholder="10 dígitos">
-      <label for="dc">Código de Downloader para la tele</label><input type="text" id="dc" value="${esc(r.downloader_code || '')}" inputmode="numeric" placeholder="Ej. 123456"><div class="note">Va en todas las invitaciones para instalar en la tele sin escribir la liga.</div></div>
+      <label for="dc">Código de Downloader para la tele</label><input type="text" id="dc" value="${esc(r.downloader_code || '')}" inputmode="numeric" placeholder="Ej. 123456"><div class="note">Va en todas las invitaciones para instalar en la tele sin escribir la liga.</div>
+      <label for="du">Liga de descarga para celular</label><input type="text" id="du" value="${esc(r.download_url || '')}" placeholder="https://msantos4321-bit.github.io/reproductor-tv/app/"><div class="note">Si compras un dominio corto (ej. cinecasa.mx), ponlo aquí y todas las invitaciones lo usarán.</div>
+      <label for="rd">Días de regalo por recomendado</label><input type="number" id="rd" value="${esc(r.referral_days || 30)}" min="0"></div>
     <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
     <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
   $('#sv').onclick = async () => {
@@ -637,7 +675,8 @@ function viewRules() {
     const data = { trial_days: v('td'), trial_devices: v('tdv'), trial_month_cap: v('tcap'), start_credits: v('sc'),
       retail: { d1: v('r1'), d2: v('r2'), d3: v('r3'), extra: v('rx') },
       levels: lv.map((_, i) => ({ name: $('#ln' + i).value.trim(), min: v('lm' + i), price: v('lp' + i) })).sort((a, b) => a.min - b.min),
-      manager_whatsapp: $('#mw').value.trim(), downloader_code: $('#dc').value.trim() };
+      manager_whatsapp: $('#mw').value.trim(), downloader_code: $('#dc').value.trim(),
+      download_url: $('#du').value.trim(), referral_days: v('rd') };
     try { const nr = await rpc('cc_rules_set', { p_t: token, p_data: data }); me.rules = nr; toast('Reglas guardadas'); } catch (e) { toast(e.message, 1); }
   };
   $('#other').onclick = async () => {
