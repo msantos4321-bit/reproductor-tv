@@ -2,3 +2,8 @@
 build/
 local.properties
 .idea/
+
+# Llaves de firma: nunca al repositorio
+app/signing/
+*.jks
+*.keystore

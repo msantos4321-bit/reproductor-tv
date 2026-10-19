@@ -5,7 +5,6 @@ plugins {
 }
 
 val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-val ksFile = file("signing/cinecasa.jks")
 
 android {
     namespace = "com.mauricio.cinecasa"
@@ -19,24 +18,13 @@ android {
         versionName = "1.0.$runNumber"
     }
 
-    signingConfigs {
-        create("release") {
-            if (ksFile.exists()) {
-                storeFile = ksFile
-                // Llave fija para que cada versión nueva se instale encima de la anterior
-                storePassword = "bQswz1OTHw0QWhkQQ-MrfZ-I"
-                keyAlias = "cinecasa"
-                keyPassword = "bQswz1OTHw0QWhkQQ-MrfZ-I"
-            }
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (ksFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // La firma se hace en GitHub con llaves guardadas como secreto (nunca en el código)
+            signingConfig = null
         }
     }
 

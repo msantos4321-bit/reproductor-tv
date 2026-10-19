@@ -42,10 +42,27 @@ jobs:
         run: |
           grep -E "^e: |error:|What went wrong" -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
 
-      - name: Preparar APK
+      - name: Firmar APK
+        env:
+          FIRMA: ${{ secrets.CINECASA_FIRMA }}
         run: |
-          mkdir -p out
-          cp app/build/outputs/apk/release/*.apk out/CineCasa.apk
+          set -e
+          if [ -z "$FIRMA" ]; then echo "::error::Falta el secreto CINECASA_FIRMA (llaves de firma)"; exit 1; fi
+          K="$RUNNER_TEMP/k"; mkdir -p "$K" out
+          echo "$FIRMA" | base64 -d | tar xz -C "$K"
+          source "$K/claves.env"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          U=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          "$BT/zipalign" -p -f 4 "$U" "$K/alineada.apk"
+          # Rotación de llave: los aparatos con la versión anterior aceptan la actualización (Android 9+ queda con la llave nueva)
+          "$BT/apksigner" rotate --out "$K/linaje" \
+            --old-signer --ks "$K/vieja.jks" --ks-key-alias cinecasa --ks-pass env:OLD_PASS --key-pass env:OLD_PASS \
+            --new-signer --ks "$K/nueva.jks" --ks-key-alias cinecasa2 --ks-pass env:NEW_PASS --key-pass env:NEW_PASS
+          "$BT/apksigner" sign --ks "$K/vieja.jks" --ks-key-alias cinecasa --ks-pass env:OLD_PASS --key-pass env:OLD_PASS \
+            --next-signer --ks "$K/nueva.jks" --ks-key-alias cinecasa2 --ks-pass env:NEW_PASS --key-pass env:NEW_PASS \
+            --lineage "$K/linaje" --rotation-min-sdk-version 28 --out out/CineCasa.apk "$K/alineada.apk"
+          "$BT/apksigner" verify -v --print-certs out/CineCasa.apk | grep -E "Verified|Signer|SHA-256" | head -20
+          rm -rf "$K"
           ls -la out
 
       - uses: actions/upload-artifact@v4
