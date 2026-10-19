@@ -156,6 +156,7 @@ private fun ProfileGate() {
     }
     val pend = pendingPairCode.value
     if (cur != null && (pend != null || addDeviceOpen.value)) AddDeviceDialog({ pendingPairCode.value = null; addDeviceOpen.value = false }, pend ?: "")
+    if (rokuOpen.value) RokuInstallDialog { rokuOpen.value = false }
 }
 
 @Composable
@@ -455,6 +456,7 @@ private fun MoreScreen() {
                 value = if (DeviceUi.rotationLocked) "Toca para desbloquear" else "Toca para bloquear",
             ) { DeviceUi.toggleRotationLock() }
             MoreRow(Icons.Filled.Tv, "Agregar otra tele o celular") { addDeviceOpen.value = true }
+            if (!DeviceUi.isTv) MoreRow(Icons.Filled.LiveTv, "Instalar CineCasa en una tele Roku") { rokuOpen.value = true }
             MoreRow(Icons.Filled.Settings, "Ajustes", last = true) { nav.go(Route.Settings) }
         }
         Text("Los videos siempre se ven a lo ancho. El candado deja fija la orientación del resto de la app.", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))
