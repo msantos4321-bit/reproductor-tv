@@ -46,7 +46,7 @@ fun bytes(b: Long): String = when {
 }
 
 /** Invitado y perfil privado no descargan (no deben dejar rastro). */
-fun canDownload(): Boolean = Profiles.current.value?.let { !it.guest && !it.private } ?: false
+fun canDownload(): Boolean = Profiles.current.value?.let { !it.guest && !it.private } ?: true
 
 @Composable
 fun DownloadButton(item: PlayItem?, label: String = "Descargar") {
@@ -58,6 +58,21 @@ fun DownloadButton(item: PlayItem?, label: String = "Descargar") {
         d == null || d.failed -> ActionButton(if (d?.failed == true) "Reintentar descarga" else label, { Downloads.start(item) }, icon = Icons.Filled.Download)
         d.finished -> ActionButton("Descargada", { }, icon = Icons.Filled.DownloadDone)
         else -> ActionButton("Descargando ${(d.fraction * 100).toInt()}%", { }, icon = Icons.Filled.Download)
+    }
+}
+
+/** Descargar o borrar un episodio suelto (debajo de cada episodio). */
+@Composable
+fun EpisodeDownloadPill(item: PlayItem?) {
+    if (item == null) return
+    val list by Downloads.list.collectAsState()
+    val d = list.firstOrNull { it.key == item.key }
+    LaunchedEffect(d?.status) { while (d != null && !d.finished && !d.failed) { delay(2000); Downloads.refresh() } }
+    when {
+        d == null -> Pill("Descargar", false, { Downloads.start(item) }, icon = Icons.Filled.Download)
+        d.failed -> Pill("Reintentar", false, { Downloads.start(item) }, icon = Icons.Filled.Download)
+        d.finished -> Pill("Descargado · Borrar", true, { Downloads.remove(d.key) }, icon = Icons.Filled.DownloadDone)
+        else -> Pill("${(d.fraction * 100).toInt()}% · Cancelar", true, { Downloads.remove(d.key) }, icon = Icons.Filled.Download)
     }
 }
 
@@ -84,6 +99,7 @@ fun DownloadsScreen() {
             }
         }
         items(list.sortedByDescending { it.added }, key = { it.key }) { d ->
+            if (LocalCompact.current) { CompactDownloadRow(d, list, prog, nav); return@items }
             Row(
                 Modifier.fillMaxWidth().background(C.Panel, RoundedCornerShape(12.dp)).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -117,6 +133,42 @@ fun DownloadsScreen() {
                     ActionButton(if (d.finished || d.failed) "Borrar" else "Cancelar", { Downloads.remove(d.key) }, icon = Icons.Filled.Delete)
                 }
             }
+        }
+    }
+}
+
+
+/** En el celular: imagen y textos arriba, botones abajo (sin apretar el texto). */
+@Composable
+private fun CompactDownloadRow(d: com.mauricio.cinecasa.data.Downloads.Dl, list: List<com.mauricio.cinecasa.data.Downloads.Dl>, prog: Map<String, com.mauricio.cinecasa.data.Progress>, nav: Nav) {
+    Column(Modifier.fillMaxWidth().background(C.Panel, RoundedCornerShape(14.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 112.dp, height = 63.dp).clip(RoundedCornerShape(8.dp)).background(C.Panel2)) {
+                Img(d.image, Modifier.fillMaxSize())
+                prog[d.key]?.let { ProgressBar(it.fraction, Modifier.align(Alignment.BottomCenter).fillMaxWidth()) }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(d.title, color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (d.subtitle.isNotBlank()) Text(d.subtitle, color = C.Mid, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val st = when {
+                    d.finished -> "Lista · ${bytes(d.total)}"
+                    d.failed -> "La descarga falló"
+                    d.total > 0 -> "${(d.fraction * 100).toInt()}% · ${bytes(d.done)} de ${bytes(d.total)}"
+                    else -> "En espera…"
+                }
+                Text(st, color = if (d.failed) C.Warn else C.Low, fontSize = 12.sp)
+            }
+        }
+        if (!d.finished && !d.failed && d.total > 0) ProgressBar(d.fraction, Modifier.fillMaxWidth(), 4.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (d.finished) ActionButton("Ver", {
+                val group = if (d.kind == "episode") list.filter { it.finished && it.kind == "episode" && it.seriesId == d.seriesId }
+                    .sortedWith(compareBy({ it.season }, { it.ep })) else listOf(d)
+                val items = group.map { PlayItem(it.key, it.kind, it.id, it.seriesId, Downloads.localUri(it.key) ?: "", it.title, it.subtitle, it.image, it.season, it.ep) }
+                nav.play(items, items.indexOfFirst { it.key == d.key }.coerceAtLeast(0), prog[d.key]?.pos ?: 0L)
+            }, Modifier.weight(1f), primary = true, icon = Icons.Filled.PlayArrow)
+            ActionButton(if (d.finished || d.failed) "Borrar" else "Cancelar", { Downloads.remove(d.key) }, Modifier.weight(1f), icon = Icons.Filled.Delete)
         }
     }
 }

@@ -286,7 +286,7 @@ fun ShowDetailScreen(show0: Show) {
                 ActionButton("Tráiler", { openTrailer(ctx, inf?.trailer?.ifBlank { null } ?: show.trailer, show.title, show.year, show.tmdb, true) }, icon = Icons.Filled.OndemandVideo)
                 if (inf != null && season > 0 && canDownload()) {
                     val eps = inf.episodes[season].orEmpty()
-                    ActionButton("Descargar T$season", {
+                    ActionButton("Descargar temporada $season", {
                         val items = episodeItems(show.id, show.title, inf.backdrop.ifBlank { show.backdrop.ifBlank { show.cover } }, inf)
                         items.filter { it.season == season }.forEach { com.mauricio.cinecasa.data.Downloads.start(it) }
                     }, icon = Icons.Filled.Download)
@@ -307,6 +307,7 @@ fun ShowDetailScreen(show0: Show) {
                     }
                 }
                 val eps = inf.episodes[season].orEmpty()
+                val epItems = remember(inf, show.id) { episodeItems(show.id, show.title, inf.backdrop.ifBlank { show.backdrop.ifBlank { show.cover } }, inf) }
                 val rowState = rememberLazyListState()
                 LaunchedEffect(season) {
                     val idx = eps.indexOfFirst { it.id == target?.id }
@@ -315,6 +316,7 @@ fun ShowDetailScreen(show0: Show) {
                 LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = sidePad(), vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(eps, key = { _, e -> e.id }) { _, e ->
                         val pe = prog["episode:${e.id}"]
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         WideCard(
                             title = "E${e.num} · ${episodeName(e, show.title)}",
                             subtitle = TextUtil.duration(e.durationSecs),
@@ -325,6 +327,8 @@ fun ShowDetailScreen(show0: Show) {
                             onFocused = { focusedEp = e },
                             onLongClick = { Library.markWatched(e.id, e.id !in watched) },
                         )
+                        if (canDownload()) EpisodeDownloadPill(epItems.firstOrNull { it.id == e.id })
+                        }
                     }
                 }
                 Column(Modifier.fillMaxWidth(wide(0.7f)).heightIn(min = 60.dp).padding(start = sidePad())) {
