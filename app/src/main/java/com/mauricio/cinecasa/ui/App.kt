@@ -154,6 +154,8 @@ private fun ProfileGate() {
         cur == null -> ProfilePicker(onManage = { manageProfilesOpen.value = true })
         else -> key(cur.id) { Shell() }
     }
+    val pend = pendingPairCode.value
+    if (cur != null && (pend != null || addDeviceOpen.value)) AddDeviceDialog({ pendingPairCode.value = null; addDeviceOpen.value = false }, pend ?: "")
 }
 
 @Composable
@@ -452,6 +454,7 @@ private fun MoreScreen() {
                 if (DeviceUi.rotationLocked) "Rotación bloqueada" else "Rotación automática",
                 value = if (DeviceUi.rotationLocked) "Toca para desbloquear" else "Toca para bloquear",
             ) { DeviceUi.toggleRotationLock() }
+            MoreRow(Icons.Filled.Tv, "Agregar otra tele o celular") { addDeviceOpen.value = true }
             MoreRow(Icons.Filled.Settings, "Ajustes", last = true) { nav.go(Route.Settings) }
         }
         Text("Los videos siempre se ven a lo ancho. El candado deja fija la orientación del resto de la app.", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))

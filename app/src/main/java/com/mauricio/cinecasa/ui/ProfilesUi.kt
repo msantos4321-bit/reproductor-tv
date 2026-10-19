@@ -75,6 +75,23 @@ import java.util.Locale
 
 /** Abre "Administrar perfiles" desde cualquier lado (p. ej. Ajustes). */
 val manageProfilesOpen = androidx.compose.runtime.mutableStateOf(false)
+/** Código de una tele nueva que llegó por QR (cinecasa://pair?c=...) para aprobarla desde aquí. */
+val pendingPairCode = androidx.compose.runtime.mutableStateOf<String?>(null)
+/** Abre «Agregar otra tele o celular» desde cualquier pantalla. */
+val addDeviceOpen = androidx.compose.runtime.mutableStateOf(false)
+
+/** Lo que pasa cuando un aparato del hogar aprobó a este: queda con la misma cuenta y activación. */
+fun finishPair(p: org.json.JSONObject, done: () -> Unit) {
+    License.scope.launch {
+        Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
+        if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
+        Repo.clearAll()
+        Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
+        p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
+        License.refresh()
+        done()
+    }
+}
 
 @Composable
 fun Avatar(p: Profile, size: Dp = 96.dp) {
@@ -387,16 +404,7 @@ fun PairScreen(onCancel: () -> Unit) {
                 // Se termina fuera de esta pantalla: al cambiar el estado, la pantalla desaparece
                 // y cancelaría el trabajo a medias (eso dejaba la app en "Revisando activación…").
                 status = "¡Aprobado! Entrando…"
-                License.scope.launch {
-                    Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
-                    if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
-                    Repo.clearAll()
-                    Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
-                    // Si el hogar que lo aprobó usa código, este aparato se activa con el mismo
-                    p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
-                    License.refresh()
-                    onCancel()
-                }
+                finishPair(p) { onCancel() }
                 return@LaunchedEffect
             }
         }
@@ -416,16 +424,16 @@ fun PairScreen(onCancel: () -> Unit) {
 
 /** En un aparato ya configurado: aprobar el código de la tele nueva. */
 @Composable
-fun AddDeviceDialog(onClose: () -> Unit) {
-    var code by remember { mutableStateOf("") }
+fun AddDeviceDialog(onClose: () -> Unit, initial: String = "") {
+    var code by remember { mutableStateOf(initial) }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onClose) {
         Column(Modifier.cardWidth(500.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Agregar aparato", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("En el aparato nuevo abre CineCasa y elige «Tengo CineCasa en otro aparato». Escribe aquí el código que muestra.", color = C.Mid, fontSize = 13.sp)
+            Text("Agregar otra tele o celular", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(if (initial.isNotEmpty()) "Toca «Aprobar» y la tele nueva entra sola con tu misma cuenta." else "Abre CineCasa en el aparato nuevo: verás un código de 6 números (o escanea su QR con este celular). Escríbelo aquí y entra solo, sin contraseñas.", color = C.Mid, fontSize = 13.sp)
             TvTextField(code, { code = it.filter { c -> c.isDigit() }.take(6) }, "Código de 6 números", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Number, boxRequester = fr)
             if (msg.isNotEmpty()) Text(msg, color = if (msg.startsWith("Listo")) C.Good else C.Warn, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

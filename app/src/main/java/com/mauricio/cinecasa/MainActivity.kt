@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
         if (!DeviceUi.isTv) enableEdgeToEdge()
         com.mauricio.cinecasa.ui.C.apply(com.mauricio.cinecasa.data.Prefs.themeMode)
         com.mauricio.cinecasa.data.LangFilter.load()
+        readPair(intent)
         val compact = DeviceUi.isCompact(this)
         setContent {
             if (DeviceUi.isTv) {
@@ -33,6 +34,19 @@ class MainActivity : ComponentActivity() {
                 // Celular y tableta: tamaño natural del aparato
                 CompositionLocalProvider(LocalCompact provides compact) { CineTheme { App() } }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        readPair(intent)
+    }
+
+    /** cinecasa://pair?c=123456 → abre «Agregar aparato» con el código ya escrito. */
+    private fun readPair(i: android.content.Intent?) {
+        val d = i?.data ?: return
+        if (d.scheme == "cinecasa" && d.host == "pair") d.getQueryParameter("c")?.filter { it.isDigit() }?.take(6)?.let {
+            if (it.length == 6) com.mauricio.cinecasa.ui.pendingPairCode.value = it
         }
     }
 }

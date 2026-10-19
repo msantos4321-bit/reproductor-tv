@@ -76,6 +76,10 @@ fun SettingsScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("Ajustes", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Section("Agregar otra tele o celular") {
+            Text("Pon CineCasa en otro aparato de tu casa con tu misma cuenta, sin escribir contraseñas: abre la app en el aparato nuevo y escribe aquí el código que te muestra.", color = C.Mid, fontSize = 13.sp)
+            ActionButton("Agregar aparato", { addDeviceOpen.value = true }, primary = true)
+        }
 
         if (isAdmin) Section("Tu cuenta") {
             val a = account

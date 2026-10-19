@@ -121,6 +121,22 @@ fun LoginScreen(onPair: () -> Unit = {}) {
 private fun PhoneSetup(onData: (String, String, String) -> Unit) {
     var code by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
+    var offer by remember { mutableStateOf<com.mauricio.cinecasa.data.Cloud.PairOffer?>(null) }
+    // Al mismo tiempo: si un celular de la casa ya tiene CineCasa, puede aprobar esta tele con el mismo QR
+    LaunchedEffect(Unit) {
+        while (true) {
+            val o = com.mauricio.cinecasa.data.Cloud.pairRequest()
+            if (o == null) { kotlinx.coroutines.delay(10_000); continue }
+            offer = o
+            val until = System.currentTimeMillis() + 14 * 60_000
+            while (System.currentTimeMillis() < until) {
+                kotlinx.coroutines.delay(3_000)
+                val p = com.mauricio.cinecasa.data.Cloud.pairPoll(o) ?: continue
+                finishPair(p) {}
+                return@LaunchedEffect
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val c = com.mauricio.cinecasa.data.Cloud.pairNew()
@@ -141,11 +157,11 @@ private fun PhoneSetup(onData: (String, String, String) -> Unit) {
     }
     Text("Escanea con tu celular", color = C.Hi, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(4.dp))
-    Text("y escribe ahí los datos de tu proveedor. La tele entra sola.", color = C.Mid, fontSize = 14.sp)
+    Text("Si ya usas CineCasa en tu celular, la tele se agrega sola a tu cuenta. Si no, escribe ahí los datos de tu proveedor.", color = C.Mid, fontSize = 14.sp)
     Spacer(Modifier.height(12.dp))
     val c = code
     if (c != null) {
-        val url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=$c"
+        val url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=$c" + (offer?.code?.let { "&p=$it" } ?: "")
         val bmp = remember(url) { qrBitmap(url, 480) }
         Box(Modifier.size(190.dp).background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(14.dp)).padding(10.dp)) {
             androidx.compose.foundation.Image(bmp.asImageBitmap(), "Código QR", Modifier.fillMaxSize())

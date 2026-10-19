@@ -21,8 +21,15 @@ button:disabled{opacity:.6}
 .small{font-size:13px;color:#7c8396;margin-top:14px}
 </style></head><body><main>
 <div class="logo">Cine<span>Casa</span></div>
-<p>Escribe aquí los datos que te dio tu proveedor y tu tele quedará lista sola.</p>
+<p>Elige cómo quieres poner tu tele.</p>
+<div class="card" id="pairCard" style="display:none">
+  <div style="font-size:18px;font-weight:800">¿Ya usas CineCasa en este celular?</div>
+  <p style="margin-top:6px">Agrega la tele a tu misma cuenta con un toque, sin escribir nada.</p>
+  <button id="pairBtn">Agregar esta tele a mi cuenta</button>
+  <p class="small" id="pairHelp">Si no se abre CineCasa, ábrela tú y ve a Más → «Agregar otra tele o celular» y escribe el código <b id="pc"></b>.</p>
+</div>
 <div class="card">
+  <div style="font-size:18px;font-weight:800;margin-bottom:10px">Es mi primera vez: escribir mis datos</div>
   <div style="font-size:14px;color:var(--mid)">Código que aparece en tu tele</div>
   <input id="c" inputmode="numeric" maxlength="6" placeholder="000000" class="code" style="margin-top:6px">
   <label for="s">Servidor</label><input id="s" placeholder="http://servidor.com:8080" autocapitalize="off" autocorrect="off" inputmode="url">
@@ -36,7 +43,13 @@ button:disabled{opacity:.6}
 <script>
 const K = 'sb_publishable_vnkSLd5EzN53_LBv76YxUA_QRo2u8ok', U = 'https://wnwecaapchcfhcljsvli.supabase.co/rest/v1/rpc/';
 const $ = id => document.getElementById(id);
-$('c').value = (new URLSearchParams(location.search).get('c') || '').replace(/\D/g, '').slice(0, 6);
+const Q = new URLSearchParams(location.search);
+$('c').value = (Q.get('c') || '').replace(/\D/g, '').slice(0, 6);
+const pc = (Q.get('p') || '').replace(/\D/g, '').slice(0, 6);
+if (pc.length === 6) {
+  $('pairCard').style.display = 'block'; $('pc').textContent = pc;
+  $('pairBtn').onclick = () => { location.href = 'intent://pair?c=' + pc + '#Intent;scheme=cinecasa;package=com.mauricio.cinecasa;end'; };
+}
 if (!$('c').value) $('c').focus(); else $('s').focus();
 $('go').onclick = async () => {
   const c = $('c').value.trim(), s = $('s').value.trim(), u = $('u').value.trim(), p = $('p').value;
