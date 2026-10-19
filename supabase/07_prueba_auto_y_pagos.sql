@@ -95,15 +95,16 @@ end $$;
 -- Datos para "Tu suscripción" en la app: a quién pagar y a quién escribir
 create or replace function cc_lic_info(p_code text, p_device text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare l licenses; r resellers; ru jsonb := cc__rules(); price numeric;
+declare l licenses; r resellers; ru jsonb := cc__rules(); price numeric; n int;
 begin
   select * into l from licenses where code = upper(trim(p_code));
   if not found then return null; end if;
   if not exists (select 1 from activations where code = l.code and device_id = p_device) then return null; end if;
   select * into r from resellers where id = l.reseller_id;
-  price := case when l.max_devices <= 1 then coalesce((ru->'retail'->>'d1')::numeric, 169)
-                when l.max_devices = 2 then coalesce((ru->'retail'->>'d2')::numeric, 279)
-                else coalesce((ru->'retail'->>'d3')::numeric, 349) + greatest(l.max_devices - 3, 0) * coalesce((ru->'retail'->>'extra')::numeric, 89) end;
+  n := case when l.kind = 'trial' then 1 else l.max_devices end;   -- en prueba se muestra el precio desde 1 aparato
+  price := case when n <= 1 then coalesce((ru->'retail'->>'d1')::numeric, 169)
+                when n = 2 then coalesce((ru->'retail'->>'d2')::numeric, 279)
+                else coalesce((ru->'retail'->>'d3')::numeric, 349) + greatest(n - 3, 0) * coalesce((ru->'retail'->>'extra')::numeric, 89) end;
   return jsonb_build_object('kind', l.kind, 'expires', l.expires_at, 'max', l.max_devices,
     'used', (select count(*) from activations a where a.code = l.code), 'status', cc__status(l),
     'seller', r.name, 'seller_phone', r.phone,
@@ -135,3 +136,5 @@ begin
   return jsonb_build_object('role', 'rs', 'id', r.id, 'name', r.name, 'phone', r.phone, 'pay_link', r.pay_link, 'credits', r.credits, 'paused', r.paused,
     'level', cc__level(r.id), 'rules', cc__rules());
 end $$;
+
+update biz_settings set data = data || '{"download_url": "https://msantos4321-bit.github.io/reproductor-tv/app/"}'::jsonb where id = 1;
