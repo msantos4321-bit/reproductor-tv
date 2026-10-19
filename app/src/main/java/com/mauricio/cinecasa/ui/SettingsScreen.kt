@@ -110,8 +110,21 @@ fun SettingsScreen() {
         if (!isAdmin) Text("La cuenta, los perfiles y los aparatos solo los cambia el administrador.", color = C.Low, fontSize = 12.sp)
 
         val owner by com.mauricio.cinecasa.data.License.owner.collectAsState()
-        if (isAdmin && owner) Section("Centro de control") { ControlCenterSection() }
-        if (!owner && com.mauricio.cinecasa.data.License.code.isNotBlank()) Section("Tu suscripción") { SubscriptionSection() }
+        var asClient by remember { mutableStateOf(false) }
+        var previewAct by remember { mutableStateOf(false) }
+        if (isAdmin && owner && !asClient) Section("Centro de control") { ControlCenterSection() }
+        if ((!owner && com.mauricio.cinecasa.data.License.code.isNotBlank()) || (owner && asClient)) Section("Tu suscripción") { SubscriptionSection(sample = owner) }
+        if (isAdmin && owner) Section("Ver como cliente") {
+            Text("Revisa lo que ven tus clientes: su sección «Tu suscripción» (pagar, compartir, recomendado) y la pantalla de prueba gratis. Es solo una vista previa: no activa ni cambia nada.", color = C.Mid, fontSize = 13.sp)
+            Wrap {
+                ActionButton(if (asClient) "Volver a vista de dueño" else "Ver Ajustes como cliente", { asClient = !asClient }, primary = !asClient)
+                ActionButton("Ver pantalla de prueba gratis", { previewAct = true })
+            }
+        }
+        if (previewAct) androidx.compose.ui.window.Dialog(onDismissRequest = { previewAct = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) { ActivationScreen("", onPair = {}, preview = { previewAct = false }) }
+        }
 
         if (isAdmin && !DeviceUi.realTv) Section("Presentaciones") {
             Text("Muestra en este celular el diseño de la tele (pantalla acostada, sin barras) para grabar videos de demostración con la grabadora de pantalla.", color = C.Mid, fontSize = 13.sp)

@@ -70,7 +70,7 @@ fun shareInvite(ctx: Context, code: String, max: Int, name: String, email: Boole
 
 /** Primera pantalla en un aparato sin activar. */
 @Composable
-fun ActivationScreen(msg: String, onPair: () -> Unit) {
+fun ActivationScreen(msg: String, onPair: () -> Unit, preview: (() -> Unit)? = null) {
     var code by remember { mutableStateOf(License.code) }
     var ref by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -80,11 +80,13 @@ fun ActivationScreen(msg: String, onPair: () -> Unit) {
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     fun go() {
+        if (preview != null) { error = "Vista previa: aquí el cliente activaría su código."; return }
         if (code.isBlank()) { error = "Escribe tu código."; return }
         busy = true; error = ""
         scope.launch { error = License.activate(code) ?: ""; busy = false }
     }
     fun trial() {
+        if (preview != null) { error = "Vista previa: aquí el cliente recibiría su prueba gratis de 21 días."; return }
         busy = true; error = ""
         scope.launch {
             val e = License.startTrial(ref)
@@ -120,7 +122,8 @@ fun ActivationScreen(msg: String, onPair: () -> Unit) {
                     else ActionButton("Activar", { go() }, Modifier.fillMaxWidth(), primary = true)
                     if (!trialGone) ActionButton("Quiero la prueba gratis", { withCode = false; error = "" }, Modifier.fillMaxWidth())
                 }
-                ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
+                if (preview != null) ActionButton("Salir de la vista previa", preview, Modifier.fillMaxWidth(), primary = true)
+                else ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
             }
         }
     }
@@ -161,16 +164,20 @@ fun ControlCenterSection() {
 
 /** Para clientes: qué tipo de activación tienen y cuándo vence. */
 @Composable
-fun SubscriptionSection() {
+fun SubscriptionSection(sample: Boolean = false) {
     val info by License.info.collectAsState()
-    val i = info
+    // Vista previa del dueño: datos de ejemplo de un cliente en prueba
+    val i = if (sample) remember { JSONObject().put("kind", "trial").put("max", 5).put("used", 2).put("price", 169)
+        .put("expires", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(System.currentTimeMillis() + 21L * 86400000))).put("help_phone", "").put("pay_link", "https://mpago.la/ejemplo")
+        .put("referral_days", 30).put("download_url", "https://msantos4321-bit.github.io/reproductor-tv/app/") } else info
     val fmt = remember { SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es", "MX")) }
     val iso = remember { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") } }
-    LaunchedEffect(Unit) { if (License.code.isNotBlank()) License.info.value = Cloud.licInfo(License.code) }
+    LaunchedEffect(Unit) { if (!sample && License.code.isNotBlank()) License.info.value = Cloud.licInfo(License.code) }
     if (i == null) { Text("Código ${License.code}", color = C.Mid, fontSize = 14.sp); return }
+    if (sample) Text("Vista previa con datos de ejemplo", color = C.Warn, fontSize = 12.sp)
     val kind = when (i.optString("kind")) { "trial" -> "Prueba gratis"; "gift" -> "Cortesía"; else -> "Anual" }
     val exp = i.optString("expires").takeIf { it.isNotBlank() && it != "null" }?.let { runCatching { fmt.format(iso.parse(it.take(19))!!) }.getOrNull() }
-    Text("$kind · código ${License.code}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    Text("$kind · código ${if (sample) "CC-EJEM-PL0S" else License.code}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     Text(if (exp != null) "Vence el $exp" else "Sin vencimiento", color = C.Mid, fontSize = 13.sp)
     Text("${i.optInt("used")} de ${i.optInt("max")} aparatos en uso", color = C.Mid, fontSize = 13.sp)
     i.optString("seller").takeIf { it.isNotBlank() && it != "null" }?.let { seller ->
@@ -179,7 +186,7 @@ fun SubscriptionSection() {
     }
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val code = License.code
+    val code = if (sample) "CC-EJEM-PL0S" else License.code
     val price = i.optDouble("price", 0.0).toInt()
     val pay = i.optString("pay_link").takeIf { it.startsWith("http") }
     val help = i.optString("help_phone").filter { it.isDigit() }.let { if (it.length == 10) "52$it" else it }
@@ -217,6 +224,7 @@ fun SubscriptionSection() {
             TvTextField(ref, { ref = it.uppercase() }, "Código de quien te recomendó", Modifier.width(260.dp))
             ActionButton("Guardar", {
                 if (ref.isBlank()) return@ActionButton
+                if (sample) { note = "Vista previa: aquí se registraría quién lo recomendó."; return@ActionButton }
                 scope.launch {
                     note = when (Cloud.setRef(code, ref)) {
                         "ok" -> { License.info.value = Cloud.licInfo(code); "Listo, quedó registrado. ¡Gracias!" }
