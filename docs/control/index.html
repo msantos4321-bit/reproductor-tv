@@ -105,6 +105,7 @@ label{display:block;font-size:13px;color:var(--mid);margin:12px 2px 6px}
 .fab{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));z-index:7;width:58px;height:58px;border-radius:50%;background:var(--acc);color:#fff;font-size:30px;box-shadow:0 8px 24px rgba(10,132,255,.4)}
 @media (min-width:900px){.fab{bottom:28px}}
 .hidden{display:none!important}
+.mailrow{display:flex;gap:8px;margin:10px 0 4px}.mailrow input{flex:1;min-width:0}.mailrow .btn{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -228,13 +229,33 @@ function waLink(phone, text) {
   let p = String(phone || '').replace(/\D/g, ''); if (p.length === 10) p = '52' + p;
   return 'https://wa.me/' + p + '?text=' + encodeURIComponent(text);
 }
+function inviteParts(c) {
+  const r = rules();
+  return {
+    dl: r.download_url || 'https://github.com/msantos4321-bit/reproductor-tv/releases/latest/download/CineCasa.apk',
+    first: c.customer ? c.customer.split(' ')[0] : '',
+    plan: c.kind === 'trial' ? `Prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'Sin vencimiento' : `Vigente hasta el ${fdate(c.expires)}`,
+    devs: `${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}`,
+    dc: r.downloader_code || '',
+    help: r.manager_whatsapp ? String(r.manager_whatsapp) : '',
+  };
+}
+// WhatsApp: *negritas*, ```monoespaciado``` y líneas cortas para que se lea bien en el celular
 function inviteText(c) {
-  const dl = rules().download_url || 'https://github.com/msantos4321-bit/reproductor-tv/releases/latest/download/CineCasa.apk';
-  const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
-  const plan = c.kind === 'trial' ? `Es una prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'No vence' : `Vence el ${fdate(c.expires)}`;
-  const dc = rules().downloader_code;
-  const tv = dc ? `📺 En la tele (Google TV, Android TV o Fire TV): instala la app «Downloader», ábrela y escribe el número *${dc}*.` : `📺 En la tele: instala la app «Downloader» y escribe la liga de arriba.`;
-  return `${who}aquí está tu CineCasa 🎬\n\n📱 En el celular o tableta, descarga la app aquí:\n${dl}\n\n${tv}\n\n🔑 Al abrirla escribe tu código:\n*${c.code}*\n\nSirve para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}. ${plan}.\nSi Android pregunta, permite «instalar apps desconocidas».`;
+  const x = inviteParts(c);
+  const tv = x.dc
+    ? `📺 *EN LA TELE* (Google TV · Android TV · Fire TV)\n1. Instala la app *Downloader* desde la tienda de la tele.\n2. Ábrela y en el cuadro escribe este número:\n\n       ━━━━━━━━━━━━\n       *${x.dc}*\n       ━━━━━━━━━━━━\n\n3. Toca *Ir* → *Instalar*. Si te pide permiso, actívalo para Downloader.`
+    : `📺 *EN LA TELE*\n1. Instala la app *Downloader*.\n2. Escribe la liga de abajo y toca *Instalar*.`;
+  return `🎬 *CineCasa*${x.first ? ` · Hola ${x.first}` : ''}\n\n🔑 *TU CÓDIGO DE ACTIVACIÓN*\n\`\`\`${c.code}\`\`\`\n${x.plan} · ${x.devs}\n\n${tv}\n\n📱 *EN CELULAR O TABLETA*\n1. Descarga aquí:\n${x.dl}\n2. Abre el archivo y toca *Instalar* (si Android pregunta, permite «instalar apps desconocidas»).\n\n✅ *AL ABRIR LA APP*\nEscribe tu código *${c.code}* y listo.${x.help ? `\n\n¿Dudas? Escríbeme por aquí 🙌` : ''}`;
+}
+// Correo: texto simple (sin asteriscos) que se ve bien en Gmail, Outlook o el correo del celular
+function emailText(c) {
+  const x = inviteParts(c);
+  const L = '────────────────────────';
+  return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a CineCasa.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Descarga la app aquí:\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code} y listo.\n\n¡Que la disfrutes!`;
+}
+function mailLink(email, c) {
+  return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de CineCasa: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
 }
 function renewText(c) {
   const d = daysLeft(c.expires);
@@ -244,6 +265,9 @@ function renewText(c) {
   const price = suggested(c.max);
   return `${who}${what} ${when}. ${c.kind === 'trial' ? 'Para seguir viendo, tu plan anual' : 'La renovación por un año'} para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'} queda en $${price}. Tu código sigue siendo el mismo (${c.code}), no tienes que reinstalar nada. ¿Te lo dejo activo?`;
 }
+// El correo del cliente se recuerda en este aparato (no se sube a ningún lado)
+function mailOf(code) { try { return (JSON.parse(localStorage.getItem('cc_mails') || '{}'))[code] || ''; } catch { return ''; } }
+function saveMail(code, v) { try { const m = JSON.parse(localStorage.getItem('cc_mails') || '{}'); if (v) m[code] = v; else delete m[code]; localStorage.setItem('cc_mails', JSON.stringify(m)); } catch {} }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copiado'); }
   catch { prompt('Copia el texto:', text); }
@@ -432,10 +456,14 @@ function codeSheet(c, fresh) {
       ${c.phone ? `<div>WhatsApp</div><div>${esc(c.phone)}</div>` : ''}
       ${isMgr() ? `<div>Vendió</div><div>${esc(c.reseller || 'Tú (directo)')}</div>` : ''}
       <div>Creado</div><div>${fdate(c.created)}</div>
+      ${rules().downloader_code ? `<div>Downloader</div><div><b style="font-size:17px;letter-spacing:1px">${esc(rules().downloader_code)}</b> (para la tele)</div>` : ''}
     </div>
     <div class="btns">
       <a class="btn wa" target="_blank" rel="noopener" href="${waLink(c.phone, inviteText(c))}">Enviar por WhatsApp</a>
       <button class="btn" id="cp">Copiar mensaje</button>
+    </div>
+    <div class="mailrow"><input type="email" id="em" placeholder="Correo del cliente (opcional)" value="${esc(mailOf(c.code))}" autocomplete="off"><a class="btn" id="ml" href="${mailLink(mailOf(c.code), c)}">Enviar por correo</a></div>
+    <div class="btns">
       ${(c.kind !== 'gift' && (c.status === 'vencido' || (d != null && d <= 15))) ? `<a class="btn acc" target="_blank" rel="noopener" href="${waLink(c.phone, renewText(c))}">Recordar renovación</a>` : ''}
     </div>
     <div class="sec">Aparatos</div><div class="group">${devs}</div>
@@ -454,6 +482,8 @@ function codeSheet(c, fresh) {
         catch (e) { toast(e.message, 1); }
       };
       bg.querySelector('#cp').onclick = () => copy(inviteText(c));
+      const em = bg.querySelector('#em'), ml = bg.querySelector('#ml');
+      em.oninput = () => { ml.href = mailLink(em.value.trim(), c); saveMail(c.code, em.value.trim()); };
       const conv = bg.querySelector('#conv'); if (conv) conv.onclick = () => askNumber(`¿Cuántos aparatos pagó?`, c.max, n => act('cc_code_convert', { p_devices: n }, 'Ya es anual'), n => isMgr() ? `Venta directa. Sugerido ${money(suggested(n))}` : `Gasta ${n} ${n == 1 ? 'crédito' : 'créditos'} · sugerido ${money(suggested(n))}`);
       const ren = bg.querySelector('#ren'); if (ren) ren.onclick = () => act('cc_code_renew', {}, 'Renovado 1 año');
       bg.querySelector('#add').onclick = () => askNumber('¿Cuántos aparatos agregas?', 1, n => act('cc_code_add', { p_n: n }, 'Aparatos agregados'), n => c.kind === 'paid' ? `Gasta ${num(n * (d != null && d < 183 ? .5 : 1))} créditos (proporcional a lo que queda del año)` : c.kind === 'trial' ? 'En prueba no gasta créditos' : 'Sin costo');
