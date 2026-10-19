@@ -22,6 +22,12 @@ sub init()
     m.eps = m.top.findNode("eps")
     m.info = m.top.findNode("info")
     m.video = m.top.findNode("video")
+    m.qrBox = m.top.findNode("qrBox")
+    m.qr = m.top.findNode("qr")
+    m.qrCode = m.top.findNode("qrCode")
+    m.pairTimer = m.top.findNode("pairTimer")
+    m.pairTimer.observeField("fire", "onPairTick")
+    m.pairCode = ""
 
     m.formList.observeField("itemSelected", "onFormSelect")
     m.sections.observeField("itemFocused", "onSectionFocus")
@@ -108,6 +114,10 @@ sub onResponse(e as object)
         onItems(id, data)
     else if id = "series" then
         onSeriesInfo(data)
+    else if id = "pairNew" then
+        onPairNew(r.body)
+    else if id = "pairGet" then
+        onPairGet(data)
     end if
 end sub
 
@@ -125,6 +135,7 @@ end sub
 
 sub showForm(title as string, text as string, items as object, mode as string)
     m.mode = mode
+    if mode <> "login" then stopPairing()
     m.home.visible = false
     m.video.visible = false
     m.form.visible = true
@@ -147,6 +158,7 @@ sub showLogin(msg as string)
     if usr = "" then usr = "(toca para escribir)"
     pw = "(toca para escribir)"
     if m.pass <> "" then pw = "••••••"
+    startPairing()
     showForm("Escribe los datos que te dio tu proveedor", "CineCasa es un reproductor: funciona con el servicio que tú ya tienes. Tus datos solo se guardan en esta tele.", ["Servidor: " + srv, "Usuario: " + usr, "Contraseña: " + pw, "Entrar", "Ver demostración"], "login")
     m.formMsg.text = msg
 end sub
@@ -244,6 +256,55 @@ sub doLogin()
     end if
     m.formMsg.text = "Conectando…"
     request("login", api(""), "GET", "", invalid)
+end sub
+
+' ---------------- configurar desde el celular (QR) ----------------
+sub startPairing()
+    m.qrBox.visible = true
+    if m.pairCode <> "" then return
+    rpc("pairNew", "cc_pair_new", {})
+end sub
+
+sub stopPairing()
+    m.qrBox.visible = false
+    m.pairTimer.control = "stop"
+    m.pairCode = ""
+end sub
+
+sub onPairNew(body as string)
+    c = body.Replace(Chr(34), "").Trim()
+    if Len(c) <> 6 then return
+    m.pairCode = c
+    m.pairStarted = CreateObject("roDateTime").AsSeconds()
+    url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=" + c
+    m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.EncodeUriComponent()
+    m.qrCode.text = Left(c, 3) + " " + Right(c, 3)
+    m.pairTimer.control = "start"
+end sub
+
+sub onPairTick()
+    if m.pairCode = "" or m.mode <> "login" then return
+    if CreateObject("roDateTime").AsSeconds() - m.pairStarted > 840 then
+        m.pairCode = ""
+        m.pairTimer.control = "stop"
+        rpc("pairNew", "cc_pair_new", {})
+        return
+    end if
+    rpc("pairGet", "cc_pair_get", { p_code: m.pairCode })
+end sub
+
+sub onPairGet(data as object)
+    if data = invalid or data.status = invalid then return
+    if data.status = "ok" then
+        stopPairing()
+        m.server = Str2(data.server) : m.user = Str2(data.user) : m.pass = Str2(data.pass)
+        m.formMsg.text = "¡Datos recibidos! Entrando…"
+        doLogin()
+    else if data.status = "expired" then
+        m.pairCode = ""
+        m.pairTimer.control = "stop"
+        rpc("pairNew", "cc_pair_new", {})
+    end if
 end sub
 
 sub onLogin(code as integer, data as object)

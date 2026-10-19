@@ -702,6 +702,10 @@ function viewRules() {
       <label for="atn">Aparatos de la prueba automática</label><input type="number" id="atn" value="${esc(r.auto_trial_devices || 5)}" min="1" max="10">
       <div class="note">Una sola prueba por aparato. Si escriben el código de quien los recomendó, quedan con el distribuidor de esa persona; si no, son clientes tuyos directos.</div></div>
     <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
+    <div class="sec">Clientes con tele Roku</div>
+    <div class="stat"><div class="note" style="margin-top:0">Mientras CineCasa llega a la tienda de Roku, la instalas tú desde una computadora con Windows conectada al mismo WiFi que la tele:</div>
+      <div class="note">1. Descarga el instalador y descomprímelo. 2. Doble clic en «Instalar CineCasa en Roku». 3. Elige la tele y sigue lo que dice. Para actualizar, vuelve a abrirlo.</div>
+      <div class="btns" style="margin-top:12px"><a class="btn pri" href="../roku/Instalador-CineCasa-Roku.zip" download>Descargar instalador para Roku</a></div></div>
     <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
   $('#sv').onclick = async () => {
     const v = id => Number($('#' + id).value);
@@ -736,6 +740,10 @@ function viewAccount() {
       <label for="apl">Tu liga de pago (Mercado Pago, transferencia, etc.)</label><input type="text" id="apl" value="${esc(me.pay_link || '')}" placeholder="https://mpago.la/...">
       <div class="note">Tus clientes ven el botón «Pagar» en la app con esta liga, y el dinero te llega directo a ti. Cuando te paguen, abre su código y toca «Cliente pagó».</div>
       <button class="btn pri full" style="margin-top:12px" id="asv">Guardar mis datos</button></div>
+    <div class="sec">Clientes con tele Roku</div>
+    <div class="stat"><div class="note" style="margin-top:0">Mientras CineCasa llega a la tienda de Roku, la instalas tú desde una computadora con Windows conectada al mismo WiFi que la tele:</div>
+      <div class="note">1. Descarga el instalador y descomprímelo. 2. Doble clic en «Instalar CineCasa en Roku». 3. Elige la tele y sigue lo que dice. Para actualizar, vuelve a abrirlo.</div>
+      <div class="btns" style="margin-top:12px"><a class="btn pri" href="../roku/Instalador-CineCasa-Roku.zip" download>Descargar instalador para Roku</a></div></div>
     <div class="sec">Cómo funciona</div>
     <div class="group">
       <div class="row"><div class="main"><div class="t">Prueba gratis</div><div class="s" style="white-space:normal">${r.trial_days || 21} días, hasta ${r.trial_devices || 2} aparatos. No gasta créditos. Tienes ${r.trial_month_cap || 20} al mes.</div></div></div>

@@ -15,6 +15,15 @@
       <Label id="formText" translation="[80,300]" width="1100" wrap="true" font="font:SmallSystemFont" color="0xB9C2D6FF" lineSpacing="6" />
       <LabelList id="formList" translation="[80,470]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="6"
         color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+      <Group id="qrBox" visible="false">
+        <Rectangle translation="[1240,220]" width="560" height="760" color="0x17171CFF" />
+        <Label translation="[1280,250]" width="480" text="Más fácil: escanea con tu celular" wrap="true" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+        <Label translation="[1280,360]" width="480" text="Escribe los datos de tu proveedor en tu celular y la tele entra sola." wrap="true" font="font:SmallSystemFont" color="0xB9C2D6FF" />
+        <Rectangle translation="[1340,470]" width="360" height="360" color="0xFFFFFFFF" />
+        <Poster id="qr" translation="[1360,490]" width="320" height="320" />
+        <Label id="qrCode" translation="[1280,860]" width="480" horizAlign="center" font="font:LargeBoldSystemFont" color="0x3D9BFFFF" />
+        <Label translation="[1280,930]" width="480" horizAlign="center" text="msantos4321-bit.github.io/reproductor-tv/tv" font="font:SmallestSystemFont" color="0x9AA3B8FF" />
+      </Group>
       <Label id="formMsg" translation="[80,960]" width="1700" wrap="true" font="font:SmallSystemFont" color="0xFF9F0AFF" />
     </Group>
 
@@ -32,6 +41,7 @@
       <Label id="info" translation="[880,1020]" width="960" wrap="false" font="font:SmallSystemFont" color="0x9AA3B8FF" />
     </Group>
 
+    <Timer id="pairTimer" repeat="true" duration="3" />
     <Video id="video" width="1920" height="1080" visible="false" enableUI="true" />
   </children>
 </component>
