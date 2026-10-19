@@ -54,7 +54,9 @@ object DeviceUi {
 
     fun toggleRotationLock() {
         rotationLocked = !rotationLocked
-        act?.get()?.getSharedPreferences("cinecasa", Context.MODE_PRIVATE)?.edit()?.putBoolean("rotLock", rotationLocked)?.apply()
+        val a = act?.get()
+        val land = a?.resources?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE
+        a?.getSharedPreferences("cinecasa", Context.MODE_PRIVATE)?.edit()?.putBoolean("rotLock", rotationLocked)?.putBoolean("rotLockLand", land)?.apply()
         apply()
     }
 
@@ -94,7 +96,9 @@ object DeviceUi {
         }
         a.requestedOrientation = when {
             playing -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            rotationLocked -> ActivityInfo.SCREEN_ORIENTATION_LOCKED
+            // Al salir de un video regresa a la orientación en que se puso el candado (no a la del video)
+            rotationLocked -> if (a.getSharedPreferences("cinecasa", Context.MODE_PRIVATE).getBoolean("rotLockLand", false))
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             else -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         }
     }

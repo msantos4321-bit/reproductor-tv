@@ -289,7 +289,11 @@ private fun PhoneHomeHeader(rows: List<HomeRow>, c: Catalog) {
         val h = hero
         if (featured != null && h != null) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp)).background(C.Panel2)
+                Modifier.fillMaxWidth().height(run {
+                    // En el celular acostado el destacado no debe tapar toda la pantalla
+                    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+                    minOf((cfg.screenWidthDp - 32) / 1.6f, cfg.screenHeightDp * 0.5f).dp
+                }).clip(RoundedCornerShape(16.dp)).background(C.Panel2)
                     .clickable { openTile(featured, nav, c) },
             ) {
                 Img(h.image, Modifier.fillMaxSize(), fallback = h.fallback)
