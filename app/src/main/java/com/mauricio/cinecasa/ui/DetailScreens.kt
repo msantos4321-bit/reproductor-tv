@@ -115,6 +115,8 @@ private fun DetailFrame(backdrop: String?, fallback: String? = null, content: @C
         Img(backdrop, Modifier.fillMaxSize(), fallback = fallback)
         Scrim()
         content()
+        val nav = LocalNav.current
+        TouchBack({ nav.back() }, Modifier.align(Alignment.TopStart).padding(14.dp))
     }
 }
 

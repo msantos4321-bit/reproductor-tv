@@ -235,9 +235,11 @@ private fun Shell() {
             top is Route.MultiView -> MultiViewScreen(top.pool, top.first)
             top is Route.MovieDetail -> key(top) { MovieDetailScreen(top.vod) }
             top is Route.ShowDetail -> key(top) { ShowDetailScreen(top.show) }
-            LocalCompact.current -> PhoneShell(top)
+            LocalCompact.current -> PhoneShell(top, canBack = stack.size > 1)
             else -> Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().padding(start = 72.dp)) {
+                Column(Modifier.fillMaxSize().padding(start = 72.dp)) {
+                if (stack.size > 1) BackBar { nav.back() }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (top) {
                         Route.Home -> HomeScreen()
                         is Route.Search -> key(top) { SearchScreen(top.q) }
@@ -249,6 +251,7 @@ private fun Shell() {
                         Route.Settings -> SettingsScreen()
                         else -> {}
                     }
+                }
                 }
                 Sidebar(top) { nav.go(it) }
                 ClockLabel(Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 24.dp))
@@ -384,9 +387,10 @@ private val phoneTabs = listOf(
 )
 
 @Composable
-private fun PhoneShell(top: Route) {
+private fun PhoneShell(top: Route, canBack: Boolean) {
     val nav = LocalNav.current
     Column(Modifier.fillMaxSize().background(C.Bg)) {
+        if (canBack) BackBar { nav.back() }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (top) {
                 Route.Home -> HomeScreen()

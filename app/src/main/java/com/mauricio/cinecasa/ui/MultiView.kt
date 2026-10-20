@@ -146,6 +146,7 @@ fun MultiViewScreen(pool: List<Channel>, first: Channel?) {
         Column(Modifier.fillMaxSize()) {
             // Barra superior
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!DeviceUi.isTv) { TouchBack({ nav.back() }); Spacer(Modifier.width(12.dp)) }
                 Text("Pantalla múltiple", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusProperties { canFocus = picker < 0 }) {

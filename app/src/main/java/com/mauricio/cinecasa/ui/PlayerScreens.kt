@@ -269,12 +269,16 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
         )
         // Título arriba cuando se ven los controles
         AnimatedVisibility(ctrlVisible && item != null, enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))).padding(start = 40.dp, end = 40.dp, top = 26.dp, bottom = 40.dp)) {
+            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))).padding(start = if (DeviceUi.isTv) 40.dp else 70.dp, end = 40.dp, top = 26.dp, bottom = 40.dp)) {
                 Column {
                     Text(item?.title.orEmpty(), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     if (!item?.subtitle.isNullOrBlank()) Text(item?.subtitle.orEmpty(), color = PMid, fontSize = 15.sp, maxLines = 1)
                 }
             }
+        }
+        // Celular/tableta: botón para regresar (visible con los controles o si hay error)
+        AnimatedVisibility(ctrlVisible || error != null, Modifier.align(Alignment.TopStart), enter = fadeIn(), exit = fadeOut()) {
+            TouchBack({ nav.back() }, Modifier.padding(start = 14.dp, top = 22.dp))
         }
         if (seekHint.isNotEmpty()) {
             Text(seekHint, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
@@ -485,6 +489,11 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
                     }
                 }
             }
+        }
+
+        // Celular/tableta: botón para regresar (aparece al tocar la pantalla)
+        AnimatedVisibility(showList || showInfo || error != null, Modifier.align(Alignment.TopEnd), enter = fadeIn(), exit = fadeOut()) {
+            TouchBack({ nav.back() }, Modifier.padding(16.dp))
         }
 
         error?.let { msg ->

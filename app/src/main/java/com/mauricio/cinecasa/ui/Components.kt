@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -470,3 +472,29 @@ private val GENRES = mapOf(
 fun genreEs(g: String): String = g.split(',', '/').joinToString(", ") { part ->
     val t = part.trim(); GENRES[t.lowercase()] ?: t
 }.trim().trimEnd(',')
+
+/** Botón «Regresar» para celular y tableta (en la tele se usa el botón del control). */
+@Composable
+fun TouchBack(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (DeviceUi.isTv) return
+    Box(
+        modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.Black.copy(alpha = 0.5f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Regresar", Modifier.size(24.dp), tint = Color.White) }
+}
+
+/** Barra superior con «‹ Regresar» para las pantallas a las que se entra desde otra. */
+@Composable
+fun BackBar(onClick: () -> Unit) {
+    if (DeviceUi.isTv) return
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Regresar", Modifier.size(24.dp), tint = C.Accent)
+        Spacer(Modifier.width(6.dp))
+        Text("Regresar", color = C.Accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
