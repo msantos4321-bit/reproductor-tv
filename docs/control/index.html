@@ -92,6 +92,9 @@ label{display:block;font-size:13px;color:var(--mid);margin:12px 2px 6px}
 .kv div:nth-child(odd){color:var(--mid)}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#f5f5f7;color:#111;font-weight:600;padding:10px 16px;border-radius:12px;z-index:40;max-width:90vw;text-align:center;animation:up .2s}
 .toast.err{background:var(--bad);color:#fff}
+.updb{background:var(--panel2);border-radius:10px;padding:6px 10px;font-size:13px;font-weight:600;color:var(--mid);white-space:nowrap}
+.updbar{position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:45;max-width:600px;margin:0 auto;background:var(--acc,#0a84ff);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:12px;font-weight:600;box-shadow:0 8px 30px #0008}
+.updbar span{flex:1}.updbar .btn{background:#fff;color:#111;min-height:38px;padding:8px 14px}
 .login{max-width:440px;margin:12vh auto 0;text-align:center;padding:0 20px}
 .login .logo{width:84px;height:84px;margin:0 auto 22px}
 .login h1{font-size:26px;letter-spacing:.3em;font-weight:300;margin-bottom:10px}
@@ -350,12 +353,13 @@ function render() {
   document.title = 'CineCasa · ' + t[1];
   const sub = isMgr() ? 'Gerente general' : `${esc(me.name)} · ${num(me.credits)} créditos`;
   $('#app').innerHTML = `
-    <header><div class="hd"><div style="flex:1"><div class="brand">CINECASA</div><h1>${t[1]}</h1></div><div class="who">${sub}</div></div></header>
+    <header><div class="hd"><div style="flex:1"><div class="brand">CINECASA</div><h1>${t[1]}</h1></div><div class="who">${sub}</div><button class="updb" id="updBtn" title="Buscar actualizaciones">↻ Actualizar</button></div></header>
     <main class="wrap" id="view"><div class="spin"></div></main>
     <nav class="tabs">${tabsFor().map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}</button>`).join('')}</nav>
     ${tab === 'codigos' || tab === 'inicio' ? `<button class="fab" id="fab" aria-label="Nuevo código">＋</button>` : ''}
     ${tab === 'dist' ? `<button class="fab" id="fab" aria-label="Nuevo distribuidor">＋</button>` : ''}`;
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+  $('#updBtn').onclick = () => checkUpdate(true);
   const fab = $('#fab'); if (fab) fab.onclick = () => tab === 'dist' ? editReseller(null) : newCode();
   ({ inicio: viewHome, codigos: viewCodes, dist: viewResellers, mov: viewLedger, reglas: viewRules, cuenta: viewAccount })[tab]();
 }
@@ -760,6 +764,35 @@ function viewAccount() {
     catch (e) { toast(e.message, 1); }
   };
 }
+
+// ---------- actualizaciones del panel ----------
+// El panel vive en internet: cada vez que se abre trae la versión nueva. Esto cubre el caso
+// en que quedó abierto (o instalado en la pantalla de inicio) con una versión vieja.
+const LOADED_AT = Date.parse(document.lastModified) || 0;
+async function newerVersion() {
+  try {
+    const r = await fetch(location.pathname + '?chk=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+    const lm = Date.parse(r.headers.get('last-modified') || '');
+    if (!lm || !LOADED_AT) return null; // no se puede saber
+    return lm > LOADED_AT + 1000;
+  } catch { return false; }
+}
+function applyUpdate() { const u = new URL(location.href); u.searchParams.set('u', Date.now()); location.replace(u.toString()); }
+function showUpdateBar() {
+  if ($('#upd')) return;
+  const d = document.createElement('div'); d.id = 'upd'; d.className = 'updbar';
+  d.innerHTML = '<span>Hay una versión nueva del panel</span><button class="btn">Actualizar</button>';
+  d.querySelector('button').onclick = applyUpdate; document.body.appendChild(d);
+}
+async function checkUpdate(manual) {
+  if (manual) toast('Buscando actualizaciones…');
+  const n = await newerVersion();
+  if (n === true) { if (manual) applyUpdate(); else showUpdateBar(); }
+  else if (manual && n === null) applyUpdate();
+  else if (manual) toast(navigator.onLine === false ? 'Sin internet' : 'Ya tienes la versión más nueva');
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(false); });
+setTimeout(() => checkUpdate(false), 4000);
 
 window.addEventListener('hashchange', () => { if (/[#&]e=/.test(location.hash)) boot(); });
 boot();
