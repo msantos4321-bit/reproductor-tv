@@ -62,6 +62,8 @@ fun SettingsScreen() {
     var confirmLogout by remember { mutableStateOf(false) }
     val me by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
     val isAdmin = me?.admin == true
+    val acct by Prefs.account.collectAsState()
+    val demoNow = acct?.server == Prefs.DEMO_SERVER
     var serverDlg by remember { mutableStateOf(false) }
     val firstFr = remember { FocusRequester() }
 
@@ -120,10 +122,12 @@ fun SettingsScreen() {
         if ((!owner && com.mauricio.cinecasa.data.License.code.isNotBlank()) || (owner && asClient)) Section("Tu suscripción") { SubscriptionSection(sample = owner) }
         if (isAdmin && owner) Section("Ver como cliente") {
             Text("Revisa lo que ven tus clientes: su sección «Tu suscripción» (pagar, compartir, recomendado) y la pantalla de prueba gratis. Es solo una vista previa: no activa ni cambia nada.", color = C.Mid, fontSize = 13.sp)
+            Text("Ver Ajustes como:", color = C.Mid, fontSize = 13.sp)
             Wrap {
-                ActionButton(if (asClient) "Volver a vista de dueño" else "Ver Ajustes como cliente", { asClient = !asClient }, primary = !asClient)
-                ActionButton("Ver pantalla de prueba gratis", { previewAct = true })
+                Pill("Dueño", !asClient, { asClient = false })
+                Pill("Cliente", asClient, { asClient = true })
             }
+            Wrap { ActionButton("Ver pantalla de prueba gratis", { previewAct = true }) }
         }
         if (previewAct) androidx.compose.ui.window.Dialog(onDismissRequest = { previewAct = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
@@ -132,20 +136,26 @@ fun SettingsScreen() {
 
         if (isAdmin && !DeviceUi.realTv) Section("Presentaciones") {
             Text("Muestra en este celular el diseño de la tele (pantalla acostada, sin barras) para grabar videos de demostración con la grabadora de pantalla.", color = C.Mid, fontSize = 13.sp)
+            Text("Diseño de este aparato:", color = C.Mid, fontSize = 13.sp)
             Wrap {
-                ActionButton(if (DeviceUi.tvLayout) "Volver al diseño de celular" else "Ver diseño de tele", { DeviceUi.setTvLayout(!DeviceUi.tvLayout) }, primary = !DeviceUi.tvLayout)
+                Pill("Celular", !DeviceUi.tvLayout, { if (DeviceUi.tvLayout) DeviceUi.setTvLayout(false) })
+                Pill("Tele", DeviceUi.tvLayout, { if (!DeviceUi.tvLayout) DeviceUi.setTvLayout(true) })
             }
         }
-        if (isAdmin) Section("Demostración") {
+        if (isAdmin || demoNow) Section("Catálogo de este aparato") {
             Text(
-                if (Prefs.inDemo) "Estás usando el catálogo de demostración. Tu cuenta real está guardada; regresa a ella cuando termines."
-                else "Cambia a un catálogo de demostración con películas libres para grabar videos o enseñar la app. Tu cuenta real se guarda y regresas con un toque.",
+                "«Mi cuenta» muestra tu lista de siempre. «Demostración» muestra películas libres para grabar videos o enseñar la app; tu cuenta queda guardada.",
                 color = C.Mid, fontSize = 13.sp,
             )
             Wrap {
-                if (Prefs.inDemo) ActionButton("Volver a mi cuenta", { Repo.clearAll(); Prefs.exitDemo(); Repo.start(force = true) }, primary = true)
-                else ActionButton("Usar la demostración", { Repo.clearAll(); Prefs.enterDemo(); Repo.start(force = true) })
+                Pill("Mi cuenta", !demoNow, {
+                    if (demoNow) { Repo.clearAll(); if (Prefs.exitDemo()) Repo.start(force = true) }
+                })
+                Pill("Demostración", demoNow, {
+                    if (!demoNow) { Repo.clearAll(); Prefs.enterDemo(); Repo.start(force = true) }
+                })
             }
+            if (demoNow) Text("Ahora ves la demostración.", color = C.Warn, fontSize = 13.sp)
         }
         Section("Apariencia") {
             Text("Claro como Apple TV, o grafito suave para la noche. «Automático» cambia a grafito de 8 pm a 7 am.", color = C.Mid, fontSize = 13.sp)

@@ -80,24 +80,30 @@ object Prefs {
 
     const val DEMO_SERVER = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"
 
-    /** True mientras se usa la demostración y la cuenta real está guardada aparte. */
-    val inDemo: Boolean get() = sp.contains("bk_server")
+    /** True mientras este aparato usa el catálogo de demostración (se decide por la cuenta activa). */
+    val inDemo: Boolean get() = _account.value?.server == DEMO_SERVER
 
     /** Guarda la cuenta real aparte y pone la de demostración (para grabar videos sin perder tus datos). */
     fun enterDemo() {
         val cur = _account.value
-        if (!inDemo && cur != null) sp.edit().putString("bk_server", cur.server).putString("bk_user", cur.user)
+        if (cur == null || cur.server == DEMO_SERVER) return // ya está en demostración: no tocar el respaldo
+        sp.edit().putString("bk_server", cur.server).putString("bk_user", cur.user)
             .putString("bk_pass", cur.pass).putString("bk_formats", sp.getString("formats", "")).apply()
         serverFormats = listOf("m3u8")
         setAccount(Account(DEMO_SERVER, "demo", "demo"))
     }
 
-    /** Regresa a la cuenta real guardada. */
-    fun exitDemo() {
+    /**
+     * Regresa a la cuenta real guardada. Devuelve false si no había respaldo válido: en ese caso
+     * cierra la demostración y la app pide entrar (con «Tengo CineCasa en otro aparato» se recupera sin escribir nada).
+     */
+    fun exitDemo(): Boolean {
         val s = sp.getString("bk_server", null); val u = sp.getString("bk_user", null); val p = sp.getString("bk_pass", null)
         val f = sp.getString("bk_formats", "")
         sp.edit().remove("bk_server").remove("bk_user").remove("bk_pass").remove("bk_formats").putString("formats", f).apply()
-        setAccount(if (s != null && u != null && p != null) Account(s, u, p) else null)
+        val ok = s != null && u != null && p != null && s != DEMO_SERVER
+        setAccount(if (ok) Account(s!!, u!!, p!!) else null)
+        return ok
     }
 
     var tmdbKey: String
