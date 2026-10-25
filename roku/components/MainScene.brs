@@ -28,6 +28,7 @@ sub init()
     m.pairTimer = m.top.findNode("pairTimer")
     m.pairTimer.observeField("fire", "onPairTick")
     m.pairCode = ""
+    m.hpCode = ""
 
     m.formList.observeField("itemSelected", "onFormSelect")
     m.sections.observeField("itemFocused", "onSectionFocus")
@@ -118,6 +119,8 @@ sub onResponse(e as object)
         onPairNew(r.body)
     else if id = "pairGet" then
         onPairGet(data)
+    else if id = "hpPoll" then
+        onHpPoll(r.body)
     end if
 end sub
 
@@ -168,7 +171,7 @@ sub showActivation(msg as string)
     ref = rget("ref")
     refTxt = "¿Quién te recomendó? (opcional)"
     if ref <> "" then refTxt = "Te recomendó: " + ref
-    showForm("Pruébala gratis 21 días", "Sin pedir código: tu prueba se activa al momento en hasta 5 aparatos. Si alguien te recomendó, escribe su código para que reciba su regalo cuando contrates.", ["Empezar prueba gratis", refTxt, "Ya tengo un código", "Cambiar cuenta"], "activation")
+    showForm("Pruébala gratis 21 días", "Sin pedir código: tu prueba se activa al momento en hasta 5 aparatos. Si alguien te recomendó, escribe su código para que reciba su regalo cuando contrates.", ["Empezar prueba gratis", refTxt, "Ya tengo un código", "Unir a mi cuenta (desde mi celular o tablet)", "Cambiar datos del proveedor"], "activation")
     m.formMsg.text = msg
 end sub
 
@@ -196,10 +199,80 @@ sub onFormSelect()
         else if i = 2 then
             ask("Tu código (ej. CC-7F3K-92QD)", "", "code")
         else if i = 3 then
-            m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Flush()
-            m.server = "" : m.user = "" : m.pass = ""
-            showLogin("")
+            startHousePair()
+        else if i = 4 then
+            clearProvider()
         end if
+    else if m.mode = "account" then
+        if i = 0 then
+            startHousePair()
+        else if i = 1 then
+            ask("Tu código (ej. CC-7F3K-92QD)", "", "code")
+        else if i = 2 then
+            clearProvider()
+        else
+            showHome()
+        end if
+    else if m.mode = "hpair" then
+        stopHousePair()
+        if m.code = "" then showActivation("") else showHome()
+    end if
+end sub
+
+sub clearProvider()
+    m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Flush()
+    m.server = "" : m.user = "" : m.pass = ""
+    showLogin("")
+end sub
+
+' ---------- Mi cuenta: unir esta tele a la cuenta de otro aparato ----------
+sub showAccount(msg as string)
+    m.sub.text = "Mi cuenta"
+    cur = "Esta tele tiene el código " + m.code + "."
+    if m.code = "" then cur = "Esta tele todavía no tiene código."
+    showForm("Mi cuenta", cur + " Para usar tu misma cuenta y suscripción que en tu celular, tablet o tele Android, elige «Unir a mi cuenta».", ["Unir a mi cuenta (desde mi celular o tablet)", "Escribir mi código de activación", "Cambiar datos del proveedor", "Volver"], "account")
+    m.formMsg.text = msg
+end sub
+
+sub startHousePair()
+    m.hpCode = Str(100000 + Rnd(899999)).Trim()
+    t = ""
+    for k = 1 to 32
+        t = t + Mid("0123456789abcdef", Rnd(16), 1)
+    end for
+    m.hpToken = t
+    rpc("hpReq", "cc_pair_request", { p_code: m.hpCode, p_token: m.hpToken })
+    m.hpStarted = CreateObject("roDateTime").AsSeconds()
+    showForm("Une esta tele a tu cuenta", "1. Abre CineCasa en tu celular, tablet o tele Android donde ya tienes tu cuenta." + Chr(10) + "2. Ve a Más → «Agregar otra tele o celular»." + Chr(10) + "3. Escribe este código y toca «Aprobar»:" + Chr(10) + Chr(10) + "            " + Left(m.hpCode, 3) + " " + Right(m.hpCode, 3), ["Cancelar"], "hpair")
+    m.formMsg.text = "Esperando la aprobación… (el código dura 15 minutos)"
+    m.pairTimer.control = "start"
+end sub
+
+sub stopHousePair()
+    m.hpCode = ""
+    m.pairTimer.control = "stop"
+end sub
+
+sub onHpPoll(body as string)
+    if m.mode <> "hpair" then return
+    t = body.Trim()
+    if t = "" or t = "null" then return
+    p = ParseJson(t)
+    if p = invalid or p.server = invalid then return
+    stopHousePair()
+    m.server = Str2(p.server) : m.user = Str2(p.user) : m.pass = Str2(p.pass)
+    rset("server", m.server) : rset("user", m.user) : rset("pass", m.pass)
+    if p.hh <> invalid then rset("hh", Str2(p.hh))
+    if p.hs <> invalid then rset("hs", Str2(p.hs))
+    lic = ""
+    if p.lic <> invalid then lic = Str2(p.lic)
+    if lic <> "" then
+        m.pendingCode = UCase(lic)
+        m.formMsg.text = "¡Aprobado! Activando tu suscripción…"
+        rpc("activate", "cc_lic_activate2", { p_code: m.pendingCode, p_device: m.deviceId, p_name: m.deviceName, p_fp: m.fp })
+    else
+        m.formMsg.text = "¡Aprobado! Entrando…"
+        start()
     end if
 end sub
 
@@ -269,6 +342,7 @@ sub stopPairing()
     m.qrBox.visible = false
     m.pairTimer.control = "stop"
     m.pairCode = ""
+    m.hpCode = ""
 end sub
 
 sub onPairNew(body as string)
@@ -283,6 +357,14 @@ sub onPairNew(body as string)
 end sub
 
 sub onPairTick()
+    if m.mode = "hpair" and m.hpCode <> "" then
+        if CreateObject("roDateTime").AsSeconds() - m.hpStarted > 840 then
+            startHousePair()
+        else
+            rpc("hpPoll", "cc_pair_poll", { p_code: m.hpCode, p_token: m.hpToken })
+        end if
+        return
+    end if
     if m.pairCode = "" or m.mode <> "login" then return
     if CreateObject("roDateTime").AsSeconds() - m.pairStarted > 840 then
         m.pairCode = ""
@@ -383,7 +465,7 @@ sub showHome()
     m.home.visible = true
     m.sub.text = "Código " + m.code
     c = CreateObject("roSGNode", "ContentNode")
-    for each t in ["En vivo", "Películas", "Series", "Cambiar cuenta"]
+    for each t in ["En vivo", "Películas", "Series", "Mi cuenta"]
         n = c.createChild("ContentNode")
         n.title = t
     end for
@@ -403,7 +485,7 @@ sub onSectionFocus()
     m.grid.content = CreateObject("roSGNode", "ContentNode")
     m.cats.content = CreateObject("roSGNode", "ContentNode")
     if i = 3 then
-        m.info.text = "Selecciona para cerrar sesión de tu proveedor en esta tele."
+        m.info.text = "Une esta tele a tu cuenta, escribe tu código o cambia los datos del proveedor."
         return
     end if
     actions = ["get_live_categories", "get_vod_categories", "get_series_categories"]
@@ -602,6 +684,11 @@ function onKeyEvent(key as string, press as boolean) as boolean
         end if
         return false
     end if
+    if key = "back" and (m.mode = "account" or m.mode = "hpair") then
+        stopHousePair()
+        if m.code = "" then showActivation("") else showHome()
+        return true
+    end if
     if m.mode <> "home" then return false
     if key = "right" then
         if m.sections.hasFocus() then
@@ -621,9 +708,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             return true
         end if
     else if key = "OK" and m.sections.hasFocus() and m.section = 3 then
-        m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Flush()
-        m.server = "" : m.user = "" : m.pass = ""
-        showLogin("")
+        showAccount("")
         return true
     else if key = "back" then
         if m.eps.hasFocus() then
