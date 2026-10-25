@@ -57,6 +57,21 @@
         <Label id="info" translation="[790,1010]" width="1080" font="font:SmallSystemFont" color="0x9AA3B8FF" />
       </Group>
 
+      <!-- Buscar: teclado + resultados al instante -->
+      <Group id="pgSearch" visible="false">
+        <Label translation="[340,60]" text="Buscar" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+        <MiniKeyboard id="kb" translation="[330,150]" />
+        <Label id="sHint" translation="[340,700]" width="560" wrap="true" font="font:SmallSystemFont" color="0x8E97ADFF" text="Escribe parte del nombre: con 2 letras ya ves sugerencias." />
+        <Label translation="[340,800]" text="Búsquedas recientes" font="font:SmallBoldSystemFont" color="0x8E97ADFF" />
+        <LabelList id="sRecent" translation="[340,840]" itemSize="[560,48]" itemSpacing="[0,4]" numRows="4"
+          color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+        <RowList id="sRows" translation="[960,110]" itemComponentName="PosterItem" numRows="3"
+          itemSize="[940,320]" rowItemSize="[[170,255]]" rowItemSpacing="[[20,0]]" itemSpacing="[0,10]"
+          showRowLabel="[true]" rowLabelOffset="[[0,10]]" rowLabelColor="0xFFFFFFFF" rowLabelFont="font:SmallBoldSystemFont"
+          rowFocusAnimationStyle="floatingFocus" focusBitmapUri="pkg:/images/focus.9.png" />
+        <Label id="sMsg" translation="[960,120]" width="900" wrap="true" font="font:MediumSystemFont" color="0xB9C2D6FF" />
+      </Group>
+
       <!-- Detalle de película o serie -->
       <Group id="pgDetail" visible="false">
         <Poster id="dBack" width="1920" height="1080" loadDisplayMode="scaleToZoom" />

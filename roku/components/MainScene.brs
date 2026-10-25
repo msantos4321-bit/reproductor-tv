@@ -529,6 +529,16 @@ sub homeInit()
     m.dEps.observeField("itemSelected", "onEpSelect")
     m.dEps.observeField("itemFocused", "onEpFocus")
     m.progTimer.observeField("fire", "onProgTick")
+
+    m.pgSearch = m.top.findNode("pgSearch")
+    m.kb = m.top.findNode("kb")
+    m.sRows = m.top.findNode("sRows")
+    m.sMsg = m.top.findNode("sMsg")
+    m.sRecent = m.top.findNode("sRecent")
+    m.sTask = invalid
+    m.kb.observeField("text", "onKbText")
+    m.sRows.observeField("rowItemSelected", "onSRowSelect")
+    m.sRecent.observeField("itemSelected", "onRecentSel")
 end sub
 
 function nowMs() as longinteger
@@ -727,7 +737,7 @@ end sub
 
 sub openSection(i as integer, focus as boolean)
     if i = 1 then
-        ask("Buscar película o serie", "", "search")
+        showSearchPage(focus)
         return
     end if
     if i = 6 then
@@ -736,6 +746,7 @@ sub openSection(i as integer, focus as boolean)
     end if
     m.section = i
     m.pgDetail.visible = false
+    m.pgSearch.visible = false
     m.pgHome.visible = (i = 0)
     m.pgBrowse.visible = (i <> 0)
     if i = 0 then
@@ -1084,6 +1095,7 @@ sub openDetail(it as object, from as object)
     m.side.visible = false
     m.pgHome.visible = false
     m.pgBrowse.visible = false
+    m.pgSearch.visible = false
     m.pgDetail.visible = true
     m.dBack.uri = it.HDPosterUrl
     m.dPoster.uri = it.HDPosterUrl
@@ -1113,6 +1125,9 @@ sub closeDetail()
         m.pgHome.visible = true
         buildRows()
         m.rows.setFocus(true)
+    else if m.section = 1 then
+        m.pgSearch.visible = true
+        m.sRows.setFocus(true)
     else
         m.pgBrowse.visible = true
         if m.browseKind = "mylist" then showMyList(m.cats.itemSelected)
@@ -1346,6 +1361,122 @@ sub onDetailButton()
     end if
 end sub
 
+
+' ---------------- Buscar (como en Android: resultados mientras escribes) ----------------
+sub showSearchPage(focus as boolean)
+    m.section = 1
+    m.browseKind = "search"
+    m.pgHome.visible = false
+    m.pgBrowse.visible = false
+    m.pgDetail.visible = false
+    m.pgSearch.visible = true
+    b = api("")
+    if m.sTask = invalid or m.sBase <> b then
+        m.sBase = b
+        m.sTask = CreateObject("roSGNode", "SearchTask")
+        m.sTask.base = b
+        m.sTask.observeField("results", "onSearchResults")
+        m.sTask.observeField("status", "onSearchStatus")
+        m.sTask.control = "RUN"
+    end if
+    fillRecent()
+    onKbText()
+    if focus then m.kb.setFocus(true)
+end sub
+
+sub onSearchStatus()
+    if m.sTask.status = "loading" then
+        m.sMsg.text = "Preparando la búsqueda (solo la primera vez)…"
+    else if m.sTask.status = "ready" and Len(m.kb.text.Trim()) < 2 then
+        m.sMsg.text = "Escribe parte del nombre de una película, serie o canal."
+    end if
+end sub
+
+sub onKbText()
+    q = m.kb.text
+    if Len(q.Trim()) < 2 then
+        m.sRows.content = CreateObject("roSGNode", "ContentNode")
+        if m.sTask <> invalid and m.sTask.status = "ready" then m.sMsg.text = "Escribe parte del nombre de una película, serie o canal."
+        return
+    end if
+    if m.sTask <> invalid then m.sTask.query = q
+end sub
+
+sub onSearchResults()
+    r = m.sTask.results
+    if r = invalid or r.q <> m.kb.text then return
+    root = CreateObject("roSGNode", "ContentNode")
+    total = 0
+    labels = { movie: "Películas", series: "Series", live: "Canales en vivo" }
+    for each kind in ["movie", "series", "live"]
+        arr = r[kind]
+        if arr <> invalid and arr.Count() > 0 then
+            row = root.createChild("ContentNode")
+            row.title = labels[kind] + " (" + Str(arr.Count()).Trim() + ")"
+            for each it in arr
+                n = row.createChild("ContentNode")
+                n.title = it.t
+                n.HDPosterUrl = img(it.img)
+                ext = ""
+                if it.ext <> invalid then ext = it.ext
+                n.addFields({ kind: kind, xid: it.id, sid: it.id, ext: ext, frac: 0, cap: "", desc: "" })
+                total = total + 1
+            end for
+        end if
+    end for
+    m.sRows.content = root
+    if total = 0 then
+        m.sMsg.text = "No encontramos «" + m.kb.text + "». Prueba con otra palabra del título."
+    else
+        m.sMsg.text = ""
+    end if
+end sub
+
+sub onSRowSelect()
+    f = m.sRows.rowItemSelected
+    it = m.sRows.content.getChild(f[0]).getChild(f[1])
+    if it = invalid then return
+    addRecent(m.kb.text.Trim())
+    if it.kind = "live" then
+        play(it.title, base() + "/live/" + m.user + "/" + m.pass + "/" + it.xid + ".m3u8", "hls", true, invalid, 0)
+    else
+        openDetail(it, m.sRows)
+    end if
+end sub
+
+function recentList() as object
+    d = ParseJson(rget("recentSearch"))
+    if type(d) <> "roArray" then d = []
+    return d
+end function
+
+sub addRecent(q as string)
+    if Len(q) < 2 then return
+    d = recentList()
+    out = [q]
+    for each x in d
+        if LCase(x) <> LCase(q) and out.Count() < 8 then out.Push(x)
+    end for
+    rset("recentSearch", FormatJson(out))
+    fillRecent()
+end sub
+
+sub fillRecent()
+    c = CreateObject("roSGNode", "ContentNode")
+    for each x in recentList()
+        n = c.createChild("ContentNode")
+        n.title = x
+    end for
+    m.sRecent.content = c
+end sub
+
+sub onRecentSel()
+    n = m.sRecent.content.getChild(m.sRecent.itemSelected)
+    if n = invalid then return
+    m.kb.text = n.title
+    m.kb.setFocus(true)
+end sub
+
 ' ---------------- Mi cuenta ----------------
 sub showAccount(msg as string)
     m.home.visible = false
@@ -1512,8 +1643,32 @@ function onKeyEvent(key as string, press as boolean) as boolean
         return false
     end if
     if m.mode <> "home" then return false
+    if m.pgSearch.visible and not m.sections.hasFocus() then
+        if key = "right" and (m.kb.isInFocusChain() or m.sRecent.hasFocus()) then
+            if m.sRows.content <> invalid and m.sRows.content.getChildCount() > 0 then m.sRows.setFocus(true)
+            return true
+        else if key = "left" and m.sRows.hasFocus() then
+            m.kb.setFocus(true)
+            return true
+        else if key = "left" and (m.kb.isInFocusChain() or m.sRecent.hasFocus()) then
+            m.sections.setFocus(true)
+            return true
+        else if key = "down" and m.kb.isInFocusChain() then
+            if m.sRecent.content <> invalid and m.sRecent.content.getChildCount() > 0 then m.sRecent.setFocus(true)
+            return true
+        else if key = "up" and m.sRecent.hasFocus() then
+            m.kb.setFocus(true)
+            return true
+        else if key = "back" then
+            if m.sRows.hasFocus() or m.sRecent.hasFocus() then m.kb.setFocus(true) else m.sections.setFocus(true)
+            return true
+        end if
+        return false
+    end if
     if key = "right" and m.sections.hasFocus() then
-        if m.pgHome.visible then
+        if m.pgSearch.visible then
+            m.kb.setFocus(true)
+        else if m.pgHome.visible then
             m.rows.setFocus(true)
         else if m.cats.content <> invalid and m.cats.content.getChildCount() > 0 then
             m.cats.setFocus(true)
