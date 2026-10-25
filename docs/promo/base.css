@@ -1,0 +1,16 @@
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1080px}
+body{background:radial-gradient(110% 70% at 50% 0%,#1d3466 0%,#0b0b14 65%);color:#fff;font-family:"DejaVu Sans",Arial,sans-serif;padding:70px 76px;display:flex;flex-direction:column}
+.logo{font-size:92px;font-weight:900;letter-spacing:-3px}.logo span{color:#0a84ff}
+.tag{font-size:34px;color:#b6bccb;margin-top:6px}
+h1{font-size:62px;line-height:1.08;margin-top:44px;font-weight:900}
+h1 b{color:#0a84ff}
+ul{list-style:none;margin-top:36px}
+li{font-size:38px;margin:16px 0;display:flex;gap:18px;align-items:center}
+li i{font-style:normal;width:52px;height:52px;border-radius:14px;background:#0a84ff;display:inline-flex;align-items:center;justify-content:center;font-size:32px;font-weight:900}
+.code{margin-top:auto;background:#0a84ff1f;border:3px dashed #0a84ff99;border-radius:28px;padding:26px 30px;display:flex;justify-content:space-between;align-items:center}
+.code small{font-size:30px;color:#b6bccb;display:block}
+.code strong{font-family:"DejaVu Sans Mono",monospace;font-size:78px;color:#4da3ff;letter-spacing:6px}
+.pill{background:#30d158;color:#04210c;font-weight:900;font-size:34px;border-radius:20px;padding:16px 22px;text-align:center}
+.foot{font-size:24px;color:#8a90a3;margin-top:22px}
+.price{font-size:44px;margin-top:30px}.price b{color:#30d158;font-size:64px}
