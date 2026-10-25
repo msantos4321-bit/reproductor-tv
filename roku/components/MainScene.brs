@@ -247,8 +247,13 @@ end sub
 
 sub startHousePair()
     newHp()
-    showForm("Une esta tele a tu cuenta", "1. Abre CineCasa en tu celular, tablet o tele Android donde ya tienes tu cuenta." + Chr(10) + "2. Ve a Más → «Agregar otra tele o celular»." + Chr(10) + "3. Escribe este código y toca «Aprobar»:" + Chr(10) + Chr(10) + "            " + Left(m.hpCode, 3) + " " + Right(m.hpCode, 3), ["Cancelar"], "hpair")
+    code = Left(m.hpCode, 3) + " " + Right(m.hpCode, 3)
+    showForm("Código: " + code, "Escanea el QR con tu celular, o abre CineCasa en tu celular o tablet → Más → «Agregar otra tele o celular», escribe " + code + " y toca «Aprobar».", ["Cancelar"], "hpair")
     m.formMsg.text = "Esperando la aprobación… (el código dura 15 minutos)"
+    url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?p=" + m.hpCode
+    m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.EncodeUriComponent()
+    m.qrCode.text = code
+    m.qrBox.visible = true
     m.pairTimer.control = "start"
 end sub
 
