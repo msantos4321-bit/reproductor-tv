@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="PosterItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent" />
+    <field id="focusPercent" type="float" onChange="onFocus" />
+    <field id="width" type="float" />
+    <field id="height" type="float" />
+  </interface>
+  <script type="text/brightscript" uri="PosterItem.brs" />
+  <children>
+    <Rectangle width="220" height="330" color="0x1A1D27FF" />
+    <Poster id="img" width="220" height="330" loadDisplayMode="scaleToZoom" loadingBitmapUri="pkg:/images/poster.png" failedBitmapUri="pkg:/images/poster.png" opacity="0.75" />
+    <Rectangle id="barBg" translation="[10,312]" width="200" height="8" color="0x00000099" visible="false" />
+    <Rectangle id="bar" translation="[10,312]" width="0" height="8" color="0x0A84FFFF" visible="false" />
+    <Label id="cap" translation="[0,280]" width="220" height="30" horizAlign="center" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+  </children>
+</component>

@@ -19,7 +19,6 @@ sub init()
     m.sections = m.top.findNode("sections")
     m.cats = m.top.findNode("cats")
     m.grid = m.top.findNode("grid")
-    m.eps = m.top.findNode("eps")
     m.info = m.top.findNode("info")
     m.video = m.top.findNode("video")
     m.qrBox = m.top.findNode("qrBox")
@@ -31,12 +30,8 @@ sub init()
     m.hpCode = ""
 
     m.formList.observeField("itemSelected", "onFormSelect")
-    m.sections.observeField("itemFocused", "onSectionFocus")
-    m.cats.observeField("itemSelected", "onCatSelect")
-    m.grid.observeField("itemSelected", "onGridSelect")
-    m.grid.observeField("itemFocused", "onGridFocus")
-    m.eps.observeField("itemSelected", "onEpSelect")
     m.video.observeField("state", "onVideoState")
+    homeInit()
 
     di = CreateObject("roDeviceInfo")
     m.deviceId = "roku-" + di.GetChannelClientId()
@@ -99,8 +94,8 @@ end function
 sub onResponse(e as object)
     r = e.getData()
     id = r.id
-    data = invalid
-    if r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
+    data = r.data
+    if data = invalid and r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
     if id = "login" then
         onLogin(r.code, data)
     else if id = "check" then
@@ -109,11 +104,21 @@ sub onResponse(e as object)
         onTrial(data)
     else if id = "activate" then
         onActivate(r.body)
+    else if id = "prof" then
+        onProfiles(data)
+    else if id = "lib" then
+        onLib(data)
+    else if id = "recentMovies" or id = "recentSeries" then
+        onRecent(id, data)
     else if Left(id, 5) = "cats:" then
-        onCats(data)
+        onCats(id, data)
     else if Left(id, 6) = "items:" then
         onItems(id, data)
-    else if id = "series" then
+    else if Left(id, 5) = "srch:" then
+        onSearch(id, data)
+    else if id = "vinfo" then
+        onVodInfo(data)
+    else if id = "sinfo" then
         onSeriesInfo(data)
     else if id = "pairNew" then
         onPairNew(r.body)
@@ -122,6 +127,7 @@ sub onResponse(e as object)
     else if id = "hpPoll" then
         onHpPoll(r.body)
     end if
+    m.tasks.Delete(id)
 end sub
 
 ' ---------------- flujo ----------------
@@ -138,6 +144,8 @@ end sub
 
 sub showForm(title as string, text as string, items as object, mode as string)
     m.mode = mode
+    if m.brand <> invalid then m.brand.visible = true
+    m.sub.visible = true
     if mode <> "login" then stopPairing()
     m.home.visible = false
     m.video.visible = false
@@ -204,15 +212,9 @@ sub onFormSelect()
             clearProvider()
         end if
     else if m.mode = "account" then
-        if i = 0 then
-            startHousePair()
-        else if i = 1 then
-            ask("Tu código (ej. CC-7F3K-92QD)", "", "code")
-        else if i = 2 then
-            clearProvider()
-        else
-            showHome()
-        end if
+        onAccountSelect(i)
+    else if m.mode = "profiles" then
+        if i < m.profiles.Count() then useProfile(m.profiles[i]) else useGuest()
     else if m.mode = "hpair" then
         stopHousePair()
         if m.code = "" then showActivation("") else showHome()
@@ -226,13 +228,7 @@ sub clearProvider()
 end sub
 
 ' ---------- Mi cuenta: unir esta tele a la cuenta de otro aparato ----------
-sub showAccount(msg as string)
-    m.sub.text = "Mi cuenta"
-    cur = "Esta tele tiene el código " + m.code + "."
-    if m.code = "" then cur = "Esta tele todavía no tiene código."
-    showForm("Mi cuenta", cur + " Para usar tu misma cuenta y suscripción que en tu celular, tablet o tele Android, elige «Unir a mi cuenta».", ["Unir a mi cuenta (desde mi celular o tablet)", "Escribir mi código de activación", "Cambiar datos del proveedor", "Volver"], "account")
-    m.formMsg.text = msg
-end sub
+
 
 sub newHp()
     m.hpCode = Str(100000 + Rnd(899999)).Trim()
@@ -306,7 +302,7 @@ sub onAsk()
     d.close = true
     m.top.dialog = invalid
     if not ok then
-        m.formList.setFocus(true)
+        if m.mode = "home" then m.sections.setFocus(true) else m.formList.setFocus(true)
         return
     end if
     f = m.askField
@@ -316,6 +312,12 @@ sub onAsk()
         m.user = v : showLogin("")
     else if f = "pass" then
         m.pass = v : showLogin("")
+    else if f = "search" then
+        if v = "" then
+            m.sections.setFocus(true)
+        else
+            startSearch(v)
+        end if
     else if f = "ref" then
         rset("ref", UCase(v)) : showActivation("")
     else if f = "code" then
@@ -329,7 +331,7 @@ end sub
 
 sub onAskClosed()
     m.top.dialog = invalid
-    m.formList.setFocus(true)
+    if m.mode = "home" then m.sections.setFocus(true) else m.formList.setFocus(true)
 end sub
 
 sub doLogin()
@@ -473,42 +475,448 @@ sub onActivate(body as string)
     end if
 end sub
 
-' ---------------- inicio ----------------
+' =====================================================================
+' APP PRINCIPAL: menú lateral, Inicio con portada y filas, explorar,
+' detalle de película/serie, mi lista, búsqueda, perfiles y progreso
+' sincronizado con los demás aparatos de la cuenta.
+' =====================================================================
+
+sub homeInit()
+    m.brand = m.top.findNode("brand")
+    m.side = m.top.findNode("side")
+    m.profName = m.top.findNode("profName")
+    m.codeLbl = m.top.findNode("codeLbl")
+    m.pgHome = m.top.findNode("pgHome")
+    m.pgBrowse = m.top.findNode("pgBrowse")
+    m.pgDetail = m.top.findNode("pgDetail")
+    m.rows = m.top.findNode("rows")
+    m.heroImg = m.top.findNode("heroImg")
+    m.heroKicker = m.top.findNode("heroKicker")
+    m.heroTitle = m.top.findNode("heroTitle")
+    m.heroMeta = m.top.findNode("heroMeta")
+    m.homeMsg = m.top.findNode("homeMsg")
+    m.browseTitle = m.top.findNode("browseTitle")
+    m.dBack = m.top.findNode("dBack")
+    m.dPoster = m.top.findNode("dPoster")
+    m.dTitle = m.top.findNode("dTitle")
+    m.dMeta = m.top.findNode("dMeta")
+    m.dPlot = m.top.findNode("dPlot")
+    m.dButtons = m.top.findNode("dButtons")
+    m.dSeries = m.top.findNode("dSeries")
+    m.dSeasons = m.top.findNode("dSeasons")
+    m.dEps = m.top.findNode("dEps")
+    m.dEpPlot = m.top.findNode("dEpPlot")
+    m.progTimer = m.top.findNode("progTimer")
+
+    m.lib = { progress: {}, mylist: {}, watched: {} }
+    m.scope = ""
+    m.guest = false
+    m.profiles = []
+    m.recentMovies = invalid
+    m.recentSeries = invalid
+    m.section = -1
+    m.browseKind = ""
+    m.playMeta = invalid
+
+    m.sections.observeField("itemSelected", "onSectionSelect")
+    m.rows.observeField("rowItemFocused", "onRowFocus")
+    m.rows.observeField("rowItemSelected", "onRowSelect")
+    m.cats.observeField("itemSelected", "onCatSelect")
+    m.grid.observeField("itemSelected", "onGridSelect")
+    m.grid.observeField("itemFocused", "onGridFocus")
+    m.dButtons.observeField("itemSelected", "onDetailButton")
+    m.dSeasons.observeField("itemFocused", "onSeasonFocus")
+    m.dEps.observeField("itemSelected", "onEpSelect")
+    m.dEps.observeField("itemFocused", "onEpFocus")
+    m.progTimer.observeField("fire", "onProgTick")
+end sub
+
+function nowMs() as longinteger
+    s& = CreateObject("roDateTime").AsSeconds()
+    return s& * 1000&
+end function
+
+function newNode(fields as object) as object
+    n = CreateObject("roSGNode", "ContentNode")
+    n.addFields(fields)
+    return n
+end function
+
+function mins(ms as dynamic) as string
+    s = Int(ms / 1000)
+    h = Int(s / 3600)
+    mm = Int((s - h * 3600) / 60)
+    if h > 0 then return Str(h).Trim() + " h " + Str(mm).Trim() + " min"
+    return Str(mm).Trim() + " min"
+end function
+
+' ---------------- entrar a la app ----------------
 sub showHome()
-    m.mode = "home"
+    stopPairing()
     m.form.visible = false
+    m.brand.visible = false
+    m.sub.visible = false
     m.home.visible = true
-    m.sub.text = "Código " + m.code
+    m.pgDetail.visible = false
+    m.side.visible = true
+    m.mode = "home"
+    m.codeLbl.text = "Código " + m.code
     c = CreateObject("roSGNode", "ContentNode")
-    for each t in ["En vivo", "Películas", "Series", "Mi cuenta"]
+    for each t in ["Inicio", "Buscar", "En vivo", "Películas", "Series", "Mi lista", "Mi cuenta"]
         n = c.createChild("ContentNode")
         n.title = t
     end for
     m.sections.content = c
-    m.section = -1
     m.sections.setFocus(true)
-    onSectionFocus()
+    m.hh = rget("hh")
+    m.hs = rget("hs")
+    m.recentMovies = invalid
+    m.recentSeries = invalid
+    if m.hh <> "" and m.hs <> "" then
+        m.homeMsg.text = "Cargando tu cuenta…"
+        openSection(0, false)
+        rpc("prof", "cc_get", { p_h: m.hh, p_s: m.hs, p_since: "1970-01-01T00:00:00Z", p_scopes: ["_"] })
+    else
+        m.scope = ""
+        m.profName.text = ""
+        loadLocalLib()
+        openSection(0, true)
+    end if
 end sub
 
-sub onSectionFocus()
-    i = m.sections.itemFocused
-    if i < 0 then i = 0
-    if i = m.section then return
-    m.section = i
-    m.eps.visible = false
-    m.grid.visible = true
-    m.grid.content = CreateObject("roSGNode", "ContentNode")
-    m.cats.content = CreateObject("roSGNode", "ContentNode")
-    if i = 3 then
-        m.info.text = "Une esta tele a tu cuenta, escribe tu código o cambia los datos del proveedor."
+' Regresa a la app sin volver a cargar todo (desde Mi cuenta)
+sub backToHome()
+    m.form.visible = false
+    m.brand.visible = false
+    m.sub.visible = false
+    m.home.visible = true
+    m.mode = "home"
+    m.sections.setFocus(true)
+end sub
+
+sub onProfiles(data as object)
+    latest = {}
+    if type(data) = "roArray" then
+        for each o in data
+            if o.kind = "profile" then latest[o.key] = o
+        end for
+    end if
+    profs = []
+    for each k in latest
+        o = latest[k]
+        if o.deleted <> true and o.data <> invalid then
+            nm = Str2(o.data.name)
+            if nm = "" then nm = "Perfil"
+            profs.Push({ id: k, name: nm })
+        end if
+    end for
+    m.profiles = profs
+    saved = rget("prof")
+    for each p in profs
+        if p.id = saved then
+            useProfile(p)
+            return
+        end if
+    end for
+    if profs.Count() = 0 then
+        m.scope = ""
+        loadLocalLib()
+        buildRows()
+        m.rows.setFocus(true)
+    else if profs.Count() = 1 then
+        useProfile(profs[0])
+    else
+        showProfilePicker()
+    end if
+end sub
+
+sub showProfilePicker()
+    m.home.visible = false
+    m.brand.visible = true
+    m.sub.visible = true
+    m.sub.text = "Perfiles"
+    names = []
+    for each p in m.profiles
+        names.Push(p.name)
+    end for
+    names.Push("Invitado (no guarda nada)")
+    showForm("¿Quién está viendo?", "Cada perfil tiene su propia lista y lo que estaba viendo, igual que en tu celular y tus otras teles.", names, "profiles")
+    m.formMsg.text = ""
+end sub
+
+sub useProfile(p as object)
+    m.guest = false
+    m.scope = p.id
+    rset("prof", p.id)
+    m.profName.text = p.name
+    m.lib = { progress: {}, mylist: {}, watched: {} }
+    m.form.visible = false
+    m.brand.visible = false
+    m.sub.visible = false
+    m.home.visible = true
+    m.mode = "home"
+    m.homeMsg.text = "Cargando tu lista…"
+    openSection(0, false)
+    rpc("lib", "cc_get", { p_h: m.hh, p_s: m.hs, p_since: "1970-01-01T00:00:00Z", p_scopes: [p.id] })
+end sub
+
+sub useGuest()
+    m.guest = true
+    m.scope = ""
+    m.profName.text = "Invitado"
+    m.lib = { progress: {}, mylist: {}, watched: {} }
+    backToHome()
+    openSection(0, true)
+end sub
+
+sub onLib(data as object)
+    m.lib = { progress: {}, mylist: {}, watched: {} }
+    if type(data) = "roArray" then
+        for each o in data
+            k = Str2(o.key)
+            del = (o.deleted = true) or (o.data = invalid)
+            if o.kind = "progress" then
+                if del then m.lib.progress.Delete(k) else m.lib.progress[k] = o.data
+            else if o.kind = "mylist" then
+                if del then m.lib.mylist.Delete(k) else m.lib.mylist[k] = o.data
+            else if o.kind = "watched" then
+                if del then m.lib.watched.Delete(k) else m.lib.watched[k] = true
+            end if
+        end for
+    end if
+    if m.section = 0 and m.mode = "home" then
+        buildRows()
+        m.rows.setFocus(true)
+    end if
+end sub
+
+sub loadLocalLib()
+    m.lib = { progress: {}, mylist: {}, watched: {} }
+    t = rget("lib_local")
+    if t <> "" then
+        d = ParseJson(t)
+        if d <> invalid and d.progress <> invalid then m.lib = d
+    end if
+end sub
+
+' Guarda un cambio (progreso, mi lista, visto) aquí y en la nube del perfil
+sub libPut(kind as string, key as string, data as dynamic, deleted as boolean)
+    bucket = m.lib.progress
+    if kind = "mylist" then bucket = m.lib.mylist
+    if kind = "watched" then bucket = m.lib.watched
+    if deleted then
+        bucket.Delete(key)
+    else if kind = "watched" then
+        bucket[key] = true
+    else
+        bucket[key] = data
+    end if
+    if m.scope <> "" and m.hh <> "" then
+        it = { scope: m.scope, kind: kind, key: key, deleted: deleted }
+        if data <> invalid and not deleted then it.data = data
+        rpc("put" + Str(m.reqN + 1).Trim(), "cc_put", { p_h: m.hh, p_s: m.hs, p_items: [it] })
+    else if not m.guest then
+        rset("lib_local", FormatJson(m.lib))
+    end if
+end sub
+
+' ---------------- menú lateral ----------------
+sub onSectionSelect()
+    openSection(m.sections.itemSelected, true)
+end sub
+
+sub openSection(i as integer, focus as boolean)
+    if i = 1 then
+        ask("Buscar película o serie", "", "search")
         return
     end if
-    actions = ["get_live_categories", "get_vod_categories", "get_series_categories"]
+    if i = 6 then
+        showAccount("")
+        return
+    end if
+    m.section = i
+    m.pgDetail.visible = false
+    m.pgHome.visible = (i = 0)
+    m.pgBrowse.visible = (i <> 0)
+    if i = 0 then
+        buildRows()
+        if focus then m.rows.setFocus(true)
+        return
+    end if
+    m.grid.content = CreateObject("roSGNode", "ContentNode")
+    m.cats.content = CreateObject("roSGNode", "ContentNode")
     m.info.text = "Cargando…"
-    request("cats:" + Str(i).Trim(), api(actions[i]), "GET", "", invalid)
+    if i = 5 then
+        m.browseKind = "mylist"
+        m.browseTitle.text = "Mi lista"
+        setCats(["Todo", "Películas", "Series"])
+        showMyList(0)
+        if focus then m.grid.setFocus(true)
+        return
+    end if
+    kinds = ["", "", "live", "movie", "series"]
+    titles = ["", "", "TV en vivo", "Películas", "Series"]
+    m.browseKind = kinds[i]
+    m.browseTitle.text = titles[i]
+    actions = ["", "", "get_live_categories", "get_vod_categories", "get_series_categories"]
+    req("cats:" + m.browseKind, api(actions[i]), { parse: true })
+    if focus then m.cats.setFocus(true)
 end sub
 
-sub onCats(data as object)
+' Petición GET al proveedor que ya llega convertida (y opcionalmente ordenada, filtrada y recortada)
+sub req(id as string, url as string, opts as object)
+    m.reqN = m.reqN + 1
+    t = CreateObject("roSGNode", "HttpTask")
+    r = { id: id, url: url, method: "GET", body: "", headers: invalid }
+    r.Append(opts)
+    t.request = r
+    t.observeField("response", "onResponse")
+    m.tasks[id] = t
+    t.control = "RUN"
+end sub
+
+sub setCats(names as object)
+    c = CreateObject("roSGNode", "ContentNode")
+    for each t in names
+        n = c.createChild("ContentNode")
+        n.title = t
+    end for
+    m.cats.content = c
+end sub
+
+' ---------------- Inicio ----------------
+sub buildRows()
+    root = CreateObject("roSGNode", "ContentNode")
+    ' Continuar viendo
+    arr = []
+    for each k in m.lib.progress
+        p = m.lib.progress[k]
+        if p <> invalid then arr.Push(p)
+    end for
+    arr.SortBy("up", "r")
+    if arr.Count() > 0 then
+        row = root.createChild("ContentNode")
+        row.title = "Continuar viendo"
+        for each p in arr
+            f = 0
+            if p.dur <> invalid and p.dur > 0 then f = p.pos / p.dur
+            kind = Str2(p.kind)
+            cap = ""
+            sub_ = "Te quedan " + mins(p.dur - p.pos)
+            if kind = "episode" then
+                cap = "T" + Str2(p.s) + " E" + Str2(p.e)
+                sub_ = Str2(p.st) + " · " + sub_
+            end if
+            n = row.createChild("ContentNode")
+            n.title = Str2(p.t)
+            n.HDPosterUrl = Str2(p.img)
+            n.addFields({ kind: kind, xid: Str2(p.id), sid: Str2(p.sid), frac: f, cap: cap, desc: sub_ })
+        end for
+    end if
+    ' Mi lista
+    ml = []
+    for each k in m.lib.mylist
+        s = m.lib.mylist[k]
+        if s <> invalid then ml.Push(s)
+    end for
+    ml.SortBy("added", "r")
+    if ml.Count() > 0 then
+        row = root.createChild("ContentNode")
+        row.title = "Mi lista"
+        for each s in ml
+            n = row.createChild("ContentNode")
+            n.title = Str2(s.title)
+            n.HDPosterUrl = Str2(s.image)
+            kind = Str2(s.kind)
+            lbl = "Película"
+            if kind = "series" then lbl = "Serie"
+            n.addFields({ kind: kind, xid: Str2(s.id), sid: Str2(s.id), frac: 0, cap: "", desc: lbl })
+        end for
+    end if
+    ' Recientes
+    if m.recentMovies <> invalid and m.recentMovies.Count() > 0 then
+        row = root.createChild("ContentNode")
+        row.title = "Películas recién agregadas"
+        for each it in m.recentMovies
+            n = row.createChild("ContentNode")
+            n.title = Str2(it.name)
+            n.HDPosterUrl = img(it.stream_icon)
+            yr = Str2(it.year)
+            lbl = "Película"
+            if yr <> "" then lbl = lbl + " · " + yr
+            n.addFields({ kind: "movie", xid: Str2(it.stream_id), sid: "", frac: 0, cap: "", desc: lbl, ext: Str2(it.container_extension) })
+        end for
+    end if
+    if m.recentSeries <> invalid and m.recentSeries.Count() > 0 then
+        row = root.createChild("ContentNode")
+        row.title = "Series con capítulos nuevos"
+        for each it in m.recentSeries
+            n = row.createChild("ContentNode")
+            n.title = Str2(it.name)
+            n.HDPosterUrl = img(it.cover)
+            n.addFields({ kind: "series", xid: Str2(it.series_id), sid: Str2(it.series_id), frac: 0, cap: "", desc: "Serie · " + Str2(it.genre) })
+        end for
+    end if
+    m.rows.content = root
+    if root.getChildCount() = 0 then
+        m.homeMsg.text = "Cargando…"
+    else
+        m.homeMsg.text = ""
+        onRowFocus()
+    end if
+    if m.recentMovies = invalid then
+        m.recentMovies = []
+        req("recentMovies", api("get_vod_streams"), { parse: true, sortKey: "added", limit: 25 })
+    end if
+    if m.recentSeries = invalid then
+        m.recentSeries = []
+        req("recentSeries", api("get_series"), { parse: true, sortKey: "last_modified", limit: 25 })
+    end if
+end sub
+
+function img(v as dynamic) as string
+    s = Str2(v)
+    if Left(s, 4) <> "http" then return "pkg:/images/poster.png"
+    return s
+end function
+
+sub onRecent(id as string, data as object)
+    if type(data) <> "roArray" then data = []
+    if id = "recentMovies" then m.recentMovies = data else m.recentSeries = data
+    if m.section = 0 and m.mode = "home" then
+        hadFocus = m.rows.hasFocus()
+        buildRows()
+        if hadFocus or m.sections.hasFocus() = false then m.rows.setFocus(true)
+    end if
+end sub
+
+sub onRowFocus()
+    if m.rows.content = invalid then return
+    f = m.rows.rowItemFocused
+    r = 0 : c = 0
+    if f <> invalid and f.Count() = 2 then
+        r = f[0] : c = f[1]
+    end if
+    row = m.rows.content.getChild(r)
+    if row = invalid then return
+    it = row.getChild(c)
+    if it = invalid then return
+    m.heroImg.uri = it.HDPosterUrl
+    m.heroKicker.text = UCase(row.title)
+    m.heroTitle.text = it.title
+    m.heroMeta.text = it.desc
+end sub
+
+sub onRowSelect()
+    f = m.rows.rowItemSelected
+    it = m.rows.content.getChild(f[0]).getChild(f[1])
+    if it <> invalid then openDetail(it, m.rows)
+end sub
+
+' ---------------- Explorar / Mi lista / Búsqueda ----------------
+sub onCats(id as string, data as object)
+    kind = Mid(id, 6)
+    if kind <> m.browseKind then return
     c = CreateObject("roSGNode", "ContentNode")
     n = c.createChild("ContentNode")
     n.title = "Todo"
@@ -521,159 +929,532 @@ sub onCats(data as object)
         end for
     end if
     m.cats.content = c
-    m.info.text = ""
     loadItems(0)
 end sub
 
-function Str2(v as dynamic) as string
-    if v = invalid then return ""
-    t = type(v)
-    if t = "roString" or t = "String" then return v
-    if t = "roInt" or t = "Integer" or t = "roFloat" or t = "Float" or t = "Double" or t = "roDouble" or t = "LongInteger" or t = "roLongInteger" then return Str(v).Trim()
-    if t = "roBoolean" or t = "Boolean" then
-        if v then return "1"
-        return "0"
-    end if
-    return ""
-end function
-
 sub onCatSelect()
-    loadItems(m.cats.itemSelected)
+    i = m.cats.itemSelected
+    if m.browseKind = "mylist" then
+        showMyList(i)
+    else if m.browseKind = "search" then
+        showSearch(i)
+    else
+        loadItems(i)
+    end if
     m.grid.setFocus(true)
 end sub
 
 sub loadItems(ci as integer)
     if m.cats.content = invalid or m.cats.content.getChildCount() = 0 then return
     cat = m.cats.content.getChild(ci).catId
-    actions = ["get_live_streams", "get_vod_streams", "get_series"]
-    u = api(actions[m.section])
+    actions = { live: "get_live_streams", movie: "get_vod_streams", series: "get_series" }
+    u = api(actions[m.browseKind])
     if cat <> "" then u = u + "&category_id=" + cat
     m.info.text = "Cargando…"
-    m.eps.visible = false
-    m.grid.visible = true
-    request("items:" + Str(m.section).Trim(), u, "GET", "", invalid)
+    sk = ""
+    if m.browseKind = "movie" then sk = "added"
+    if m.browseKind = "series" then sk = "last_modified"
+    if m.browseKind = "live" then sk = ""
+    req("items:" + m.browseKind, u, { parse: true, sortKey: sk, limit: 600 })
 end sub
 
-sub onItems(id as string, data as object)
-    sec = Val(Mid(id, 7))
-    if sec <> m.section then return
+sub fillGrid(kind as string, data as object)
     c = CreateObject("roSGNode", "ContentNode")
     count = 0
     if type(data) = "roArray" then
         for each it in data
-            if count >= 600 then exit for
             n = c.createChild("ContentNode")
-            n.shortDescriptionLine1 = Str2(it.name)
-            img = ""
-            if sec < 2 then img = Str2(it.stream_icon) else img = Str2(it.cover)
-            if Left(img, 4) <> "http" then img = ""
-            if img = "" then img = "pkg:/images/poster.png"
-            n.HDPosterUrl = img
-            n.FHDPosterUrl = img
-            if sec = 2 then
-                n.addFields({ xid: Str2(it.series_id), ext: "" })
+            t = Str2(it.name)
+            if t = "" then t = Str2(it.title)
+            n.title = t
+            n.shortDescriptionLine1 = t
+            k = kind
+            if k = "mixed" then k = Str2(it.kind)
+            if k = "series" then
+                p = img(it.cover)
+                if it.image <> invalid then p = img(it.image)
+                n.HDPosterUrl = p
+                id = Str2(it.series_id)
+                if id = "" then id = Str2(it.id)
+                n.addFields({ kind: "series", xid: id, sid: id, ext: "" })
             else
-                ext = "m3u8"
-                if sec = 1 and Str2(it.container_extension) <> "" then ext = Str2(it.container_extension)
-                n.addFields({ xid: Str2(it.stream_id), ext: ext })
+                p = img(it.stream_icon)
+                if it.image <> invalid then p = img(it.image)
+                n.HDPosterUrl = p
+                id = Str2(it.stream_id)
+                if id = "" then id = Str2(it.id)
+                n.addFields({ kind: k, xid: id, sid: "", ext: Str2(it.container_extension) })
             end if
+            n.FHDPosterUrl = n.HDPosterUrl
             count = count + 1
         end for
     end if
     m.grid.content = c
     if count = 0 then
-        m.info.text = "No hay nada en esta categoría."
+        m.info.text = "No hay nada aquí todavía."
     else
-        m.info.text = Str(count).Trim() + " títulos"
+        m.info.text = Str(count).Trim() + " títulos · OK para ver"
+    end if
+end sub
+
+sub onItems(id as string, data as object)
+    kind = Mid(id, 7)
+    if kind <> m.browseKind then return
+    fillGrid(kind, data)
+end sub
+
+sub showMyList(filter as integer)
+    arr = []
+    for each k in m.lib.mylist
+        s = m.lib.mylist[k]
+        if s <> invalid then
+            kk = Str2(s.kind)
+            if filter = 0 or (filter = 1 and kk = "movie") or (filter = 2 and kk = "series") then arr.Push(s)
+        end if
+    end for
+    arr.SortBy("added", "r")
+    fillGrid("mixed", arr)
+    if arr.Count() = 0 then m.info.text = "Tu lista está vacía. En el detalle de una película o serie elige «Agregar a Mi lista»."
+end sub
+
+sub startSearch(q as string)
+    if q = "" then return
+    m.section = 1
+    m.browseKind = "search"
+    m.pgHome.visible = false
+    m.pgDetail.visible = false
+    m.pgBrowse.visible = true
+    m.browseTitle.text = "Buscar: " + q
+    setCats(["Películas", "Series"])
+    m.grid.content = CreateObject("roSGNode", "ContentNode")
+    m.info.text = "Buscando…"
+    m.searchRes = [invalid, invalid]
+    q = LCase(q)
+    req("srch:movie", api("get_vod_streams"), { parse: true, filter: q })
+    req("srch:series", api("get_series"), { parse: true, filter: q })
+    m.grid.setFocus(true)
+end sub
+
+sub onSearch(id as string, data as object)
+    if m.browseKind <> "search" then return
+    if type(data) <> "roArray" then data = []
+    if id = "srch:movie" then m.searchRes[0] = data else m.searchRes[1] = data
+    i = m.cats.itemFocused
+    if i < 0 then i = 0
+    showSearch(i)
+end sub
+
+sub showSearch(i as integer)
+    d = m.searchRes[i]
+    if d = invalid then
+        m.info.text = "Buscando…"
+        return
+    end if
+    kinds = ["movie", "series"]
+    fillGrid(kinds[i], d)
+    if d.Count() = 0 then
+        other = "series"
+        if i = 1 then other = "películas"
+        m.info.text = "Sin resultados aquí. Revisa en " + other + "."
     end if
 end sub
 
 sub onGridFocus()
     if m.grid.content = invalid then return
     it = m.grid.content.getChild(m.grid.itemFocused)
-    if it <> invalid then m.info.text = it.shortDescriptionLine1
+    if it <> invalid then m.info.text = it.title
 end sub
 
 sub onGridSelect()
     it = m.grid.content.getChild(m.grid.itemSelected)
     if it = invalid then return
-    if m.section = 2 then
-        m.info.text = "Cargando episodios…"
-        m.seriesTitle = it.shortDescriptionLine1
-        request("series", api("get_series_info") + "&series_id=" + it.xid, "GET", "", invalid)
-    else if m.section = 0 then
-        play(it.shortDescriptionLine1, base() + "/live/" + m.user + "/" + m.pass + "/" + it.xid + ".m3u8", "hls", true)
+    if it.kind = "live" then
+        play(it.title, base() + "/live/" + m.user + "/" + m.pass + "/" + it.xid + ".m3u8", "hls", true, invalid, 0)
     else
-        play(it.shortDescriptionLine1, base() + "/movie/" + m.user + "/" + m.pass + "/" + it.xid + "." + it.ext, fmt(it.ext), false)
+        openDetail(it, m.grid)
     end if
 end sub
 
-function fmt(ext as string) as string
-    e = LCase(ext)
-    if e = "m3u8" then return "hls"
-    if e = "mkv" then return "mkv"
-    if e = "ts" then return "ts"
-    return "mp4"
+' ---------------- Detalle ----------------
+sub openDetail(it as object, from as object)
+    m.dItem = { kind: it.kind, xid: it.xid, sid: it.sid, title: it.title, poster: it.HDPosterUrl, ext: "" }
+    if it.hasField("ext") then m.dItem.ext = it.ext
+    m.dFrom = from
+    m.mode = "detail"
+    m.side.visible = false
+    m.pgHome.visible = false
+    m.pgBrowse.visible = false
+    m.pgDetail.visible = true
+    m.dBack.uri = it.HDPosterUrl
+    m.dPoster.uri = it.HDPosterUrl
+    m.dTitle.text = it.title
+    m.dMeta.text = "Cargando…"
+    m.dPlot.text = ""
+    m.dSeries.visible = false
+    setButtons([], [])
+    if it.kind = "movie" then
+        req("vinfo", api("get_vod_info") + "&vod_id=" + it.xid, { parse: true })
+    else
+        sid = it.sid
+        if sid = "" then sid = it.xid
+        m.dItem.kind = "series"
+        m.dItem.xid = sid
+        m.dItem.sid = sid
+        req("sinfo", api("get_series_info") + "&series_id=" + sid, { parse: true })
+    end if
+    m.dButtons.setFocus(true)
+end sub
+
+sub closeDetail()
+    m.pgDetail.visible = false
+    m.side.visible = true
+    m.mode = "home"
+    if m.section = 0 then
+        m.pgHome.visible = true
+        buildRows()
+        m.rows.setFocus(true)
+    else
+        m.pgBrowse.visible = true
+        if m.browseKind = "mylist" then showMyList(m.cats.itemSelected)
+        m.grid.setFocus(true)
+    end if
+end sub
+
+sub setButtons(labels as object, actions as object)
+    c = CreateObject("roSGNode", "ContentNode")
+    for each t in labels
+        n = c.createChild("ContentNode")
+        n.title = t
+    end for
+    m.dButtons.content = c
+    m.dActions = actions
+end sub
+
+function listKey() as string
+    return m.dItem.kind + ":" + m.dItem.xid
 end function
 
-sub onSeriesInfo(data as object)
-    c = CreateObject("roSGNode", "ContentNode")
-    count = 0
-    if data <> invalid and data.episodes <> invalid then
-        seasons = []
-        for each s in data.episodes
-            seasons.Push(s)
-        end for
-        seasons.Sort()
-        for each s in seasons
-            for each ep in data.episodes[s]
-                n = c.createChild("ContentNode")
-                t = ""
-                t = Str2(ep.title)
-                n.title = "T" + s + " · E" + Str2(ep.episode_num) + "   " + t
-                ext = "mp4"
-                if Str2(ep.container_extension) <> "" then ext = Str2(ep.container_extension)
-                n.addFields({ xid: Str2(ep.id), ext: ext })
-                count = count + 1
-            end for
-        end for
-    end if
-    if count = 0 then
-        m.info.text = "Esta serie no tiene episodios."
+function listLabel() as string
+    if m.lib.mylist[listKey()] <> invalid then return "Quitar de Mi lista"
+    return "Agregar a Mi lista"
+end function
+
+function joinMeta(parts as object) as string
+    out = ""
+    for each p in parts
+        if p <> invalid and p <> "" and p <> "0" then
+            if out <> "" then out = out + "   ·   "
+            out = out + p
+        end if
+    end for
+    return out
+end function
+
+sub onVodInfo(d as object)
+    if m.mode <> "detail" or d = invalid then
+        if m.mode = "detail" then m.dMeta.text = "No se pudo cargar la información."
+        if m.mode = "detail" then refreshMovieButtons()
         return
     end if
-    m.eps.content = c
-    m.grid.visible = false
-    m.eps.visible = true
-    m.eps.setFocus(true)
-    m.info.text = m.seriesTitle
+    info = d.info
+    if info = invalid then info = {}
+    md = d.movie_data
+    if md <> invalid and Str2(md.container_extension) <> "" then m.dItem.ext = Str2(md.container_extension)
+    if m.dItem.ext = "" then m.dItem.ext = "mp4"
+    yr = Left(Str2(info.releasedate), 4)
+    rating = Str2(info.rating)
+    if rating <> "" then rating = "Calificación " + Left(rating, 3)
+    m.dItem.year = yr
+    m.dMeta.text = joinMeta([yr, Str2(info.duration), Str2(info.genre), rating])
+    plot = Str2(info.plot)
+    if plot = "" then plot = Str2(info.description)
+    m.dPlot.text = plot
+    bd = ""
+    if type(info.backdrop_path) = "roArray" and info.backdrop_path.Count() > 0 then bd = Str2(info.backdrop_path[0])
+    if Left(bd, 4) = "http" then m.dBack.uri = bd
+    if Left(Str2(info.movie_image), 4) = "http" then m.dPoster.uri = Str2(info.movie_image)
+    refreshMovieButtons()
+end sub
+
+sub refreshMovieButtons()
+    p = m.lib.progress["movie:" + m.dItem.xid]
+    if p <> invalid then
+        setButtons(["Continuar (te quedan " + mins(p.dur - p.pos) + ")", "Ver desde el inicio", listLabel()], ["resume", "start", "list"])
+    else
+        setButtons(["Ver película", listLabel()], ["start", "list"])
+    end if
+end sub
+
+sub onSeriesInfo(d as object)
+    if m.mode <> "detail" then return
+    if d = invalid or d.episodes = invalid then
+        m.dMeta.text = "No se pudo cargar la serie."
+        return
+    end if
+    info = d.info
+    if info = invalid then info = {}
+    m.sInfo = info
+    rating = Str2(info.rating)
+    if rating <> "" then rating = "Calificación " + Left(rating, 3)
+    m.dMeta.text = joinMeta([Left(Str2(info.releaseDate), 4), Str2(info.genre), rating])
+    m.dPlot.text = Str2(info.plot)
+    bd = ""
+    if type(info.backdrop_path) = "roArray" and info.backdrop_path.Count() > 0 then bd = Str2(info.backdrop_path[0])
+    if Left(bd, 4) = "http" then m.dBack.uri = bd
+    if Left(Str2(info.cover), 4) = "http" then
+        m.dPoster.uri = Str2(info.cover)
+        m.dItem.poster = Str2(info.cover)
+    end if
+    ' temporadas en orden
+    keys = []
+    for each s in d.episodes
+        keys.Push({ k: s, n: Val(s) })
+    end for
+    keys.SortBy("n")
+    m.sEps = d.episodes
+    m.sKeys = []
+    c = CreateObject("roSGNode", "ContentNode")
+    for each o in keys
+        m.sKeys.Push(o.k)
+        n = c.createChild("ContentNode")
+        n.title = "Temporada " + o.k
+    end for
+    m.dSeasons.content = c
+    m.dSeries.visible = true
+    ' episodio en curso
+    m.sCont = invalid
+    best = invalid
+    for each k in m.lib.progress
+        p = m.lib.progress[k]
+        if p <> invalid and Str2(p.kind) = "episode" and Str2(p.sid) = m.dItem.sid then
+            if best = invalid or p.up > best.up then best = p
+        end if
+    end for
+    m.sCont = best
+    si = 0
+    if best <> invalid then
+        for i = 0 to m.sKeys.Count() - 1
+            if Val(m.sKeys[i]) = best.s then si = i
+        end for
+    end if
+    m.dSeasons.jumpToItem = si
+    fillEps(si)
+    refreshSeriesButtons()
+end sub
+
+sub refreshSeriesButtons()
+    if m.sCont <> invalid then
+        setButtons(["Continuar T" + Str2(m.sCont.s) + " E" + Str2(m.sCont.e) + " (te quedan " + mins(m.sCont.dur - m.sCont.pos) + ")", listLabel()], ["resumeEp", "list"])
+    else
+        setButtons(["Ver desde el primer episodio", listLabel()], ["firstEp", "list"])
+    end if
+end sub
+
+sub onSeasonFocus()
+    if m.dSeries.visible = false then return
+    fillEps(m.dSeasons.itemFocused)
+end sub
+
+sub fillEps(si as integer)
+    if m.sKeys = invalid or si < 0 or si >= m.sKeys.Count() then return
+    m.curSeason = m.sKeys[si]
+    eps = m.sEps[m.curSeason]
+    m.curEps = eps
+    c = CreateObject("roSGNode", "ContentNode")
+    for each ep in eps
+        n = c.createChild("ContentNode")
+        t = "E" + Str2(ep.episode_num) + "   " + Str2(ep.title)
+        id = Str2(ep.id)
+        if m.lib.progress["episode:" + id] <> invalid then
+            p = m.lib.progress["episode:" + id]
+            t = t + "   ·   te quedan " + mins(p.dur - p.pos)
+        else if m.lib.watched[id] = true then
+            t = t + "   ·   visto"
+        end if
+        n.title = t
+    end for
+    m.dEps.content = c
+    m.dEpPlot.text = ""
+end sub
+
+sub onEpFocus()
+    if m.curEps = invalid then return
+    ep = m.curEps[m.dEps.itemFocused]
+    if ep = invalid then return
+    plot = ""
+    if ep.info <> invalid then plot = Str2(ep.info.plot)
+    m.dEpPlot.text = plot
 end sub
 
 sub onEpSelect()
-    it = m.eps.content.getChild(m.eps.itemSelected)
-    if it = invalid then return
-    play(m.seriesTitle + " · " + it.title, base() + "/series/" + m.user + "/" + m.pass + "/" + it.xid + "." + it.ext, fmt(it.ext), false)
+    ep = m.curEps[m.dEps.itemSelected]
+    if ep = invalid then return
+    st = 0
+    p = m.lib.progress["episode:" + Str2(ep.id)]
+    if p <> invalid then st = Int(p.pos / 1000)
+    playEpisode(ep, m.curSeason, st)
+end sub
+
+sub playEpisode(ep as object, season as dynamic, startSec as integer)
+    ext = Str2(ep.container_extension)
+    if ext = "" then ext = "mp4"
+    num = Int(Val(Str2(ep.episode_num)))
+    s = Int(Val(Str2(season)))
+    t = Str2(ep.title)
+    meta = { kind: "episode", id: Int(Val(Str2(ep.id))), sid: Int(Val(m.dItem.sid)), t: m.dItem.title, st: "T" + Str(s).Trim() + " E" + Str(num).Trim() + " · " + t, img: m.dItem.poster, s: s, e: num }
+    play(m.dItem.title + " · T" + Str(s).Trim() + " E" + Str(num).Trim(), base() + "/series/" + m.user + "/" + m.pass + "/" + Str2(ep.id) + "." + ext, fmt(ext), false, meta, startSec)
+end sub
+
+function findEpisode(epId as string) as object
+    for each k in m.sEps
+        for each ep in m.sEps[k]
+            if Str2(ep.id) = epId then return { ep: ep, season: k }
+        end for
+    end for
+    return invalid
+end function
+
+sub onDetailButton()
+    a = m.dActions[m.dButtons.itemSelected]
+    if a = invalid then return
+    if a = "list" then
+        k = listKey()
+        if m.lib.mylist[k] <> invalid then
+            libPut("mylist", k, invalid, true)
+        else
+            libPut("mylist", k, { kind: m.dItem.kind, id: Int(Val(m.dItem.xid)), title: m.dItem.title, image: m.dItem.poster, added: nowMs() }, false)
+        end if
+        i = m.dButtons.itemFocused
+        if m.dItem.kind = "movie" then refreshMovieButtons() else refreshSeriesButtons()
+        m.dButtons.jumpToItem = i
+    else if a = "start" or a = "resume" then
+        st = 0
+        p = m.lib.progress["movie:" + m.dItem.xid]
+        if a = "resume" and p <> invalid then st = Int(p.pos / 1000)
+        ext = m.dItem.ext
+        if ext = "" then ext = "mp4"
+        meta = { kind: "movie", id: Int(Val(m.dItem.xid)), sid: 0, t: m.dItem.title, st: Str2(m.dItem.year), img: m.dItem.poster, s: 0, e: 0 }
+        play(m.dItem.title, base() + "/movie/" + m.user + "/" + m.pass + "/" + m.dItem.xid + "." + ext, fmt(ext), false, meta, st)
+    else if a = "resumeEp" and m.sCont <> invalid then
+        f = findEpisode(Str2(m.sCont.id))
+        if f <> invalid then playEpisode(f.ep, f.season, Int(m.sCont.pos / 1000))
+    else if a = "firstEp" then
+        if m.sKeys <> invalid and m.sKeys.Count() > 0 then
+            eps = m.sEps[m.sKeys[0]]
+            if eps <> invalid and eps.Count() > 0 then playEpisode(eps[0], m.sKeys[0], 0)
+        end if
+    end if
+end sub
+
+' ---------------- Mi cuenta ----------------
+sub showAccount(msg as string)
+    m.home.visible = false
+    m.brand.visible = true
+    m.sub.visible = true
+    m.sub.text = "Mi cuenta"
+    cur = "Esta tele tiene el código " + m.code + "."
+    if m.code = "" then cur = "Esta tele todavía no tiene código."
+    items = ["Unir a mi cuenta (desde mi celular o tablet)", "Escribir mi código de activación"]
+    if m.profiles.Count() > 0 then items.Push("Cambiar de perfil")
+    items.Push("Cambiar datos del proveedor")
+    items.Push("Volver")
+    m.accItems = items
+    showForm("Mi cuenta", cur + " Para usar tu misma cuenta, tu lista y lo que estabas viendo en tu celular, tablet o tele Android, elige «Unir a mi cuenta».", items, "account")
+    m.formMsg.text = msg
+end sub
+
+sub onAccountSelect(i as integer)
+    t = m.accItems[i]
+    if Left(t, 4) = "Unir" then
+        startHousePair()
+    else if Left(t, 8) = "Escribir" then
+        ask("Tu código (ej. CC-7F3K-92QD)", "", "code")
+    else if t = "Cambiar de perfil" then
+        showProfilePicker()
+    else if Left(t, 14) = "Cambiar datos " then
+        clearProvider()
+    else
+        backToHome()
+    end if
 end sub
 
 ' ---------------- reproductor ----------------
-sub play(title as string, url as string, format as string, live as boolean)
+sub play(title as string, url as string, format as string, live as boolean, meta as dynamic, startSec as integer)
     c = CreateObject("roSGNode", "ContentNode")
     c.title = title
     c.url = url
     c.streamFormat = format
     c.live = live
+    if startSec > 5 then c.PlayStart = startSec - 3
     m.returnFocus = m.top.focusedChild
+    m.playMeta = meta
     m.video.content = c
     m.video.visible = true
     m.video.control = "play"
     m.video.setFocus(true)
+    if meta <> invalid then m.progTimer.control = "start"
+end sub
+
+sub onProgTick()
+    saveProgress()
+end sub
+
+sub saveProgress()
+    mt = m.playMeta
+    if mt = invalid then return
+    ps = m.video.position
+    dur = m.video.duration
+    if dur = invalid or dur <= 0 or ps = invalid then return
+    key = mt.kind + ":" + Str(mt.id).Trim()
+    finished = (ps >= dur * 0.92) or (dur - ps < 90 and dur > 600)
+    if finished then
+        if m.lib.progress[key] <> invalid then libPut("progress", key, invalid, true)
+        if mt.kind = "episode" then libPut("watched", Str(mt.id).Trim(), { w: true }, false)
+    else if ps > 15 then
+        if mt.kind = "episode" then
+            old = []
+            for each k in m.lib.progress
+                p = m.lib.progress[k]
+                if k <> key and p <> invalid and Str2(p.kind) = "episode" and Str2(p.sid) = Str(mt.sid).Trim() then old.Push(k)
+            end for
+            for each k in old
+                libPut("progress", k, invalid, true)
+            end for
+        end if
+        data = { kind: mt.kind, id: mt.id, sid: mt.sid, t: mt.t, st: mt.st, img: mt.img, pos: Int(ps * 1000), dur: Int(dur * 1000), up: nowMs(), s: mt.s, e: mt.e }
+        libPut("progress", key, data, false)
+    end if
 end sub
 
 sub stopVideo()
+    saveProgress()
+    m.progTimer.control = "stop"
+    m.playMeta = invalid
     m.video.control = "stop"
     m.video.visible = false
-    if m.eps.visible then
-        m.eps.setFocus(true)
+    if m.mode = "detail" then
+        if m.dItem.kind = "movie" then
+            refreshMovieButtons()
+        else
+            ' actualiza el episodio en curso y las marcas
+            best = invalid
+            for each k in m.lib.progress
+                p = m.lib.progress[k]
+                if p <> invalid and Str2(p.kind) = "episode" and Str2(p.sid) = m.dItem.sid then
+                    if best = invalid or p.up > best.up then best = p
+                end if
+            end for
+            m.sCont = best
+            i = m.dEps.itemFocused
+            fillEps(m.dSeasons.itemFocused)
+            m.dEps.jumpToItem = i
+            refreshSeriesButtons()
+        end if
+    end if
+    if m.returnFocus <> invalid then
+        m.returnFocus.setFocus(true)
+    else if m.mode = "detail" then
+        m.dButtons.setFocus(true)
     else
         m.grid.setFocus(true)
     end if
@@ -683,6 +1464,7 @@ sub onVideoState()
     s = m.video.state
     if s = "error" then
         m.info.text = "No se pudo reproducir (" + m.video.errorMsg + ")."
+        m.dMeta.text = "No se pudo reproducir. Intenta de nuevo o elige otra versión."
         stopVideo()
     else if s = "finished" then
         stopVideo()
@@ -701,43 +1483,84 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     if key = "back" and (m.mode = "account" or m.mode = "hpair") then
         stopHousePair()
-        if m.code = "" then showActivation("") else showHome()
+        if m.code = "" then
+            showActivation("")
+        else if m.home.visible = false and m.mode = "hpair" then
+            showAccount("")
+        else
+            backToHome()
+        end if
         return true
     end if
-    if m.mode <> "home" then return false
-    if key = "right" then
-        if m.sections.hasFocus() then
-            if m.section = 3 then return true
-            m.cats.setFocus(true)
+    if m.mode = "detail" then
+        if key = "back" then
+            closeDetail()
             return true
-        else if m.cats.hasFocus() then
-            if m.eps.visible then m.eps.setFocus(true) else m.grid.setFocus(true)
+        else if key = "down" and m.dButtons.hasFocus() and m.dSeries.visible then
+            m.dEps.setFocus(true)
+            return true
+        else if key = "up" and (m.dEps.hasFocus() or m.dSeasons.hasFocus()) then
+            m.dButtons.setFocus(true)
+            return true
+        else if key = "left" and m.dEps.hasFocus() then
+            m.dSeasons.setFocus(true)
+            return true
+        else if key = "right" and m.dSeasons.hasFocus() then
+            m.dEps.setFocus(true)
             return true
         end if
+        return false
+    end if
+    if m.mode <> "home" then return false
+    if key = "right" and m.sections.hasFocus() then
+        if m.pgHome.visible then
+            m.rows.setFocus(true)
+        else if m.cats.content <> invalid and m.cats.content.getChildCount() > 0 then
+            m.cats.setFocus(true)
+        else
+            m.grid.setFocus(true)
+        end if
+        return true
+    else if key = "right" and m.cats.hasFocus() then
+        m.grid.setFocus(true)
+        return true
     else if key = "left" then
-        if m.cats.hasFocus() then
+        if m.grid.hasFocus() then
+            m.cats.setFocus(true)
+            return true
+        else if m.rows.hasFocus() or m.cats.hasFocus() then
             m.sections.setFocus(true)
             return true
-        else if m.grid.hasFocus() or m.eps.hasFocus() then
-            m.cats.setFocus(true)
-            return true
         end if
-    else if key = "OK" and m.sections.hasFocus() and m.section = 3 then
-        showAccount("")
-        return true
     else if key = "back" then
-        if m.eps.hasFocus() then
-            m.eps.visible = false
-            m.grid.visible = true
-            m.grid.setFocus(true)
-            return true
-        else if m.grid.hasFocus() then
+        if m.grid.hasFocus() then
             m.cats.setFocus(true)
             return true
-        else if m.cats.hasFocus() then
+        else if m.rows.hasFocus() or m.cats.hasFocus() then
             m.sections.setFocus(true)
             return true
         end if
     end if
     return false
+end function
+
+' ---------------- utilidades ----------------
+function Str2(v as dynamic) as string
+    if v = invalid then return ""
+    t = type(v)
+    if t = "roString" or t = "String" then return v
+    if t = "roInt" or t = "Integer" or t = "roFloat" or t = "Float" or t = "Double" or t = "roDouble" or t = "LongInteger" or t = "roLongInteger" then return Str(v).Trim()
+    if t = "roBoolean" or t = "Boolean" then
+        if v then return "1"
+        return "0"
+    end if
+    return ""
+end function
+
+function fmt(ext as string) as string
+    e = LCase(ext)
+    if e = "m3u8" then return "hls"
+    if e = "mkv" then return "mkv"
+    if e = "ts" then return "ts"
+    return "mp4"
 end function

@@ -5,15 +5,15 @@
     <Rectangle id="bg" width="1920" height="1080" color="0x0B0C12FF" />
     <Rectangle id="glow" width="1920" height="300" color="0x14244AFF" opacity="0.55" />
 
-    <!-- Encabezado -->
+    <!-- Encabezado (pantallas de entrada) -->
     <Label id="brand" text="CineCasa" translation="[80,50]" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
     <Label id="sub" text="" translation="[80,118]" width="1600" font="font:SmallSystemFont" color="0x9AA3B8FF" />
 
-    <!-- Formulario genérico (inicio de sesión / activación) -->
+    <!-- Formulario genérico (inicio de sesión / activación / perfiles) -->
     <Group id="form" visible="false">
       <Label id="formTitle" translation="[80,220]" width="1100" wrap="true" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
-      <Label id="formText" translation="[80,300]" width="1100" wrap="true" font="font:SmallSystemFont" color="0xB9C2D6FF" lineSpacing="6" />
-      <LabelList id="formList" translation="[80,470]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="6"
+      <Label id="formText" translation="[80,300]" width="1100" wrap="true" maxLines="5" font="font:SmallSystemFont" color="0xB9C2D6FF" lineSpacing="6" />
+      <LabelList id="formList" translation="[80,500]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="6"
         color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
       <Group id="qrBox" visible="false">
         <Rectangle translation="[1240,220]" width="560" height="760" color="0x17171CFF" />
@@ -24,24 +24,77 @@
         <Label id="qrCode" translation="[1280,860]" width="480" horizAlign="center" font="font:LargeBoldSystemFont" color="0x3D9BFFFF" />
         <Label translation="[1280,930]" width="480" horizAlign="center" text="msantos4321-bit.github.io/reproductor-tv/tv" font="font:SmallestSystemFont" color="0x9AA3B8FF" />
       </Group>
-      <Label id="formMsg" translation="[80,960]" width="1700" wrap="true" font="font:SmallSystemFont" color="0xFF9F0AFF" />
+      <Label id="formMsg" translation="[80,980]" width="1700" wrap="true" font="font:SmallSystemFont" color="0xFF9F0AFF" />
     </Group>
 
-    <!-- Inicio: secciones | categorías | contenido -->
+    <!-- App principal -->
     <Group id="home" visible="false">
-      <LabelList id="sections" translation="[80,200]" itemSize="[300,70]" itemSpacing="[0,10]" numRows="6"
-        color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
-      <LabelList id="cats" translation="[420,200]" itemSize="[420,58]" itemSpacing="[0,6]" numRows="13"
-        color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
-      <PosterGrid id="grid" translation="[880,200]" basePosterSize="[220,330]" itemSpacing="[22,60]" numColumns="4" numRows="2"
-        caption1NumLines="1" posterDisplayMode="scaleToZoom" loadingBitmapUri="pkg:/images/poster.png" failedBitmapUri="pkg:/images/poster.png"
-        />
-      <LabelList id="eps" translation="[880,200]" itemSize="[960,62]" itemSpacing="[0,8]" numRows="12" visible="false"
-        color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
-      <Label id="info" translation="[880,1020]" width="960" wrap="false" font="font:SmallSystemFont" color="0x9AA3B8FF" />
+
+      <!-- Inicio: portada + filas -->
+      <Group id="pgHome">
+        <Poster id="heroImg" translation="[300,0]" width="1620" height="680" loadDisplayMode="scaleToZoom" />
+        <Poster translation="[300,0]" width="1620" height="680" uri="pkg:/images/hero_shade.png" />
+        <Label id="heroKicker" translation="[380,150]" width="1000" font="font:SmallBoldSystemFont" color="0x3D9BFFFF" />
+        <Label id="heroTitle" translation="[380,190]" width="1100" wrap="true" maxLines="2" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="64" />
+        </Label>
+        <Label id="heroMeta" translation="[380,360]" width="1000" font="font:SmallSystemFont" color="0xC3CBE0FF" />
+        <Label id="heroHint" translation="[380,410]" width="1000" font="font:SmallestSystemFont" color="0x8E97ADFF" text="OK: ver detalles" />
+        <RowList id="rows" translation="[340,500]" itemComponentName="PosterItem" numRows="2"
+          itemSize="[1560,400]" rowItemSize="[[220,330]]" rowItemSpacing="[[26,0]]" itemSpacing="[0,40]"
+          showRowLabel="[true]" rowLabelOffset="[[0,14]]" rowLabelColor="0xFFFFFFFF" rowLabelFont="font:MediumBoldSystemFont"
+          rowFocusAnimationStyle="floatingFocus" focusBitmapUri="pkg:/images/focus.9.png" />
+        <Label id="homeMsg" translation="[380,640]" width="1400" wrap="true" font="font:MediumSystemFont" color="0xB9C2D6FF" />
+      </Group>
+
+      <!-- Explorar: categorías + cuadrícula -->
+      <Group id="pgBrowse" visible="false">
+        <Label id="browseTitle" translation="[340,60]" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+        <LabelList id="cats" translation="[340,170]" itemSize="[400,60]" itemSpacing="[0,6]" numRows="13"
+          color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+        <PosterGrid id="grid" translation="[790,170]" basePosterSize="[200,300]" itemSpacing="[24,70]" numColumns="5" numRows="2"
+          caption1NumLines="1" posterDisplayMode="scaleToZoom" loadingBitmapUri="pkg:/images/poster.png" failedBitmapUri="pkg:/images/poster.png" />
+        <Label id="info" translation="[790,1010]" width="1080" font="font:SmallSystemFont" color="0x9AA3B8FF" />
+      </Group>
+
+      <!-- Detalle de película o serie -->
+      <Group id="pgDetail" visible="false">
+        <Poster id="dBack" width="1920" height="1080" loadDisplayMode="scaleToZoom" />
+        <Poster width="1920" height="1080" uri="pkg:/images/detail_shade.png" />
+        <Poster id="dPoster" translation="[120,130]" width="260" height="390" loadDisplayMode="scaleToZoom" failedBitmapUri="pkg:/images/poster.png" />
+        <Label id="dTitle" translation="[440,130]" width="1360" wrap="true" maxLines="2" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="58" />
+        </Label>
+        <Label id="dMeta" translation="[440,280]" width="1360" font="font:SmallSystemFont" color="0xC3CBE0FF" />
+        <Label id="dPlot" translation="[440,330]" width="1300" wrap="true" maxLines="3" lineSpacing="4" font="font:SmallSystemFont" color="0xE6EAF2FF" />
+        <LabelList id="dButtons" translation="[440,450]" itemSize="[800,62]" itemSpacing="[0,10]" numRows="3"
+          color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+        <Group id="dSeries" visible="false">
+          <Label translation="[120,630]" text="Temporadas" font="font:SmallBoldSystemFont" color="0x8E97ADFF" />
+          <LabelList id="dSeasons" translation="[120,675]" itemSize="[260,56]" itemSpacing="[0,6]" numRows="6"
+            color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+          <Label translation="[440,630]" text="Episodios" font="font:SmallBoldSystemFont" color="0x8E97ADFF" />
+          <LabelList id="dEps" translation="[440,675]" itemSize="[1360,56]" itemSpacing="[0,6]" numRows="5"
+            color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+          <Label id="dEpPlot" translation="[440,990]" width="1360" maxLines="2" wrap="true" font="font:SmallestSystemFont" color="0xB9C2D6FF" />
+        </Group>
+      </Group>
+
+      <!-- Menú lateral -->
+      <Group id="side">
+        <Rectangle width="300" height="1080" color="0x0E1018F0" />
+        <Label text="CineCasa" translation="[40,50]" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="44" />
+        </Label>
+        <Label id="profName" translation="[42,112]" width="240" font="font:SmallestSystemFont" color="0x8E97ADFF" />
+        <LabelList id="sections" translation="[24,200]" itemSize="[252,66]" itemSpacing="[0,8]" numRows="8"
+          color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+        <Label id="codeLbl" translation="[42,1010]" width="240" font="font:SmallestSystemFont" color="0x5C6478FF" />
+      </Group>
     </Group>
 
     <Timer id="pairTimer" repeat="true" duration="3" />
+    <Timer id="progTimer" repeat="true" duration="30" />
     <Video id="video" width="1920" height="1080" visible="false" enableUI="true" />
   </children>
 </component>
