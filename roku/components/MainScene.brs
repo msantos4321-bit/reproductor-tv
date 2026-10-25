@@ -234,7 +234,7 @@ sub showAccount(msg as string)
     m.formMsg.text = msg
 end sub
 
-sub startHousePair()
+sub newHp()
     m.hpCode = Str(100000 + Rnd(899999)).Trim()
     t = ""
     for k = 1 to 32
@@ -243,6 +243,10 @@ sub startHousePair()
     m.hpToken = t
     rpc("hpReq", "cc_pair_request", { p_code: m.hpCode, p_token: m.hpToken })
     m.hpStarted = CreateObject("roDateTime").AsSeconds()
+end sub
+
+sub startHousePair()
+    newHp()
     showForm("Une esta tele a tu cuenta", "1. Abre CineCasa en tu celular, tablet o tele Android donde ya tienes tu cuenta." + Chr(10) + "2. Ve a Más → «Agregar otra tele o celular»." + Chr(10) + "3. Escribe este código y toca «Aprobar»:" + Chr(10) + Chr(10) + "            " + Left(m.hpCode, 3) + " " + Right(m.hpCode, 3), ["Cancelar"], "hpair")
     m.formMsg.text = "Esperando la aprobación… (el código dura 15 minutos)"
     m.pairTimer.control = "start"
@@ -254,12 +258,13 @@ sub stopHousePair()
 end sub
 
 sub onHpPoll(body as string)
-    if m.mode <> "hpair" then return
+    if m.mode <> "hpair" and m.mode <> "login" then return
     t = body.Trim()
     if t = "" or t = "null" then return
     p = ParseJson(t)
     if p = invalid or p.server = invalid then return
     stopHousePair()
+    stopPairing()
     m.server = Str2(p.server) : m.user = Str2(p.user) : m.pass = Str2(p.pass)
     rset("server", m.server) : rset("user", m.user) : rset("pass", m.pass)
     if p.hh <> invalid then rset("hh", Str2(p.hh))
@@ -335,6 +340,7 @@ end sub
 sub startPairing()
     m.qrBox.visible = true
     if m.pairCode <> "" then return
+    newHp()   ' el QR también trae un código para unir la tele a la cuenta del celular
     rpc("pairNew", "cc_pair_new", {})
 end sub
 
@@ -351,6 +357,7 @@ sub onPairNew(body as string)
     m.pairCode = c
     m.pairStarted = CreateObject("roDateTime").AsSeconds()
     url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=" + c
+    if m.hpCode <> "" then url = url + "&p=" + m.hpCode
     m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.EncodeUriComponent()
     m.qrCode.text = Left(c, 3) + " " + Right(c, 3)
     m.pairTimer.control = "start"
@@ -369,10 +376,12 @@ sub onPairTick()
     if CreateObject("roDateTime").AsSeconds() - m.pairStarted > 840 then
         m.pairCode = ""
         m.pairTimer.control = "stop"
+        newHp()
         rpc("pairNew", "cc_pair_new", {})
         return
     end if
     rpc("pairGet", "cc_pair_get", { p_code: m.pairCode })
+    if m.hpCode <> "" then rpc("hpPoll", "cc_pair_poll", { p_code: m.hpCode, p_token: m.hpToken })
 end sub
 
 sub onPairGet(data as object)
@@ -385,6 +394,7 @@ sub onPairGet(data as object)
     else if data.status = "expired" then
         m.pairCode = ""
         m.pairTimer.control = "stop"
+        newHp()
         rpc("pairNew", "cc_pair_new", {})
     end if
 end sub
