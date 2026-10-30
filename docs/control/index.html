@@ -329,6 +329,16 @@ async function copyEmailHtml(c) {
 function mailLink(email, c) {
   return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de ${appOf(c).name}: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
 }
+// Guía para poner CineCasa en una tele Roku sin ir a la casa del cliente (con su WhatsApp para pedir ayuda)
+function rokuLink(c) {
+  const ph = String(isMgr() ? (rules().manager_whatsapp || '') : (me.phone || rules().manager_whatsapp || '')).replace(/\D/g, '');
+  const dl = appOf(c || {}).dl;
+  return new URL('../roku/', PANEL_URL).href + '?' + new URLSearchParams(Object.assign({}, ph ? { w: ph } : {}, c && c.code ? { c: c.code } : {}, dl ? { d: dl } : {})).toString();
+}
+function rokuText(c) {
+  const first = c && c.customer ? ' ' + c.customer.split(' ')[0] : '';
+  return `Hola${first} 👋 Para poner *CineCasa en tu tele Roku* no necesitas que nadie vaya a tu casa:\n\n📱 Lo más fácil es con un celular Android en el mismo WiFi que la tele: instalas CineCasa en el celular, tocas *Más → Instalar CineCasa en una tele Roku* y el celular hace todo; la tele entra sola con tus datos.\n\nAquí están los pasos (también con computadora):\n${rokuLink(c)}${c && c.code ? `\n\nTu código: *${c.code}*` : ''}\n\nSi te atoras, mándame foto de la tele y te ayudo por aquí.`;
+}
 function renewText(c) {
   const d = daysLeft(c.expires);
   const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
@@ -583,6 +593,7 @@ function codeSheet(c, fresh) {
     <div class="note">«Copiar correo con diseño» copia la invitación con el código en el cuadro azul; abre Gmail u Outlook, pon el correo del cliente y pega (Ctrl+V o mantener presionado → Pegar).</div>
     <div class="btns">
       ${(c.kind !== 'gift' && (c.status === 'vencido' || (d != null && d <= 15))) ? `<a class="btn acc" target="_blank" rel="noopener" href="${waLink(c.phone, renewText(c))}">Recordar renovación</a>` : ''}
+      ${isCine ? `<a class="btn" target="_blank" rel="noopener" href="${waLink(c.phone, rokuText(c))}">Pasos para tele Roku</a>` : ''}
     </div>
     <div class="sec">Aparatos</div><div class="group">${devs}</div>
     <div class="note">«Quitar» saca solo ese aparato (por ejemplo un celular perdido): deja de funcionar en unos minutos, se borran ahí los datos de la cuenta y el lugar queda libre para otro aparato.</div>
@@ -829,10 +840,10 @@ function viewRules() {
       <div class="note">Una sola prueba por aparato. Si escriben el código de quien los recomendó, quedan con el distribuidor de esa persona; si no, son clientes tuyos directos.</div></div>
     <button class="btn pri full" style="margin-top:18px" id="sv">Guardar reglas</button>
     <div class="sec">Clientes con tele Roku</div>
-    <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa.</b> El cliente lo hace solo desde su celular Android, en el mismo WiFi que la tele:</div>
-      <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele y le dice qué tocar; la primera vez la tele pide crear una contraseña.</div>
-      <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi: descarga el instalador, descomprímelo y abre «Instalar CineCasa en Roku».</div>
-      <div class="btns" style="margin-top:12px"><a class="btn pri" href="../roku/Instalador-CineCasa-Roku.zip" download>Descargar instalador para Roku</a></div></div>
+    <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa, aunque viva en otra ciudad.</b> El cliente lo hace solo con un celular Android en el mismo WiFi que la tele:</div>
+      <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele, le dice qué tocar y hasta escribe la contraseña del permiso. 4. La tele entra sola con su código y sus datos: no escribe nada con el control.</div>
+      <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi. Si se atora, en la app y en la tele tiene un botón para escribirte por WhatsApp.</div>
+      <div class="btns" style="margin-top:12px"><a class="btn wa rokuwa" target="_blank" rel="noopener" href="#">Mandar los pasos por WhatsApp</a><button class="btn rokucp">Copiar liga de los pasos</button><a class="btn" href="../roku/Instalador-CineCasa-Roku.zip" download>Instalador para Windows</a></div></div>
     <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
   $('#sv').onclick = async () => {
     const v = id => Number($('#' + id).value);
@@ -850,7 +861,11 @@ function viewRules() {
     } catch (e) { toast(e.message, 1); }
   };
   $('#out').onclick = () => logout();
-  mountServers();
+  mountServers(); mountRoku();
+}
+function mountRoku() {
+  document.querySelectorAll('.rokuwa').forEach(a => a.href = 'https://wa.me/?text=' + encodeURIComponent(rokuText(null)));
+  document.querySelectorAll('.rokucp').forEach(b => b.onclick = () => copy(rokuLink(null)));
 }
 
 // ---------- mi cuenta (distribuidor) ----------
@@ -870,10 +885,10 @@ function viewAccount() {
       <button class="btn pri full" style="margin-top:12px" id="asv">Guardar mis datos</button></div>
     ${SRV_HTML}
     <div class="sec">Clientes con tele Roku</div>
-    <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa.</b> El cliente lo hace solo desde su celular Android, en el mismo WiFi que la tele:</div>
-      <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele y le dice qué tocar; la primera vez la tele pide crear una contraseña.</div>
-      <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi: descarga el instalador, descomprímelo y abre «Instalar CineCasa en Roku».</div>
-      <div class="btns" style="margin-top:12px"><a class="btn pri" href="../roku/Instalador-CineCasa-Roku.zip" download>Descargar instalador para Roku</a></div></div>
+    <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa, aunque viva en otra ciudad.</b> El cliente lo hace solo con un celular Android en el mismo WiFi que la tele:</div>
+      <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele, le dice qué tocar y hasta escribe la contraseña del permiso. 4. La tele entra sola con su código y sus datos: no escribe nada con el control.</div>
+      <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi. Si se atora, en la app y en la tele tiene un botón para escribirte por WhatsApp.</div>
+      <div class="btns" style="margin-top:12px"><a class="btn wa rokuwa" target="_blank" rel="noopener" href="#">Mandar los pasos por WhatsApp</a><button class="btn rokucp">Copiar liga de los pasos</button><a class="btn" href="../roku/Instalador-CineCasa-Roku.zip" download>Instalador para Windows</a></div></div>
     <div class="sec">Cómo funciona</div>
     <div class="group">
       <div class="row"><div class="main"><div class="t">Prueba gratis</div><div class="s" style="white-space:normal">${r.trial_days || 21} días, hasta ${r.trial_devices || 2} aparatos. No gasta créditos. Tienes ${r.trial_month_cap || 20} al mes.</div></div></div>
@@ -887,7 +902,7 @@ function viewAccount() {
     try { me = await rpc('cc_rs_self', { p_t: token, p_phone: $('#aph').value, p_pay_link: $('#apl').value }); toast('Datos guardados'); }
     catch (e) { toast(e.message, 1); }
   };
-  mountServers();
+  mountServers(); mountRoku();
 }
 
 // ---------- actualizaciones del panel ----------

@@ -26,6 +26,18 @@ sub init()
     m.qrCode = m.top.findNode("qrCode")
     m.pairTimer = m.top.findNode("pairTimer")
     m.pairTimer.observeField("fire", "onPairTick")
+    m.pingTimer = m.top.findNode("pingTimer")
+    m.pingTimer.observeField("fire", "onPingTick")
+    m.qrTitle = m.top.findNode("qrTitle")
+    m.qrText = m.top.findNode("qrText")
+    m.qrUrl = m.top.findNode("qrUrl")
+    m.owner = false
+    m.ownerAsked = false
+    m.vsrv = invalid        ' servidor que puso el vendedor (url, name)
+    m.vsrvAll = []
+    m.vsrvAsked = false
+    m.customSrv = false
+    m.formItems = []
     m.pairCode = ""
     m.hpCode = ""
 
@@ -98,8 +110,14 @@ sub onResponse(e as object)
     if data = invalid and r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
     if id = "login" then
         onLogin(r.code, data)
-    else if id = "check" then
-        onCheck(r.code, r.body)
+    else if id = "check" or id = "ping" then
+        onPing(id = "check", r.code, data)
+    else if id = "owner" then
+        onOwner(r.body)
+    else if id = "lsrv" then
+        onLsrv(data)
+    else if id = "help" then
+        onHelp(data)
     else if id = "trial" then
         onTrial(data)
     else if id = "activate" then
@@ -131,14 +149,176 @@ sub onResponse(e as object)
 end sub
 
 ' ---------------- flujo ----------------
+' Orden: 1) activación (código o prueba)  2) usuario y contraseña (la liga la pone el vendedor)  3) inicio
 sub start()
-    if m.server = "" or m.user = "" or m.pass = "" then
-        showLogin("")
-    else if m.code = "" then
+    if m.code = "" and not m.owner then
+        hh = rget("hh") : hs = rget("hs")
+        if hh <> "" and hs <> "" and not m.ownerAsked then
+            m.ownerAsked = true
+            m.sub.text = "Revisando tu cuenta…"
+            rpc("owner", "cc_is_owner", { p_h: hh, p_s: hs })
+            return
+        end if
         showActivation("")
+    else if m.server = "" or m.user = "" or m.pass = "" then
+        loginStart("")
+    else if m.owner then
+        showHome()
+        loadVendorServer()
     else
         m.sub.text = "Revisando tu activación…"
-        rpc("check", "cc_lic_check", { p_code: m.code, p_device: m.deviceId })
+        ping("check")
+    end if
+end sub
+
+sub onOwner(body as string)
+    if body.Trim() = "true" then m.owner = true
+    start()
+end sub
+
+' ---------- revisión periódica (cada 3 min): activación, servidor del vendedor y «en uso ahora» ----------
+sub ping(id as string)
+    rpc(id, "cc_lic_ping", { p_code: m.code, p_device: m.deviceId, p_playing: m.video.visible, p_model: m.deviceName, p_version: "1.2.0" })
+end sub
+
+sub onPingTick()
+    if m.code <> "" and not m.owner then ping("ping")
+end sub
+
+sub onPing(first as boolean, code as integer, data as object)
+    st = ""
+    if data <> invalid and type(data) = "roAssociativeArray" then st = Str2(data.status)
+    if code <> 200 or st = "" then
+        ' sin internet hacia la nube: deja ver (se revisa la próxima vez)
+        if first then
+            showHome()
+            m.pingTimer.control = "start"
+        end if
+        return
+    end if
+    if st = "ok" then
+        followServer(data.server)
+        if data.server <> invalid then m.vsrv = data.server
+        if data.servers <> invalid then m.vsrvAll = data.servers
+        if first then
+            showHome()
+            m.pingTimer.control = "start"
+        end if
+        return
+    end if
+    if st = "removed" then
+        ' se liberaron los aparatos del código: intenta volver a entrar
+        m.pendingCode = m.code
+        rpc("activate", "cc_lic_activate2", { p_code: m.code, p_device: m.deviceId, p_name: m.deviceName, p_fp: m.fp })
+        return
+    end if
+    m.pingTimer.control = "stop"
+    if m.video.visible then stopVideo()
+    msg = "Tu activación ya no es válida."
+    if st = "expired" then msg = "Tu plan venció. Pide tu renovación a quien te lo vendió; tu código sigue siendo el mismo."
+    if st = "revoked" then msg = "Tu código fue desactivado."
+    if st = "blocked" then
+        msg = "Esta tele se quitó de la cuenta desde otro aparato o por tu vendedor. Si fue un error, pide que la permitan otra vez."
+        ' se borran aquí los datos de la cuenta
+        m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Delete("vs")
+        m.server = "" : m.user = "" : m.pass = ""
+    end if
+    m.code = "" : m.reg.Delete("code") : m.reg.Flush()
+    showActivation(msg)
+end sub
+
+' Si la cuenta usa el servidor del vendedor y él cambió la liga, se toma sola
+sub followServer(srv as dynamic)
+    if srv = invalid or rget("vs") <> "1" then return
+    u = Str2(srv.url)
+    if u = "" or m.server = "" then return
+    if u <> m.server then
+        m.server = u
+        rset("server", u)
+    end if
+end sub
+
+sub loadVendorServer()
+    if m.vsrvAsked then return
+    m.vsrvAsked = true
+    if m.owner then
+        rpc("lsrv", "cc_owner_server", { p_h: rget("hh"), p_s: rget("hs") })
+    else if m.code <> "" then
+        rpc("lsrv", "cc_lic_server", { p_code: m.code, p_device: m.deviceId })
+    end if
+end sub
+
+sub onLsrv(data as object)
+    if data <> invalid and type(data) = "roAssociativeArray" then
+        if data.server <> invalid and type(data.server) = "roAssociativeArray" then m.vsrv = data.server
+        if data.servers <> invalid then m.vsrvAll = data.servers
+    end if
+    if m.mode = "login" then showLogin(m.formMsg.text)
+end sub
+
+function useVendor() as boolean
+    return m.vsrv <> invalid and not m.customSrv and Str2(m.vsrv.url) <> ""
+end function
+
+sub loginStart(msg as string)
+    loadVendorServer()
+    showLogin(msg)
+end sub
+
+' ---------- ayuda del vendedor por WhatsApp (QR en la tele) ----------
+sub askHelp()
+    m.helpFrom = m.mode
+    m.formMsg.text = "Buscando el WhatsApp de tu vendedor…"
+    rpc("help", "cc_lic_info", { p_code: m.code, p_device: m.deviceId })
+end sub
+
+sub onHelp(data as object)
+    ph = ""
+    if data <> invalid and type(data) = "roAssociativeArray" then ph = Str2(data.help_phone)
+    digits = ""
+    for k = 1 to Len(ph)
+        ch = Mid(ph, k, 1)
+        if ch >= "0" and ch <= "9" then digits = digits + ch
+    end for
+    if Len(digits) < 10 then
+        m.formMsg.text = "Tu vendedor todavía no puso su WhatsApp. Escríbele por donde te vendió CineCasa."
+        return
+    end if
+    wa = digits
+    if Len(wa) = 10 then wa = "52" + wa
+    txt = "Hola, necesito ayuda con CineCasa en mi tele Roku. Mi código es " + m.code + "."
+    showForm("Ayuda de tu vendedor", "Escanea el código con tu celular para escribirle por WhatsApp, o márcale al " + digits + ". Ya va tu código en el mensaje.", ["Volver"], "help")
+    m.qrTitle.text = "WhatsApp de tu vendedor"
+    m.qrText.text = "Abre la cámara de tu celular y apunta al código."
+    m.qrUrl.text = digits
+    m.qrCode.text = ""
+    m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + ("https://wa.me/" + wa + "?text=" + txt.EncodeUriComponent()).EncodeUriComponent()
+    m.qrBox.visible = true
+end sub
+
+' ---------- datos que manda el celular al instalar ----------
+sub onLaunchArgs()
+    a = m.top.launchArgs
+    if a = invalid then return
+    hh = Str2(a.hh) : hs = Str2(a.hs)
+    if hh <> "" and hs <> "" then
+        rset("hh", hh) : rset("hs", hs)
+        m.ownerAsked = false
+    end if
+    srv = Str2(a.srv) : usr = Str2(a.usr) : pwd = Str2(a.pwd)
+    if srv <> "" and usr <> "" and pwd <> "" then
+        m.server = srv : m.user = usr : m.pass = pwd
+        rset("server", srv) : rset("user", usr) : rset("pass", pwd)
+        if Str2(a.vs) = "1" then rset("vs", "1") else rset("vs", "0")
+    end if
+    lic = UCase(Str2(a.lic))
+    if lic <> "" and lic <> m.code then
+        m.pendingCode = lic
+        showForm("Configurando con tu celular…", "Tu tele está recibiendo los datos de tu celular. Espera unos segundos.", ["Esperar"], "wait")
+        m.formMsg.text = "Activando…"
+        rpc("activate", "cc_lic_activate2", { p_code: lic, p_device: m.deviceId, p_name: m.deviceName, p_fp: m.fp })
+    else
+        start()
     end if
 end sub
 
@@ -163,15 +343,47 @@ end sub
 
 sub showLogin(msg as string)
     m.sub.text = "Reproductor para tu tele"
-    srv = m.server
-    if srv = "" then srv = "(toca para escribir)"
     usr = m.user
     if usr = "" then usr = "(toca para escribir)"
     pw = "(toca para escribir)"
     if m.pass <> "" then pw = "••••••"
+    items = []
+    if useVendor() then
+        items.Push("Usuario: " + usr)
+        items.Push("Contraseña: " + pw)
+        items.Push("Entrar")
+        items.Push("Servidor: " + Str2(m.vsrv.name) + " (cambiar)")
+        title = "Escribe tu usuario y contraseña"
+        txt = "La liga del servidor ya viene puesta por quien te vendió CineCasa. Solo escribe el usuario y la contraseña de tu servicio."
+    else
+        srv = m.server
+        if srv = "" then srv = "(toca para escribir)"
+        items.Push("Servidor: " + srv)
+        items.Push("Usuario: " + usr)
+        items.Push("Contraseña: " + pw)
+        items.Push("Entrar")
+        if m.vsrv <> invalid then items.Push("Usar el servidor de mi vendedor")
+        title = "Escribe los datos que te dio tu proveedor"
+        txt = "CineCasa es un reproductor: funciona con el servicio que tú ya tienes. Tus datos solo se guardan en esta tele."
+    end if
+    items.Push("Ver demostración")
+    if m.code <> "" then items.Push("Pedir ayuda a mi vendedor")
+    m.formItems = items
     startPairing()
-    showForm("Escribe los datos que te dio tu proveedor", "CineCasa es un reproductor: funciona con el servicio que tú ya tienes. Tus datos solo se guardan en esta tele.", ["Servidor: " + srv, "Usuario: " + usr, "Contraseña: " + pw, "Entrar", "Ver demostración"], "login")
+    showForm(title, txt, items, "login")
     m.formMsg.text = msg
+end sub
+
+' Elegir entre los servidores del vendedor o escribir otro
+sub showServerPick()
+    items = []
+    for each v in m.vsrvAll
+        items.Push(Str2(v.name))
+    end for
+    items.Push("Escribir otro servidor")
+    items.Push("Volver")
+    m.formItems = items
+    showForm("Elige el servidor", "Son los servidores que tiene guardados tu vendedor. Si tu proveedor te dio otra liga, elige «Escribir otro servidor».", items, "srvpick")
 end sub
 
 sub showActivation(msg as string)
@@ -179,25 +391,44 @@ sub showActivation(msg as string)
     ref = rget("ref")
     refTxt = "¿Quién te recomendó? (opcional)"
     if ref <> "" then refTxt = "Te recomendó: " + ref
-    showForm("Pruébala gratis 21 días", "Sin pedir código: tu prueba se activa al momento en hasta 5 aparatos. Si alguien te recomendó, escribe su código para que reciba su regalo cuando contrates.", ["Empezar prueba gratis", refTxt, "Ya tengo un código", "Unir a mi cuenta (desde mi celular o tablet)", "Cambiar datos del proveedor"], "activation")
+    showForm("Pruébala gratis 21 días", "Sin pedir código: tu prueba se activa al momento en hasta 5 aparatos. Si alguien te recomendó, escribe su código para que reciba su regalo cuando contrates.", ["Empezar prueba gratis", refTxt, "Ya tengo un código", "Unir a mi cuenta (desde mi celular o tablet)"], "activation")
     m.formMsg.text = msg
 end sub
 
 sub onFormSelect()
     i = m.formList.itemSelected
     if m.mode = "login" then
-        if i = 0 then
-            ask("Servidor (ej. http://servidor.com:8080)", m.server, "server")
-        else if i = 1 then
+        t = m.formItems[i]
+        if Left(t, 9) = "Servidor:" then
+            if useVendor() then showServerPick() else ask("Servidor (ej. http://servidor.com:8080)", m.server, "server")
+        else if Left(t, 8) = "Usuario:" then
             ask("Usuario", m.user, "user")
-        else if i = 2 then
+        else if Left(t, 11) = "Contraseña:" then
             ask("Contraseña", "", "pass")
-        else if i = 3 then
+        else if t = "Entrar" then
             doLogin()
-        else if i = 4 then
+        else if Left(t, 9) = "Usar el s" then
+            m.customSrv = false : showLogin("")
+        else if Left(t, 5) = "Pedir" then
+            askHelp()
+        else if Left(t, 3) = "Ver" then
+            m.customSrv = true
             m.server = m.demo : m.user = "demo" : m.pass = "demo"
             doLogin()
         end if
+    else if m.mode = "srvpick" then
+        if i < m.vsrvAll.Count() then
+            m.vsrv = m.vsrvAll[i] : m.customSrv = false : showLogin("")
+        else if m.formItems[i] = "Escribir otro servidor" then
+            m.customSrv = true : m.server = "" : showLogin("")
+            ask("Servidor (ej. http://servidor.com:8080)", "", "server")
+        else
+            showLogin("")
+        end if
+    else if m.mode = "help" then
+        if m.helpFrom = "login" then showLogin("") else showAccount("")
+    else if m.mode = "wait" then
+        return
     else if m.mode = "activation" then
         if i = 0 then
             m.formMsg.text = "Activando tu prueba…"
@@ -222,9 +453,10 @@ sub onFormSelect()
 end sub
 
 sub clearProvider()
-    m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Flush()
+    m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Delete("vs") : m.reg.Flush()
     m.server = "" : m.user = "" : m.pass = ""
-    showLogin("")
+    m.pingTimer.control = "stop"
+    loginStart("")
 end sub
 
 ' ---------- Mi cuenta: unir esta tele a la cuenta de otro aparato ----------
@@ -242,6 +474,9 @@ sub newHp()
 end sub
 
 sub startHousePair()
+    m.qrTitle.text = "Más fácil: escanea con tu celular"
+    m.qrText.text = "Si ya usas CineCasa en tu celular, al escanear toca «Agregar esta tele a mi cuenta» y entra sola."
+    m.qrUrl.text = "msantos4321-bit.github.io/reproductor-tv/tv"
     newHp()
     code = Left(m.hpCode, 3) + " " + Right(m.hpCode, 3)
     showForm("Código: " + code, "Escanea el QR con tu celular, o abre CineCasa en tu celular o tablet → Más → «Agregar otra tele o celular», escribe " + code + " y toca «Aprobar».", ["Cancelar"], "hpair")
@@ -335,8 +570,9 @@ sub onAskClosed()
 end sub
 
 sub doLogin()
+    if useVendor() then m.server = Str2(m.vsrv.url)
     if m.server = "" or m.user = "" or m.pass = "" then
-        m.formMsg.text = "Llena los tres datos."
+        if useVendor() then m.formMsg.text = "Escribe tu usuario y contraseña." else m.formMsg.text = "Llena los tres datos."
         return
     end if
     m.formMsg.text = "Conectando…"
@@ -345,6 +581,9 @@ end sub
 
 ' ---------------- configurar desde el celular (QR) ----------------
 sub startPairing()
+    m.qrTitle.text = "Más fácil: escanea con tu celular"
+    m.qrText.text = "Si ya usas CineCasa en tu celular, al escanear toca «Agregar esta tele a mi cuenta» y entra sola."
+    m.qrUrl.text = "msantos4321-bit.github.io/reproductor-tv/tv"
     m.qrBox.visible = true
     if m.pairCode <> "" then return
     newHp()   ' el QR también trae un código para unir la tele a la cuenta del celular
@@ -365,6 +604,7 @@ sub onPairNew(body as string)
     m.pairStarted = CreateObject("roDateTime").AsSeconds()
     url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=" + c
     if m.hpCode <> "" then url = url + "&p=" + m.hpCode
+    if useVendor() then url = url + "&k=1"
     m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.EncodeUriComponent()
     m.qrCode.text = Left(c, 3) + " " + Right(c, 3)
     m.pairTimer.control = "start"
@@ -395,7 +635,10 @@ sub onPairGet(data as object)
     if data = invalid or data.status = invalid then return
     if data.status = "ok" then
         stopPairing()
-        m.server = Str2(data.server) : m.user = Str2(data.user) : m.pass = Str2(data.pass)
+        if Str2(data.server) <> "" then
+            m.server = Str2(data.server) : m.customSrv = true
+        end if
+        m.user = Str2(data.user) : m.pass = Str2(data.pass)
         m.formMsg.text = "¡Datos recibidos! Entrando…"
         doLogin()
     else if data.status = "expired" then
@@ -409,28 +652,15 @@ end sub
 sub onLogin(code as integer, data as object)
     if code = 200 and data <> invalid and data.user_info <> invalid and Str2(data.user_info.auth) = "1" then
         rset("server", m.server) : rset("user", m.user) : rset("pass", m.pass)
+        if useVendor() then rset("vs", "1") else rset("vs", "0")
         start()
     else if code = 200 then
         showLogin("Usuario o contraseña incorrectos. Revísalos con tu proveedor.")
     else
-        showLogin("No se pudo conectar con el servidor (" + Str(code).Trim() + "). Revisa la dirección.")
+        showLogin("No se pudo conectar con el servidor (" + Str(code).Trim() + "). Si la liga dejó de funcionar, pide la nueva a tu vendedor.")
     end if
 end sub
 
-sub onCheck(code as integer, body as string)
-    r = body.Replace(Chr(34), "").Trim()
-    if r = "ok" then
-        showHome()
-    else if code <> 200 then
-        showHome() ' sin internet hacia la nube: deja ver (se revisa la próxima vez)
-    else
-        m.code = "" : m.reg.Delete("code") : m.reg.Flush()
-        msg = "Tu activación ya no es válida."
-        if r = "expired" then msg = "Tu plan venció. Pide tu renovación a quien te lo vendió."
-        if r = "revoked" then msg = "Tu código fue desactivado."
-        showActivation(msg)
-    end if
-end sub
 
 sub onTrial(data as object)
     if data = invalid then
@@ -443,7 +673,8 @@ sub onTrial(data as object)
     if data.result <> invalid then res = data.result
     if e = "" and res = "ok" then
         m.code = data.code : rset("code", m.code)
-        showHome()
+        m.vsrvAsked = false
+        start()
     else if e = "trial_used" or res = "trial_used" then
         m.formMsg.text = "Este aparato ya usó su prueba gratis. Para seguir, pide tu plan anual."
     else if e = "bad_ref" then
@@ -459,9 +690,15 @@ sub onActivate(body as string)
     r = body.Replace(Chr(34), "").Trim()
     if r = "ok" then
         m.code = m.pendingCode : rset("code", m.code)
-        showHome()
+        m.vsrvAsked = false
+        start()
+    else if r <> "full" and r <> "blocked" and m.mode <> "activation" and m.mode <> "login" then
+        ' venía de la revisión o del celular: muestra la pantalla de activación con el motivo
+        showActivation("No se pudo activar esta tele (" + r + "). Revisa tu internet o pide ayuda a tu vendedor.")
     else if r = "full" then
-        m.formMsg.text = "Ese código ya se usó en todos los aparatos que permite."
+        showActivation("Ese código ya está en todos los aparatos que permite. Desde tu celular quita uno en Ajustes → Tu suscripción → Mis aparatos, o pide un aparato más a tu vendedor.")
+    else if r = "blocked" then
+        showActivation("Esta tele se quitó de ese código. Pide a tu vendedor que la permita otra vez.")
     else if r = "expired" then
         m.formMsg.text = "Ese código ya venció."
     else if r = "revoked" then
@@ -1488,6 +1725,7 @@ sub showAccount(msg as string)
     items = ["Unir a mi cuenta (desde mi celular o tablet)", "Escribir mi código de activación"]
     if m.profiles.Count() > 0 then items.Push("Cambiar de perfil")
     items.Push("Cambiar datos del proveedor")
+    if m.code <> "" then items.Push("Pedir ayuda a mi vendedor (WhatsApp)")
     items.Push("Volver")
     m.accItems = items
     showForm("Mi cuenta", cur + " Para usar tu misma cuenta, tu lista y lo que estabas viendo en tu celular, tablet o tele Android, elige «Unir a mi cuenta».", items, "account")
@@ -1504,6 +1742,8 @@ sub onAccountSelect(i as integer)
         showProfilePicker()
     else if Left(t, 14) = "Cambiar datos " then
         clearProvider()
+    else if Left(t, 5) = "Pedir" then
+        askHelp()
     else
         backToHome()
     end if

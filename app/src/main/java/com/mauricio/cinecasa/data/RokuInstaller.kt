@@ -65,15 +65,46 @@ object RokuInstaller {
         try { http.newCall(Request.Builder().url("http://$ip/").build()).execute().use { true } } catch (_: Exception) { false }
     }
 
-    private fun key(ip: String, k: String) {
-        runCatching { http.newCall(Request.Builder().url("http://$ip:8060/keypress/$k").post(ByteArray(0).toRequestBody()).build()).execute().close() }
-        Thread.sleep(450)
+    /** Manda una tecla del control por la red. Devuelve el código HTTP (403 = la tele no deja que el celular la controle). */
+    private fun key(ip: String, k: String, pause: Long = 450): Int {
+        val c = runCatching { http.newCall(Request.Builder().url("http://$ip:8060/keypress/$k").post(ByteArray(0).toRequestBody()).build()).execute().use { it.code } }.getOrDefault(0)
+        Thread.sleep(pause)
+        return c
     }
 
-    /** Abre en la tele la pantalla para activar el modo desarrollador. */
-    suspend fun openDevScreen(ip: String) = withContext(Dispatchers.IO) {
-        key(ip, "Home"); Thread.sleep(1500)
+    /**
+     * Abre en la tele la pantalla para activar el modo desarrollador.
+     * Devuelve "ok", "blocked" (la tele no acepta control desde el celular) o "offline".
+     */
+    suspend fun openDevScreen(ip: String): String = withContext(Dispatchers.IO) {
+        when (key(ip, "Home")) { 403 -> return@withContext "blocked"; 0 -> return@withContext "offline" }
+        Thread.sleep(1500)
         listOf("Home", "Home", "Home", "Up", "Up", "Right", "Left", "Right", "Left", "Right").forEach { key(ip, it) }
+        "ok"
+    }
+
+    /** Escribe un texto en el teclado que tenga abierto la tele (p. ej. la contraseña del permiso). */
+    suspend fun typeText(ip: String, text: String) = withContext(Dispatchers.IO) {
+        text.forEach { ch -> key(ip, "Lit_" + java.net.URLEncoder.encode(ch.toString(), "UTF-8"), 250) }
+    }
+
+    /** Espera a que la tele vuelva con el permiso activado (después de reiniciarse). */
+    suspend fun waitDevMode(ip: String, seconds: Int = 180): Boolean {
+        repeat(seconds / 3) {
+            if (devModeOn(ip)) return true
+            kotlinx.coroutines.delay(3000)
+        }
+        return false
+    }
+
+    /**
+     * Abre CineCasa en la tele y le pasa los datos de este celular (código, proveedor y cuenta),
+     * para que la tele entre sola sin escribir nada con el control.
+     */
+    suspend fun launchWith(ip: String, params: Map<String, String>) = withContext(Dispatchers.IO) {
+        key(ip, "Home", 2500)
+        val q = params.filterValues { it.isNotBlank() }.entries.joinToString("&") { (k, v) -> k + "=" + java.net.URLEncoder.encode(v, "UTF-8") }
+        runCatching { http.newCall(Request.Builder().url("http://$ip:8060/launch/dev" + (if (q.isEmpty()) "" else "?$q")).post(ByteArray(0).toRequestBody()).build()).execute().close() }
     }
 
     /** Descarga la versión más reciente y la instala. Devuelve "ok", "password" o un mensaje de error. */

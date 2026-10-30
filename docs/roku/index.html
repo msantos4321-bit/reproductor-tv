@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CineCasa en Roku</title>
+<meta name="theme-color" content="#0b0b0f">
+<style>
+:root{--bg:#0b0b0f;--panel:#17171c;--line:#2a2a33;--hi:#fff;--mid:#b6bccb;--acc:#0a84ff;--ok:#30d158;--warn:#ff9f0a;--wa:#1fa855}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(120% 60% at 50% 0%,#1b2747 0%,var(--bg) 62%) fixed,var(--bg);color:var(--hi);font:17px/1.5 -apple-system,"SF Pro Text",Inter,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+main{max-width:520px;margin:0 auto;padding:36px 16px 48px}
+.logo{font-size:38px;font-weight:900;letter-spacing:-1px}.logo span{color:var(--acc)}
+h1{font-size:24px;margin-top:6px}
+h2{font-size:19px;margin-bottom:4px}
+p,li{color:var(--mid)}
+p{margin-top:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:18px}
+.tag{display:inline-block;font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;background:rgba(48,209,88,.16);color:var(--ok);margin-bottom:8px}
+ol{margin:10px 0 0 22px}li{margin-top:8px}
+li b,p b{color:var(--hi)}
+.btn{display:block;text-align:center;width:100%;margin-top:16px;padding:15px;border-radius:14px;background:var(--acc);color:#fff;font-size:17px;font-weight:800;text-decoration:none}
+.btn.wa{background:var(--wa)}.btn.gray{background:#2a2a33}
+.code{font:800 26px ui-monospace,Menlo,monospace;letter-spacing:3px;color:var(--acc)}
+.small{font-size:13px;color:#7c8396;margin-top:12px}
+</style></head><body><main>
+<div class="logo">Cine<span>Casa</span></div>
+<h1>Poner CineCasa en tu tele Roku</h1>
+<p>No necesitas que nadie vaya a tu casa. Elige la forma que te quede.</p>
+
+<div class="card">
+  <span class="tag">LA MÁS FÁCIL · 5 MINUTOS</span>
+  <h2>Con un celular Android</h2>
+  <p>El celular y la tele tienen que estar en el <b>mismo WiFi</b>. Ten a la mano el control de la tele.</p>
+  <ol>
+    <li>En el celular, descarga CineCasa y ábrela (entra con tu código o con la prueba gratis).</li>
+    <li>Toca <b>Más</b> → <b>Instalar CineCasa en una tele Roku</b>.</li>
+    <li>El celular encuentra tu tele y te dice qué tocar. Solo la primera vez la tele pide un permiso; el celular hasta escribe la contraseña por ti.</li>
+    <li>Listo: CineCasa se abre en la tele y <b>entra sola</b> con los datos del celular. No escribes nada con el control.</li>
+  </ol>
+  <a class="btn" id="dl" href="https://msantos4321-bit.github.io/reproductor-tv/app/">Descargar CineCasa para el celular</a>
+</div>
+
+<div class="card">
+  <h2>Con una computadora Windows</h2>
+  <p>Si no tienes celular Android. La computadora también debe estar en el mismo WiFi que la tele.</p>
+  <ol>
+    <li>Descarga el instalador, ábrelo y elige <b>Extraer todo</b>.</li>
+    <li>Abre <b>«Instalar CineCasa en Roku»</b> y sigue lo que te dice.</li>
+  </ol>
+  <a class="btn gray" href="Instalador-CineCasa-Roku.zip" download>Descargar instalador para Windows</a>
+</div>
+
+<div class="card" id="helpCard" style="display:none">
+  <h2>¿Te atoraste?</h2>
+  <p>Escríbele a quien te vendió CineCasa. Te ayuda por videollamada o con fotos, sin ir a tu casa.</p>
+  <a class="btn wa" id="wa" target="_blank" rel="noopener">Pedir ayuda por WhatsApp</a>
+</div>
+
+<p class="small">CineCasa es un reproductor: funciona con el servicio que tú ya tienes. Tu código de activación sirve igual en la tele Roku.</p>
+<p class="small" id="codeLine" style="display:none">Tu código: <span class="code" id="cc"></span></p>
+</main>
+<script>
+const Q = new URLSearchParams(location.search);
+let w = (Q.get('w') || '').replace(/\D/g, ''); if (w.length === 10) w = '52' + w;
+const c = (Q.get('c') || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 14);
+if (c) { document.getElementById('cc').textContent = c; document.getElementById('codeLine').style.display = 'block'; }
+if (w.length >= 11) {
+  document.getElementById('helpCard').style.display = 'block';
+  document.getElementById('wa').href = 'https://wa.me/' + w + '?text=' + encodeURIComponent('Hola, estoy poniendo CineCasa en mi tele Roku y necesito ayuda.' + (c ? ' Mi código es ' + c + '.' : ''));
+}
+const d = Q.get('d'); if (d && /^https:\/\//.test(d)) document.getElementById('dl').href = d;
+</script>
+</body></html>
