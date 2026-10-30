@@ -240,7 +240,7 @@ fun SettingsScreen() {
             if (tmdbMsg.isNotEmpty()) Text(tmdbMsg, color = if (tmdbMsg.startsWith("Clave guardada")) C.Good else C.Warn, fontSize = 13.sp)
         }
 
-        Section("Actualizaciones") {
+        if (!BuildConfig.PLAY) Section("Actualizaciones") {
             Text("La app revisa sola si hay versión nueva cada vez que la abres. También puedes revisar aquí.", color = C.Mid, fontSize = 13.sp)
             Wrap(gap = 12.dp) {
                 ActionButton("Buscar actualización", {

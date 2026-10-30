@@ -18,6 +18,21 @@ android {
         versionName = "1.0.$runNumber"
     }
 
+    // «direct»: la de siempre (Downloader, actualización propia, botón de pago del vendedor).
+    // «play»: para Google Play (sin actualizador propio ni botón de pago externo).
+    flavorDimensions += "canal"
+    productFlavors {
+        create("direct") {
+            dimension = "canal"
+            buildConfigField("boolean", "PLAY", "false")
+        }
+        create("play") {
+            dimension = "canal"
+            applicationId = "mx.cinecasa.reproductor"
+            buildConfigField("boolean", "PLAY", "true")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

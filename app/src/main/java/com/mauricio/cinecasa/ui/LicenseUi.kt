@@ -189,17 +189,20 @@ fun SubscriptionSection(sample: Boolean = false) {
     val scope = rememberCoroutineScope()
     val code = if (sample) "CC-EJEM-PL0S" else License.code
     val price = i.optDouble("price", 0.0).toInt()
-    val pay = i.optString("pay_link").takeIf { it.startsWith("http") }
+    // En Google Play no se manda a pagar fuera de la tienda: solo contacto con el vendedor
+    val pay = i.optString("pay_link").takeIf { it.startsWith("http") && !com.mauricio.cinecasa.BuildConfig.PLAY }
     val help = i.optString("help_phone").filter { it.isDigit() }.let { if (it.length == 10) "52$it" else it }
     fun open(u: String) = runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     var note by remember { mutableStateOf("") }
     val isTrial = i.optString("kind") == "trial"
     if (i.optString("kind") != "gift") {
-        Text(if (isTrial) "Plan anual desde $$price al año (1 aparato)." else "Renovación por un año: $$price.", color = C.Hi, fontSize = 14.sp)
+        if (!com.mauricio.cinecasa.BuildConfig.PLAY) Text(if (isTrial) "Plan anual desde $$price al año (1 aparato)." else "Renovación por un año: $$price.", color = C.Hi, fontSize = 14.sp)
+        else Text(if (isTrial) "Para seguir después de la prueba, habla con quien te compartió CineCasa." else "Para renovar, habla con quien te compartió CineCasa.", color = C.Hi, fontSize = 14.sp)
         Wrap {
             if (pay != null) ActionButton(if (isTrial) "Pagar plan anual" else "Pagar renovación", { if (!open(pay)) note = "Abre esta liga en tu celular: $pay" }, primary = true)
             if (help.length >= 10) ActionButton("Escribir por WhatsApp", {
-                val t = (if (isTrial) "Hola, quiero contratar el plan anual de CineCasa. Mi código es $code." else "Hola, quiero renovar CineCasa. Mi código es $code.") + (if (pay != null) " Ya hice el pago." else "")
+                val t = if (com.mauricio.cinecasa.BuildConfig.PLAY) "Hola, te escribo por CineCasa. Mi código es $code."
+                    else (if (isTrial) "Hola, quiero contratar el plan anual de CineCasa. Mi código es $code." else "Hola, quiero renovar CineCasa. Mi código es $code.") + (if (pay != null) " Ya hice el pago." else "")
                 if (!open("https://wa.me/$help?text=" + Uri.encode(t))) note = "Escribe al WhatsApp $help"
             }, primary = pay == null)
         }
@@ -214,7 +217,8 @@ fun SubscriptionSection(sample: Boolean = false) {
     Wrap {
         ActionButton("Compartir CineCasa", {
             val dl = i.optString("download_url")
-            val t = "Te recomiendo CineCasa, un reproductor muy fácil para la tele y el celular. Pruébalo gratis 21 días: $dl\nEn la tele usa la app Downloader con el número 8835880. Al abrirla, en «¿Quién te recomendó?» escribe: $code"
+            val t = if (com.mauricio.cinecasa.BuildConfig.PLAY) "Te recomiendo CineCasa, un reproductor muy fácil para la tele y el celular. Búscala en Google Play como «CineCasa» y pruébala gratis 21 días. Al abrirla, en «¿Quién te recomendó?» escribe: $code"
+                else "Te recomiendo CineCasa, un reproductor muy fácil para la tele y el celular. Pruébalo gratis 21 días: $dl\nEn la tele usa la app Downloader con el número 8835880. Al abrirla, en «¿Quién te recomendó?» escribe: $code"
             runCatching { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, t), "Compartir CineCasa").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }, icon = Icons.Filled.Share)
     }

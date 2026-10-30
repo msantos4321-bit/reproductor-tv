@@ -36,7 +36,7 @@ jobs:
       - name: Compilar
         run: |
           set -o pipefail
-          gradle :app:assembleRelease --no-daemon 2>&1 | tee build.log
+          gradle :app:assembleDirectRelease :app:bundlePlayRelease --no-daemon 2>&1 | tee build.log
 
       - name: Mostrar errores
         if: failure()
@@ -53,7 +53,7 @@ jobs:
           echo "$FIRMA" | base64 -d | tar xz -C "$K"
           source "$K/claves.env"
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          U=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          U=$(ls app/build/outputs/apk/direct/release/*.apk | head -1)
           "$BT/zipalign" -p -f 4 "$U" "$K/alineada.apk"
           # Rotación de llave: los aparatos con la versión anterior aceptan la actualización (Android 9+ queda con la llave nueva)
           "$BT/apksigner" rotate --out "$K/linaje" \
@@ -63,13 +63,20 @@ jobs:
             --next-signer --ks "$K/nueva.jks" --ks-key-alias cinecasa2 --ks-pass env:NEW_PASS --key-pass env:NEW_PASS \
             --lineage "$K/linaje" --rotation-min-sdk-version 28 --out out/CineCasa.apk "$K/alineada.apk"
           "$BT/apksigner" verify -v --print-certs out/CineCasa.apk | grep -E "Verified|Signer|SHA-256" | head -20
+          # Versión para Google Play (.aab) firmada con la llave nueva como «llave de subida»
+          A=$(ls app/build/outputs/bundle/playRelease/*.aab | head -1)
+          cp "$A" out/CineCasa-GooglePlay.aab
+          jarsigner -keystore "$K/nueva.jks" -storepass:env NEW_PASS -keypass:env NEW_PASS -sigalg SHA256withRSA -digestalg SHA-256 out/CineCasa-GooglePlay.aab cinecasa2 > /dev/null
+          jarsigner -verify out/CineCasa-GooglePlay.aab | tail -1
           rm -rf "$K"
           ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
           name: CineCasa
-          path: out/CineCasa.apk
+          path: |
+            out/CineCasa.apk
+            out/CineCasa-GooglePlay.aab
 
       - name: Publicar versión
         uses: softprops/action-gh-release@v2
@@ -77,5 +84,7 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: CineCasa 1.0.${{ github.run_number }}
           body: "Descarga directa: https://github.com/${{ github.repository }}/releases/latest/download/CineCasa.apk"
-          files: out/CineCasa.apk
+          files: |
+            out/CineCasa.apk
+            out/CineCasa-GooglePlay.aab
           make_latest: true

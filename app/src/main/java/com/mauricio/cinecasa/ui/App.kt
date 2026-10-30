@@ -121,7 +121,7 @@ fun App() {
                     if (pairing) PairScreen { pairing = false } else LoginScreen(onPair = { pairing = true })
                 } else ProfileGate()
         }
-        AutoUpdateCheck()
+        if (!com.mauricio.cinecasa.BuildConfig.PLAY) AutoUpdateCheck()   // en Google Play actualiza la tienda
         SleepTimerWatcher()
     }
     LaunchedEffect(Unit) {
