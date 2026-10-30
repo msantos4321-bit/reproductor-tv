@@ -180,6 +180,7 @@ fun SubscriptionSection(sample: Boolean = false) {
     Text("$kind · código ${if (sample) "CC-EJEM-PL0S" else License.code}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     Text(if (exp != null) "Vence el $exp" else "Sin vencimiento", color = C.Mid, fontSize = 13.sp)
     Text("${i.optInt("used")} de ${i.optInt("max")} aparatos en uso", color = C.Mid, fontSize = 13.sp)
+    if (!sample && License.code.isNotBlank()) MyDevices(License.code)
     i.optString("seller").takeIf { it.isNotBlank() && it != "null" }?.let { seller ->
         val ph = i.optString("seller_phone").takeIf { it.isNotBlank() && it != "null" }
         Text("Te la vendió: $seller" + (ph?.let { " · $it" } ?: ""), color = C.Low, fontSize = 12.sp)
@@ -239,4 +240,113 @@ fun SubscriptionSection(sample: Boolean = false) {
         }
     }
     if (note.isNotEmpty()) Text(note, color = C.Warn, fontSize = 13.sp)
+}
+
+
+/**
+ * «Mis aparatos»: los aparatos activados con el mismo código. Se puede quitar uno solo
+ * (p. ej. un celular perdido): deja de funcionar en unos minutos y su lugar queda libre.
+ */
+@Composable
+private fun MyDevices(code: String) {
+    var data by remember { mutableStateOf<JSONObject?>(null) }
+    var msg by remember { mutableStateOf("") }
+    var toRemove by remember { mutableStateOf<JSONObject?>(null) }
+    var toRename by remember { mutableStateOf<JSONObject?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(code) { data = Cloud.licDevices(code) }
+    val d = data ?: return
+    val me = d.optString("me")
+    val devs = d.optJSONArray("devices")?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
+    val blocked = d.optJSONArray("blocked")?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
+    Spacer(Modifier.height(6.dp))
+    Text("Mis aparatos", color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    Text("¿Perdiste un celular o ya no usas una tele? Quítalo aquí: deja de funcionar en unos minutos, se borran ahí los datos de tu cuenta y el lugar queda libre para otro aparato.", color = C.Low, fontSize = 12.sp)
+    devs.forEach { x ->
+        val key = x.optString("key"); val mine = key == me
+        Row(Modifier.fillMaxWidth().background(C.Panel2, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(x.optString("name").ifBlank { "Aparato" } + if (mine) "  (este)" else "", color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(listOf(devState(x), x.optString("model").takeIf { it.isNotBlank() && it != x.optString("name") }).filterNotNull().joinToString(" · "), color = C.Low, fontSize = 11.sp)
+            }
+            Wrap {
+                Pill("Renombrar", false, { toRename = x })
+                if (!mine) Pill("Quitar", false, { toRemove = x })
+            }
+        }
+    }
+    blocked.forEach { x ->
+        Row(Modifier.fillMaxWidth().background(C.Panel2, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(x.optString("name").ifBlank { "Aparato" }, color = C.Mid, fontSize = 14.sp)
+                Text("Quitado: ya no puede usar tu código", color = C.Low, fontSize = 11.sp)
+            }
+            Pill("Permitir otra vez", false, {
+                scope.launch {
+                    msg = if (Cloud.licDeviceAllow(code, x.optString("key")) == "ok") "Listo: ese aparato puede volver a entrar con tu código." else "Sin conexión. Intenta de nuevo."
+                    data = Cloud.licDevices(code) ?: data
+                }
+            })
+        }
+    }
+    if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
+    toRemove?.let { x ->
+        ConfirmDialog(
+            title = "¿Quitar «${x.optString("name").ifBlank { "Aparato" }}»?",
+            message = "Deja de funcionar en unos minutos y no podrá volver a usar tu código (a menos que lo permitas otra vez). Tus demás aparatos siguen igual.",
+            confirm = "Sí, quitar",
+            onConfirm = {
+                toRemove = null
+                scope.launch {
+                    val key = x.optString("key")
+                    msg = when (Cloud.licDeviceRemove(code, key)) {
+                        "ok" -> {
+                            // También sale del hogar (perfiles y lo que ibas viendo)
+                            com.mauricio.cinecasa.data.Devices.list.value.keys.firstOrNull { Cloud.deviceKey(it) == key }?.let { Cloud.removeDevice(it) }
+                            "Aparato quitado. Ya tienes un lugar libre."
+                        }
+                        "self" -> "Este aparato no se puede quitar desde aquí mismo; hazlo desde otro."
+                        "gone" -> "Ese aparato ya no estaba."
+                        null -> "Sin conexión. Intenta de nuevo."
+                        else -> "No se pudo quitar."
+                    }
+                    data = Cloud.licDevices(code) ?: data
+                }
+            },
+            onDismiss = { toRemove = null },
+        )
+    }
+    toRename?.let { x ->
+        var name by remember(x) { mutableStateOf(x.optString("name")) }
+        val fr = remember { FocusRequester() }
+        androidx.compose.ui.window.Dialog(onDismissRequest = { toRename = null }) {
+            Column(Modifier.cardWidth(460.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Nombre del aparato", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                TvTextField(name, { name = it.take(40) }, "Sala, Recámara, Celular…", Modifier.fillMaxWidth(), boxRequester = fr)
+                ActionButton("Guardar", {
+                    toRename = null
+                    scope.launch {
+                        val key = x.optString("key")
+                        if (Cloud.licDeviceRename(code, key, name) == "ok" && key == Cloud.deviceKey()) Cloud.deviceName = name
+                        data = Cloud.licDevices(code) ?: data
+                    }
+                }, primary = true)
+            }
+        }
+        LaunchedEffect(x) { delay(80); runCatching { fr.requestFocus() } }
+    }
+}
+
+/** «Viendo ahora», «App abierta ahora» o «Visto hace 2 h». */
+private fun devState(x: JSONObject): String {
+    when (x.optString("state")) { "viendo" -> return "Viendo ahora"; "abierta" -> return "Abierta ahora" }
+    val t = x.optString("seen").takeIf { it.length >= 19 } ?: return ""
+    val ms = runCatching { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(t.take(19))!!.time }.getOrNull() ?: return ""
+    val min = (System.currentTimeMillis() - ms) / 60_000
+    return "Visto " + when {
+        min < 60 -> "hace ${min.coerceAtLeast(1)} min"
+        min < 1440 -> "hace ${min / 60} h"
+        min < 2880 -> "ayer"
+        else -> "hace ${min / 1440} días"
+    }
 }

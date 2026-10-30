@@ -107,6 +107,8 @@ fun MultiViewScreen(pool: List<Channel>, first: Channel?) {
         liveMediaItem(ch)?.let { p.setMediaItem(it); p.prepare(); p.playWhenReady = true }
     }
 
+    // Para el panel: «en uso ahora» (no se manda qué se ve)
+    DisposableEffect(Unit) { com.mauricio.cinecasa.data.License.playing = true; onDispose { com.mauricio.cinecasa.data.License.playing = false } }
     DisposableEffect(Unit) {
         val listeners = players.mapIndexed { i, p ->
             object : Player.Listener {

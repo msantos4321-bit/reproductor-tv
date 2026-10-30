@@ -150,6 +150,9 @@ private val PLow = Color(0xFFA1A1A6)
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
+    // Para el panel: «en uso ahora» (no se manda qué se ve)
+    DisposableEffect(Unit) { com.mauricio.cinecasa.data.License.playing = true; onDispose { com.mauricio.cinecasa.data.License.playing = false } }
+
     LandscapeWhilePlaying()
     val nav = LocalNav.current
     val ctx = LocalContext.current
@@ -319,6 +322,9 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
+    // Para el panel: «en uso ahora» (no se manda qué se ve)
+    DisposableEffect(Unit) { com.mauricio.cinecasa.data.License.playing = true; onDispose { com.mauricio.cinecasa.data.License.playing = false } }
+
     LandscapeWhilePlaying()
     val nav = LocalNav.current
     val ctx = LocalContext.current

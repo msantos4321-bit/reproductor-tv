@@ -125,13 +125,15 @@ let token = store.get('cc_token');
 let me = null, tab = 'inicio', codes = [], resellers = [], q = '';
 
 // ---------- modo demostración (?demo o ?demo=rs): datos inventados, sin tocar la base ----------
-const DEMO = new URLSearchParams(location.search).get('demo');
+const DEMO = (q => q.has('demo') ? (q.get('demo') || 'mgr') : null)(new URLSearchParams(location.search));   // «?demo» solo también entra
 const DAY = 864e5, iso = d => new Date(Date.now() + d * DAY).toISOString();
 const DEMO_RULES = { trial_days: 21, trial_devices: 2, trial_month_cap: 20, start_credits: 3, retail: { d1: 169, d2: 279, d3: 349, extra: 89 },
   levels: [{ name: 'Inicial', min: 0, price: 60 }, { name: 'Plata', min: 100, price: 55 }, { name: 'Oro', min: 400, price: 50 }], manager_whatsapp: '6640000000', downloader_code: '123456' };
-const dev = (n, s) => ({ name: n, seen: iso(-s), activated: iso(-40) });
+let demoK = 0;
+const dev = (n, s, st, m) => ({ key: 'k' + (demoK++), name: n, model: m || '', seen: iso(-s), activated: iso(-40), state: st || '' });
+const DEMO_SRV = [{ id: 's1', name: 'Principal', url: 'http://principal.ejemplo.com:8080', default: true, codes: 0 }, { id: 's2', name: 'Respaldo', url: 'http://respaldo.ejemplo.net', default: false, codes: 1 }];
 let DEMO_CODES = [
-  { code: 'CC-7F3K-92QD', customer: 'Laura Méndez', phone: '6641234567', kind: 'paid', max: 3, status: 'activo', expires: iso(320), created: iso(-45), reseller: 'Luis Ramírez', devices: [dev('Sala · Google TV', 0), dev('Galaxy S23', 1), dev('Tablet', 3)], note: '' },
+  { code: 'CC-7F3K-92QD', customer: 'Laura Méndez', phone: '6641234567', kind: 'paid', max: 3, status: 'activo', expires: iso(320), created: iso(-45), reseller: 'Luis Ramírez', devices: [dev('Sala · Google TV', 0, 'viendo', 'Chromecast'), dev('Galaxy S23', 1, '', 'SM-S911B'), dev('Tablet', 3, '', 'Lenovo TB-X306F')], server: { id: 's1', name: 'Principal' }, blocked: [], note: '' },
   { code: 'CC-H2MP-8XZA', customer: 'Jorge Castillo', phone: '6649876543', kind: 'trial', max: 2, status: 'prueba', expires: iso(9), created: iso(-12), reseller: 'Luis Ramírez', devices: [dev('Fire TV Stick', 0)], note: '' },
   { code: 'CC-Q9TR-4KDL', customer: 'Familia Ortega', phone: '6645551212', kind: 'paid', max: 4, status: 'activo', expires: iso(11), created: iso(-354), reseller: 'Luis Ramírez', devices: [dev('TCL 55"', 0), dev('Recámara', 2), dev('iPad', 5), dev('Moto G', 1)], note: '' },
   { code: 'CC-B6WN-2PZE', customer: 'Ricardo Soto', phone: '6643332211', kind: 'paid', max: 1, status: 'activo', expires: iso(201), created: iso(-164), reseller: 'Ana Torres', devices: [dev('Chromecast', 0)], note: '' },
@@ -163,9 +165,9 @@ async function demoRpc(fn, a) {
     case 'cc_code_list': { const q = (a.p_q || '').toLowerCase(); return DEMO_CODES.filter(mine).filter(c => !q || JSON.stringify(c).toLowerCase().includes(q)); }
     case 'cc_rs_list': return DEMO_RS;
     case 'cc_ledger': return DEMO_LEDGER.filter(g => !rs || g.reseller === 'Luis Ramírez');
-    case 'cc_code_create': {
-      const n = a.p_devices || 1, k = a.p_kind;
-      const c = { code: 'CC-' + ['N4VE', 'R7TA', 'X2KM'][demoN % 3] + '-' + ['8QWE', '3HJK', '6PLM'][demoN++ % 3], customer: a.p_customer || 'Cliente nuevo', phone: a.p_phone || '', kind: k,
+    case 'cc_code_create': case 'cc_code_create_app': {
+      const n = a.p_devices || 1, k = a.p_kind, ap = a.p_app || 'cinecasa';
+      const c = { app: ap, code: (ap === 'vista' ? 'VI-' : 'CC-') + ['N4VE', 'R7TA', 'X2KM'][demoN % 3] + '-' + ['8QWE', '3HJK', '6PLM'][demoN++ % 3], customer: a.p_customer || 'Cliente nuevo', phone: a.p_phone || '', kind: k,
         max: k === 'trial' ? Math.min(n, 2) : n, status: k === 'trial' ? 'prueba' : 'activo', expires: k === 'gift' ? null : iso(k === 'trial' ? 21 : 365), created: iso(0), reseller: rs ? 'Luis Ramírez' : null, devices: [], note: '' };
       DEMO_CODES.unshift(c); return c;
     }
@@ -181,6 +183,19 @@ async function demoRpc(fn, a) {
     case 'cc_rs_self': return Object.assign({ role: 'rs', id: 'r1', name: 'Luis Ramírez', credits: 18, paused: false, level: DEMO_RS[0].level, rules: DEMO_RULES }, { phone: a.p_phone, pay_link: a.p_pay_link });
     case 'cc_rs_credit': { const r = DEMO_RS.find(x => x.id === a.p_id); r.credits += a.p_delta; return r.credits; }
     case 'cc_link_create': return 'demo' + Math.random().toString(16).slice(2);
+    case 'cc_srv_list': return DEMO_SRV;
+    case 'cc_srv_save': {
+      if (a.p_id) Object.assign(DEMO_SRV.find(x => x.id === a.p_id), { name: a.p_name, url: a.p_url });
+      else DEMO_SRV.push({ id: 's' + Date.now(), name: a.p_name, url: a.p_url, default: !DEMO_SRV.length, codes: 0 });
+      if (a.p_default || DEMO_SRV.length === 1) { const id = a.p_id || DEMO_SRV[DEMO_SRV.length - 1].id; DEMO_SRV.forEach(x => x.default = x.id === id); }
+      return DEMO_SRV;
+    }
+    case 'cc_srv_default': DEMO_SRV.forEach(x => x.default = x.id === a.p_id); return DEMO_SRV;
+    case 'cc_srv_delete': { const i = DEMO_SRV.findIndex(x => x.id === a.p_id); const was = DEMO_SRV[i].default; DEMO_SRV.splice(i, 1); if (was && DEMO_SRV[0]) DEMO_SRV[0].default = true; return DEMO_SRV; }
+    case 'cc_code_server': { const c = DEMO_CODES.find(x => x.code === a.p_code); c.server_id = a.p_server; c.server = DEMO_SRV.find(x => x.id === a.p_server) || DEMO_SRV.find(x => x.default) || null; return c; }
+    case 'cc_code_device_remove': { const c = DEMO_CODES.find(x => x.code === a.p_code); const d = c.devices.find(x => x.key === a.p_key); c.devices = c.devices.filter(x => x !== d); (c.blocked = c.blocked || []).unshift({ key: d.key, name: d.name, at: iso(0) }); return c; }
+    case 'cc_code_device_allow': { const c = DEMO_CODES.find(x => x.code === a.p_code); c.blocked = (c.blocked || []).filter(x => x.key !== a.p_key); return c; }
+    case 'cc_code_device_rename': { const c = DEMO_CODES.find(x => x.code === a.p_code); c.devices.find(x => x.key === a.p_key).name = a.p_name; return c; }
     default: return null;
   }
 }
@@ -221,9 +236,32 @@ const money = n => '$' + Number(n || 0).toLocaleString('es-MX', { maximumFractio
 const num = n => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
 const fdate = s => s ? new Date(s).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' }) : 'Sin vencimiento';
 const ago = s => { if (!s) return 'nunca'; const d = (Date.now() - new Date(s)) / 864e5; return d < 1 ? 'hoy' : d < 2 ? 'ayer' : `hace ${Math.floor(d)} días` };
+// Cuándo se vio un aparato, con minutos y horas (para saber si está en uso)
+function seenTxt(x) {
+  if (x.state === 'viendo') return '<b style="color:var(--good)">● Viendo ahora</b>';
+  if (x.state === 'abierta') return '<b style="color:var(--acc)">● App abierta ahora</b>';
+  if (!x.seen) return 'Nunca';
+  const m = (Date.now() - new Date(x.seen)) / 6e4;
+  return 'Visto ' + (m < 60 ? `hace ${Math.max(1, Math.round(m))} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : ago(x.seen));
+}
+let servers = null;   // servidores (ligas) del gerente o del distribuidor que entró
+async function loadServers(force) {
+  if (servers && !force) return servers;
+  try { servers = await rpc('cc_srv_list', { p_t: token }) || []; } catch { servers = servers || []; }
+  return servers;
+}
 const daysLeft = s => s ? Math.ceil((new Date(s) - Date.now()) / 864e5) : null;
 const isMgr = () => me && me.role === 'mgr';
 const rules = () => (me && me.rules) || {};
+const APPS0 = { cinecasa: { name: 'CineCasa', prefix: 'CC' }, vista: { name: 'Vista', prefix: 'VI', trial_days: 7, trial_devices: 3, download_url: 'https://github.com/msantos4321-bit/vista/releases/latest/download/Vista.apk', downloader: '6214004' } };
+const apps = () => Object.assign({}, APPS0, rules().apps || {});
+function appOf(c) {
+  const k = (c && c.app) || 'cinecasa', a = apps()[k] || { name: k }, r = rules();
+  return { key: k, name: a.name || k,
+    dl: a.download_url || (k === 'cinecasa' ? r.download_url : '') || 'https://msantos4321-bit.github.io/reproductor-tv/app/',
+    dc: a.downloader || (k === 'cinecasa' ? r.downloader_code : '') || '',
+    trialDays: a.trial_days || r.trial_days || 21, trialDevices: a.trial_devices || r.trial_devices || 2 };
+}
 const statusLabel = c => c.kind === 'gift' && c.status === 'activo' ? 'regalo' : c.status;
 
 function suggested(n) {
@@ -236,14 +274,17 @@ function waLink(phone, text) {
 }
 function inviteParts(c) {
   const r = rules();
+  const ap = appOf(c);
   return {
-    dl: r.download_url || 'https://msantos4321-bit.github.io/reproductor-tv/app/',
+    name: ap.name, isCine: ap.key === 'cinecasa',
+    dl: ap.dl,
     first: c.customer ? c.customer.split(' ')[0] : '',
     plan: c.kind === 'trial' ? `Prueba gratis hasta el ${fdate(c.expires)}` : c.kind === 'gift' ? 'Sin vencimiento' : `Vigente hasta el ${fdate(c.expires)}`,
     devs: `${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'}`,
-    dc: r.downloader_code || '',
+    dc: ap.dc,
     help: prettyPhone(isMgr() ? r.manager_whatsapp : (me.phone || r.manager_whatsapp)),
     refDays: Number(r.referral_days || 30),
+    srv: ap.key === 'cinecasa' && c.server && c.server.name ? true : false,
   };
 }
 function prettyPhone(p) { p = String(p || '').replace(/\D/g, ''); return p.length === 10 ? `${p.slice(0, 3)} ${p.slice(3, 6)} ${p.slice(6)}` : p; }
@@ -254,30 +295,30 @@ function inviteText(c) {
   const tv = x.dc
     ? `📺 *EN LA TELE* (Google TV · Android TV · Fire TV)\n1. Instala la app *Downloader* desde la tienda de la tele.\n2. Ábrela y en el cuadro escribe este número:\n\n       ━━━━━━━━━━━━\n       *${x.dc}*\n       ━━━━━━━━━━━━\n\n3. Toca *Ir* → *Instalar*. Si te pide permiso, actívalo para Downloader.`
     : `📺 *EN LA TELE*\n1. Instala la app *Downloader*.\n2. Escribe la liga de abajo y toca *Instalar*.`;
-  return `🎬 *CineCasa*${x.first ? ` · Hola ${x.first}` : ''}\n\n🔑 *TU CÓDIGO DE ACTIVACIÓN*\n\`\`\`${c.code}\`\`\`\n${x.plan} · ${x.devs}\n\n${tv}\n\n📱 *EN CELULAR O TABLETA*\n1. Entra aquí y toca *Descargar*:\n${x.dl}\n2. Abre el archivo y toca *Instalar* (si Android pregunta, permite «instalar apps desconocidas»).\n\n✅ *AL ABRIR LA APP*\nEscribe tu código *${c.code}* y listo.\n\n🎁 *RECOMIENDA Y GANA*\nPor cada amigo que contrate con tu recomendación te regalamos *${refTxt(x.refDays)}*. Solo que me diga tu código.${x.help ? `\n\n💬 ¿Dudas? WhatsApp *${x.help}*` : ''}`;
+  return `${x.isCine ? '🎬' : '▶️'} *${x.name}*${x.first ? ` · Hola ${x.first}` : ''}\n\n🔑 *TU CÓDIGO DE ACTIVACIÓN*\n\`\`\`${c.code}\`\`\`\n${x.plan} · ${x.devs}\n\n${tv}\n\n📱 *EN CELULAR O TABLETA*\n1. Entra aquí y toca *Descargar*:\n${x.dl}\n2. Abre el archivo y toca *Instalar* (si Android pregunta, permite «instalar apps desconocidas»).\n\n✅ *AL ABRIR LA APP*\nEscribe tu código *${c.code}*.${x.srv ? ' Luego solo pon el *usuario y contraseña* de tu servicio: la liga del servidor ya viene puesta.' : ' Listo.'}\n\n🎁 *RECOMIENDA Y GANA*\nPor cada amigo que contrate con tu recomendación te regalamos *${refTxt(x.refDays)}*. Solo que me diga tu código.${x.help ? `\n\n💬 ¿Dudas? WhatsApp *${x.help}*` : ''}`;
 }
 // Correo: texto simple (sin asteriscos) que se ve bien en Gmail, Outlook o el correo del celular
 function emailText(c) {
   const x = inviteParts(c);
   const L = '────────────────────────';
-  return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a CineCasa.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Entra aquí y toca "Descargar":\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code} y listo.\n\nRECOMIENDA Y GANA\n  Por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}. Solo que nos diga tu código.\n${x.help ? `\n¿Dudas? Escríbenos por WhatsApp al ${x.help}.\n` : ''}\n¡Que la disfrutes!`;
+  return `Hola${x.first ? ' ' + x.first : ''}:\n\nAquí está tu acceso a ${x.name}.\n\n${L}\nTU CÓDIGO DE ACTIVACIÓN:   ${c.code}\n${x.plan} · ${x.devs}\n${L}\n\nEN LA TELE (Google TV, Android TV o Fire TV)\n  1. Instala la app "Downloader" desde la tienda de la tele.\n  2. Ábrela y escribe este número:   ${x.dc || '(la liga de abajo)'}\n  3. Toca "Ir" y luego "Instalar". Si pide permiso, actívalo para Downloader.\n\nEN CELULAR O TABLETA\n  1. Entra aquí y toca "Descargar":\n     ${x.dl}\n  2. Abre el archivo y toca "Instalar". Si Android pregunta, permite "instalar apps desconocidas".\n\nAL ABRIR LA APP\n  Escribe tu código ${c.code}.${x.srv ? ' Luego solo pon el usuario y contraseña de tu servicio: la liga del servidor ya viene puesta.' : ' Listo.'}\n\nRECOMIENDA Y GANA\n  Por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}. Solo que nos diga tu código.\n${x.help ? `\n¿Dudas? Escríbenos por WhatsApp al ${x.help}.\n` : ''}\n¡Que la disfrutes!`;
 }
 function emailHtml(c) {
   const x = inviteParts(c);
   const st = 'font-family:Arial,Helvetica,sans-serif;color:#1c1c1e';
   const step = (n, t) => `<tr><td style="vertical-align:top;padding:4px 10px 4px 0"><span style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#0a84ff;color:#fff;text-align:center;font-weight:700;font-size:13px">${n}</span></td><td style="padding:4px 0;font-size:15px">${t}</td></tr>`;
   return `<div style="${st};max-width:560px">
-  <div style="background:#0b0c12;border-radius:16px 16px 0 0;padding:22px 24px"><span style="font-size:28px;font-weight:900;color:#fff">Cine</span><span style="font-size:28px;font-weight:900;color:#3d9bff">Casa</span><div style="color:#c3cbe0;font-size:14px;margin-top:4px">Tu reproductor para la tele y el celular</div></div>
+  <div style="background:#0b0c12;border-radius:16px 16px 0 0;padding:22px 24px">${x.isCine ? '<span style="font-size:28px;font-weight:900;color:#fff">Cine</span><span style="font-size:28px;font-weight:900;color:#3d9bff">Casa</span>' : `<span style="font-size:28px;font-weight:900;color:#fff">${esc(x.name)}</span>`}<div style="color:#c3cbe0;font-size:14px;margin-top:4px">${x.isCine ? 'Tu reproductor para la tele y el celular' : 'Para la tele, el celular y la tableta'}</div></div>
   <div style="border:1px solid #e5e5ea;border-top:0;border-radius:0 0 16px 16px;padding:24px">
-   <p style="font-size:16px;margin:0 0 14px">Hola${x.first ? ' ' + esc(x.first) : ''}, aquí está tu acceso a CineCasa.</p>
+   <p style="font-size:16px;margin:0 0 14px">Hola${x.first ? ' ' + esc(x.first) : ''}, aquí está tu acceso a ${esc(x.name)}.</p>
    <div style="background:#0a84ff;border-radius:14px;padding:18px;text-align:center;color:#fff"><div style="font-size:13px;opacity:.85;letter-spacing:1px">TU CÓDIGO DE ACTIVACIÓN</div><div style="font-size:30px;font-weight:900;letter-spacing:3px;font-family:Consolas,Menlo,monospace;margin-top:6px">${esc(c.code)}</div><div style="font-size:13px;margin-top:6px">${esc(x.plan)} · ${esc(x.devs)}</div></div>
    <h3 style="font-size:16px;margin:22px 0 6px">📺 En la tele (Google TV, Android TV o Fire TV)</h3>
    <table style="border-collapse:collapse">${step(1, 'Instala la app <b>Downloader</b> desde la tienda de la tele.')}${step(2, `Ábrela y escribe este número: <span style="display:inline-block;background:#eaf3ff;color:#0a5fd6;border:2px dashed #0a84ff;border-radius:8px;padding:2px 10px;font-size:20px;font-weight:900;letter-spacing:2px">${esc(x.dc || '—')}</span>`)}${step(3, 'Toca <b>Ir</b> y luego <b>Instalar</b>. Si pide permiso, actívalo para Downloader.')}</table>
    <h3 style="font-size:16px;margin:18px 0 6px">📱 En celular o tableta</h3>
    <table style="border-collapse:collapse">${step(1, `Entra a <a href="${x.dl}" style="color:#0a84ff">${x.dl}</a> y toca <b>Descargar</b>.`)}${step(2, 'Abre el archivo y toca <b>Instalar</b>. Si Android pregunta, permite «instalar apps desconocidas».')}</table>
-   <h3 style="font-size:16px;margin:18px 0 6px">✅ Al abrir la app</h3><p style="font-size:15px;margin:0">Escribe tu código <b>${esc(c.code)}</b> y listo.</p>
+   <h3 style="font-size:16px;margin:18px 0 6px">✅ Al abrir la app</h3><p style="font-size:15px;margin:0">Escribe tu código <b>${esc(c.code)}</b>.${x.srv ? ' Luego solo pon el <b>usuario y contraseña</b> de tu servicio: la liga del servidor ya viene puesta.' : ' Listo.'}</p>
    <div style="background:#f2f2f7;border-radius:12px;padding:14px;margin-top:18px;font-size:14px">🎁 <b>Recomienda y gana:</b> por cada amigo que contrate con tu recomendación te regalamos ${refTxt(x.refDays)}.${x.help ? `<br>💬 ¿Dudas? WhatsApp <b>${esc(x.help)}</b>` : ''}</div>
-   <p style="font-size:12px;color:#8e8e93;margin:16px 0 0">CineCasa es un reproductor; funciona con el servicio que tú ya tienes.</p>
+   ${x.isCine ? '<p style="font-size:12px;color:#8e8e93;margin:16px 0 0">CineCasa es un reproductor; funciona con el servicio que tú ya tienes.</p>' : ''}
   </div></div>`;
 }
 async function copyEmailHtml(c) {
@@ -286,13 +327,13 @@ async function copyEmailHtml(c) {
   catch { toast('Tu navegador no deja copiar con diseño; se abrirá en texto simple', 1); return false; }
 }
 function mailLink(email, c) {
-  return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de CineCasa: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
+  return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(`Tu código de ${appOf(c).name}: ${c.code}`) + '&body=' + encodeURIComponent(emailText(c));
 }
 function renewText(c) {
   const d = daysLeft(c.expires);
   const who = c.customer ? `Hola ${c.customer.split(' ')[0]}, ` : 'Hola, ';
   const when = c.status === 'vencido' ? 'ya venció' : d === 0 ? 'vence hoy' : `vence en ${d} ${d === 1 ? 'día' : 'días'} (${fdate(c.expires)})`;
-  const what = c.kind === 'trial' ? 'tu prueba gratis de CineCasa' : 'tu CineCasa';
+  const an = appOf(c).name, what = c.kind === 'trial' ? `tu prueba gratis de ${an}` : `tu ${an}`;
   const price = suggested(c.max);
   return `${who}${what} ${when}. ${c.kind === 'trial' ? 'Para seguir viendo, tu plan anual' : 'La renovación por un año'} para ${c.max} ${c.max == 1 ? 'aparato' : 'aparatos'} queda en $${price}. Tu código sigue siendo el mismo (${c.code}), no tienes que reinstalar nada. ¿Te lo dejo activo?`;
 }
@@ -321,7 +362,7 @@ async function boot() {
 }
 function logout(silent) {
   if (!silent && token) rpc('cc_logout', { p_t: token }).catch(() => {});
-  token = null; me = null; store.set('cc_token', null);
+  token = null; me = null; servers = null; store.set('cc_token', null);
   renderLogin(silent ? 'Tu sesión terminó.' : '');
 }
 const LOGO = `<svg viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#1f1d1a"/><path d="M68 30 A26 26 0 1 0 68 70" fill="none" stroke="#d4b071" stroke-width="6" stroke-linecap="round"/><path d="M45 40 L62 50 L45 60 Z" fill="#d4b071"/></svg>`;
@@ -429,7 +470,7 @@ async function viewCodes() {
   let timer; $('#q').oninput = e => { q = e.target.value; clearTimeout(timer); timer = setTimeout(loadCodes, 300); };
   await loadCodes();
 }
-let fstate = 'todos';
+let fstate = 'todos', fapp = 'todas';
 async function loadCodes() {
   try { codes = await rpc('cc_code_list', { p_t: token, p_q: q }); } catch (e) { toast(e.message, 1); return; }
   if (filterExpiring) { fstate = 'vence'; filterExpiring = false; }
@@ -438,13 +479,16 @@ async function loadCodes() {
   const F = [['todos','Todos'],['activo','Activos'],['prueba','En prueba'],['vence','Por vencer'],['vencido','Vencidos']];
   $('#flt').innerHTML = F.map(([k, l]) => `<button class="pill ${fstate === k ? 'prueba' : ''}" data-f="${k}" style="padding:7px 12px;font-size:13px">${l} ${counts[k]}</button>`).join('');
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { fstate = b.dataset.f; loadCodes(); });
-  const list = codes.filter(c => fstate === 'todos' || (fstate === 'vence' ? (c.status === 'activo' && daysLeft(c.expires) != null && daysLeft(c.expires) <= 15) : c.status === fstate));
+  const used = [...new Set(codes.map(c => c.app || 'cinecasa'))];
+  if (used.length > 1) $('#flt').innerHTML += '<span style="flex-basis:100%;height:0"></span>' + [['todas', 'Todas las apps']].concat(used.map(k => [k, apps()[k] ? apps()[k].name : k])).map(([k, l]) => `<button class="pill ${fapp === k ? 'prueba' : ''}" data-a="${k}" style="padding:7px 12px;font-size:13px">${esc(l)}</button>`).join('');
+  document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { fapp = b.dataset.a; loadCodes(); });
+  const list = codes.filter(c => fapp === 'todas' || (c.app || 'cinecasa') === fapp).filter(c => fstate === 'todos' || (fstate === 'vence' ? (c.status === 'activo' && daysLeft(c.expires) != null && daysLeft(c.expires) <= 15) : c.status === fstate));
   if (!list.length) { $('#list').innerHTML = `<div class="empty">${codes.length ? 'Nada en este filtro.' : 'Todavía no hay códigos. Toca ＋ para crear el primero.'}</div>`; return; }
   $('#list').innerHTML = `<div class="group">${list.map((c, i) => {
     const d = daysLeft(c.expires), st = statusLabel(c);
     const when = c.kind === 'gift' ? 'No vence' : c.status === 'vencido' ? `Venció ${fdate(c.expires)}` : d != null ? (d <= 15 ? `Vence en ${d} días` : `Vence ${fdate(c.expires)}`) : 'Sin vencimiento';
     return `<button class="row" data-i="${codes.indexOf(c)}"><div class="main"><div class="t">${esc(c.customer || c.note || 'Sin nombre')}</div>
-      <div class="s">${esc(c.code)} · ${c.devices.length}/${c.max} aparatos · ${when}${isMgr() && c.reseller ? ' · ' + esc(c.reseller) : ''}</div></div>
+      <div class="s">${(c.app || 'cinecasa') !== 'cinecasa' ? `<b>${esc(appOf(c).name)}</b> · ` : ''}${esc(c.code)} · ${c.devices.length}/${c.max} aparatos${c.devices.some(x => x.state) ? ' · <span style="color:var(--good)">● en uso</span>' : ''} · ${when}${isMgr() && c.reseller ? ' · ' + esc(c.reseller) : ''}</div></div>
       <span class="pill ${st} ${c.status === 'activo' && d != null && d <= 15 ? 'warn' : ''}">${st}</span><span class="chev">›</span></button>`;
   }).join('')}</div>`;
   document.querySelectorAll('[data-i]').forEach(b => b.onclick = () => codeSheet(codes[b.dataset.i]));
@@ -457,44 +501,62 @@ function sheet(html, onmount) {
   document.body.appendChild(bg); if (onmount) onmount(bg); return bg;
 }
 
+let lastApp = (() => { try { return localStorage.getItem('cc_app') || 'cinecasa'; } catch { return 'cinecasa'; } })();
 function newCode(kind0) {
-  let kind = kind0 || 'trial', n = 1;
-  const r = rules();
+  let kind = kind0 || 'trial', n = 1, app = apps()[lastApp] ? lastApp : 'cinecasa', srv = '';
+  const r = rules(), AL = Object.entries(apps());
   const bg = sheet(`<h2>Nuevo código</h2><div class="note" style="margin-top:0">Para un cliente nuevo. Después lo compartes por WhatsApp.</div>
-    <label>Tipo</label><div class="seg" id="kind"><button data-k="trial">Prueba ${r.trial_days || 21} días</button><button data-k="paid">Anual</button>${isMgr() ? '<button data-k="gift">Regalo</button>' : ''}</div>
+    ${AL.length > 1 ? `<label>App</label><div class="seg" id="appsel">${AL.map(([k, a]) => `<button data-app="${k}">${esc(a.name || k)}</button>`).join('')}</div>` : ''}
+    <label>Tipo</label><div class="seg" id="kind"><button data-k="trial">Prueba <span id="td">${r.trial_days || 21}</span> días</button><button data-k="paid">Anual</button>${isMgr() ? '<button data-k="gift">Regalo</button>' : ''}</div>
     <label>Aparatos</label><div class="stepper"><button id="m">−</button><div class="v" id="n">1</div><button id="p">＋</button><div class="note" id="nhint" style="margin:0"></div></div>
     <label for="c">Nombre del cliente</label><input type="text" id="c" placeholder="Ej. Juan Pérez" autocomplete="off">
     <label for="ph">WhatsApp del cliente (opcional)</label><input type="tel" id="ph" placeholder="10 dígitos" inputmode="tel">
+    <div id="srvw"></div>
     <div class="cost" id="cost"></div>
     <button class="btn pri full" style="margin-top:16px" id="go">Crear código</button>`, bg => {
       const upd = () => {
         bg.querySelectorAll('#kind button').forEach(b => b.classList.toggle('on', b.dataset.k === kind));
-        const maxT = r.trial_devices || 2; if (kind === 'trial' && n > maxT) n = maxT;
+        bg.querySelectorAll('#appsel button').forEach(b => b.classList.toggle('on', b.dataset.app === app));
+        const ap = appOf({ app }); bg.querySelector('#td').textContent = ap.trialDays;
+        const sw = bg.querySelector('#srvw');
+        if (app !== 'cinecasa' || !servers || !servers.length) sw.innerHTML = app === 'cinecasa' && servers && !servers.length ? `<div class="note">Aún no tienes servidor guardado: el cliente tendrá que escribir la liga. Agrégalo en ${isMgr() ? 'Reglas' : 'Mi cuenta'} → Servidores.</div>` : '';
+        else if (servers.length === 1) sw.innerHTML = `<div class="note">Servidor: <b>${esc(servers[0].name)}</b> (el cliente solo escribe usuario y contraseña).</div>`;
+        else if (!sw.querySelector('select')) {
+          sw.innerHTML = `<label for="sv">Servidor</label><select id="sv">${servers.map(x => `<option value="${x.default ? '' : x.id}">${esc(x.name)}${x.default ? ' (por defecto)' : ''}</option>`).join('')}</select>`;
+          sw.querySelector('select').value = srv; sw.querySelector('select').onchange = e => { srv = e.target.value; };
+        }
+        const maxT = ap.trialDevices; if (kind === 'trial' && n > maxT) n = maxT;
         bg.querySelector('#n').textContent = n;
         bg.querySelector('#nhint').textContent = kind === 'trial' ? `máximo ${maxT} en prueba` : '';
         const c = bg.querySelector('#cost');
-        if (kind === 'trial') c.innerHTML = `Gratis. Funciona <b>${r.trial_days || 21} días</b>; si el cliente paga, la conviertes a anual con un toque.`;
+        if (kind === 'trial') c.innerHTML = `Gratis. Funciona <b>${ap.trialDays} días</b>; si el cliente paga, la conviertes a anual con un toque.`;
         else if (kind === 'gift') c.innerHTML = `Sin costo y <b>sin vencimiento</b>. Solo para familia o cortesías.`;
         else c.innerHTML = isMgr() ? `Venta directa tuya. Precio sugerido al público: <b>${money(suggested(n))} al año</b>.`
           : `Gasta <b>${n} ${n == 1 ? 'crédito' : 'créditos'}</b> (tienes ${num(me.credits)}). Precio sugerido al público: <b>${money(suggested(n))} al año</b>.`;
       };
       bg.querySelectorAll('#kind button').forEach(b => b.onclick = () => { kind = b.dataset.k; upd(); });
+      bg.querySelectorAll('#appsel button').forEach(b => b.onclick = () => { app = b.dataset.app; lastApp = app; try { localStorage.setItem('cc_app', app); } catch {} upd(); });
       bg.querySelector('#m').onclick = () => { n = Math.max(1, n - 1); upd(); };
       bg.querySelector('#p').onclick = () => { n = Math.min(20, n + 1); upd(); };
       bg.querySelector('#go').onclick = async e => {
         e.target.disabled = true;
         try {
-          const c = await rpc('cc_code_create', { p_t: token, p_kind: kind, p_devices: n, p_customer: bg.querySelector('#c').value.trim(), p_phone: bg.querySelector('#ph').value.trim(), p_note: '' });
+          let c = await rpc('cc_code_create_app', { p_t: token, p_app: app, p_kind: kind, p_devices: n, p_customer: bg.querySelector('#c').value.trim(), p_phone: bg.querySelector('#ph').value.trim(), p_note: '' });
+          if (app === 'cinecasa' && srv) c = await rpc('cc_code_server', { p_t: token, p_code: c.code, p_server: srv });
           bg.remove(); await refreshMe(); codeSheet(c, true); if (tab === 'codigos' || tab === 'inicio') render();
         } catch (err) { toast(err.message, 1); e.target.disabled = false; }
       };
       upd();
+      if (!servers) loadServers().then(upd);
     });
 }
 
 function codeSheet(c, fresh) {
   const st = statusLabel(c), d = daysLeft(c.expires);
-  const devs = c.devices.length ? c.devices.map(x => `<div class="row"><div class="main"><div class="t">${esc(x.name || 'Aparato')}</div><div class="s">Visto ${ago(x.seen)}</div></div></div>`).join('') : `<div class="row"><div class="main"><div class="s">Aún no se ha usado en ningún aparato.</div></div></div>`;
+  const devs = c.devices.length ? c.devices.map(x => `<div class="row"><div class="main"><div class="t">${esc(x.name || 'Aparato')}</div><div class="s">${seenTxt(x)}${x.model && x.model !== x.name ? ' · ' + esc(x.model) : ''}${x.version ? ' · v' + esc(x.version) : ''}</div></div>
+      ${x.key ? `<button class="btn" style="min-height:38px;padding:8px 12px" data-ren="${esc(x.key)}">Renombrar</button><button class="btn danger" style="min-height:38px;padding:8px 12px" data-del="${esc(x.key)}">Quitar</button>` : ''}</div>`).join('') : `<div class="row"><div class="main"><div class="s">Aún no se ha usado en ningún aparato.</div></div></div>`;
+  const blk = (c.blocked || []).map(x => `<div class="row"><div class="main"><div class="t" style="color:var(--mid)">${esc(x.name || 'Aparato')}</div><div class="s">Quitado ${ago(x.at)} · ya no puede usar este código</div></div><button class="btn" style="min-height:38px;padding:8px 12px" data-allow="${esc(x.key)}">Permitir otra vez</button></div>`).join('');
+  const isCine = appOf(c).key === 'cinecasa';
   const kindTxt = { trial: 'Prueba gratis', paid: 'Anual', gift: 'Regalo' }[c.kind] || c.kind;
   const bg = sheet(`
     ${fresh ? '<div class="pill activo" style="margin-bottom:8px">Código creado</div>' : ''}
@@ -502,13 +564,15 @@ function codeSheet(c, fresh) {
     <div class="codebig">${esc(c.code)}</div>
     <span class="pill ${st}">${st}</span>
     <div class="kv">
+      <div>App</div><div>${esc(appOf(c).name)}</div>
       <div>Tipo</div><div>${kindTxt}</div>
-      <div>Aparatos</div><div>${c.devices.length} de ${c.max} en uso</div>
+      <div>Aparatos</div><div>${c.devices.length} de ${c.max} activados${c.devices.filter(x => x.state).length ? ` · <b style="color:var(--good)">${c.devices.filter(x => x.state).length} en uso ahora</b>` : ''}</div>
+      ${isCine ? `<div>Servidor</div><div>${c.server ? `${esc(c.server.name)}${c.server_id ? '' : ' <span style="color:var(--low)">(por defecto)</span>'}` : '<span style="color:var(--warn)">Sin servidor: el cliente escribe la liga</span>'} · <a href="#" id="srvc">Cambiar</a></div>` : ''}
       <div>${c.status === 'vencido' ? 'Venció' : 'Vence'}</div><div>${c.kind === 'gift' ? 'No vence' : fdate(c.expires)}${d != null && d > 0 ? ` (en ${d} días)` : ''}</div>
       ${c.phone ? `<div>WhatsApp</div><div>${esc(c.phone)}</div>` : ''}
       ${isMgr() ? `<div>Vendió</div><div>${esc(c.reseller || 'Tú (directo)')}</div>` : ''}
       <div>Creado</div><div>${fdate(c.created)}</div>
-      ${rules().downloader_code ? `<div>Downloader</div><div><b style="font-size:17px;letter-spacing:1px">${esc(rules().downloader_code)}</b> (para la tele)</div>` : ''}
+      ${appOf(c).dc ? `<div>Downloader</div><div><b style="font-size:17px;letter-spacing:1px">${esc(appOf(c).dc)}</b> (para la tele)</div>` : ''}
     </div>
     <div class="btns">
       <a class="btn wa" target="_blank" rel="noopener" href="${waLink(c.phone, inviteText(c))}">Enviar por WhatsApp</a>
@@ -521,17 +585,19 @@ function codeSheet(c, fresh) {
       ${(c.kind !== 'gift' && (c.status === 'vencido' || (d != null && d <= 15))) ? `<a class="btn acc" target="_blank" rel="noopener" href="${waLink(c.phone, renewText(c))}">Recordar renovación</a>` : ''}
     </div>
     <div class="sec">Aparatos</div><div class="group">${devs}</div>
+    <div class="note">«Quitar» saca solo ese aparato (por ejemplo un celular perdido): deja de funcionar en unos minutos, se borran ahí los datos de la cuenta y el lugar queda libre para otro aparato.</div>
+    ${blk ? `<div class="sec">Aparatos quitados</div><div class="group">${blk}</div>` : ''}
     <div class="sec">Acciones</div>
     <div class="btns">
       ${c.kind === 'trial' && c.status !== 'desactivado' ? `<button class="btn acc" id="conv">Cliente pagó: pasar a anual</button>` : ''}
       ${c.kind === 'paid' ? `<button class="btn acc" id="ren">Renovar 1 año (${c.max} ${c.max == 1 ? 'crédito' : 'créditos'})</button>` : ''}
       ${c.kind === 'paid' ? `<button class="btn" id="ref">Lo recomendó un cliente</button>` : ''}
       <button class="btn" id="add">Agregar aparato</button>
-      ${c.devices.length ? `<button class="btn" id="rst">Liberar aparatos</button>` : ''}
+      ${c.devices.length > 1 ? `<button class="btn" id="rst">Liberar todos</button>` : ''}
       <button class="btn" id="ed">Editar cliente</button>
       <button class="btn danger" id="rev">${c.revoked ? 'Volver a activar' : 'Desactivar'}</button>
     </div>
-    <div class="note">Liberar aparatos sirve cuando el cliente cambia de celular o de tele: el código vuelve a quedar libre.</div>`, bg => {
+    <div class="note">«Liberar todos» deja el código como nuevo: todos sus aparatos tendrán que volver a escribirlo. Para uno solo, usa «Quitar».</div>`, bg => {
       const act = async (fn, args, msg) => {
         try { const nc = await rpc(fn, Object.assign({ p_t: token, p_code: c.code }, args)); bg.remove(); toast(msg); await refreshMe(); codeSheet(nc); if (tab !== 'reglas') render(); }
         catch (e) { toast(e.message, 1); }
@@ -544,7 +610,7 @@ function codeSheet(c, fresh) {
       const refb = bg.querySelector('#ref'); if (refb) refb.onclick = () => {
         const days = Number(rules().referral_days || 30);
         const s2 = sheet(`<h2>¿Quién lo recomendó?</h2><p class="note">Escribe el código del cliente que lo recomendó. A ese cliente se le regalan ${refTxt(days)} sin gastar créditos. Solo se puede una vez por cliente nuevo.</p>
-          <input type="text" id="rc" placeholder="CC-XXXX-XXXX" autocapitalize="characters" style="margin-top:10px;font-family:ui-monospace,Menlo,monospace">
+          <input type="text" id="rc" placeholder="${appOf(c).key === 'cinecasa' ? 'CC' : (apps()[appOf(c).key].prefix || 'CC')}-XXXX-XXXX" autocapitalize="characters" style="margin-top:10px;font-family:ui-monospace,Menlo,monospace">
           <div class="btns" style="margin-top:12px"><button class="btn pri" id="ok">Regalar ${refTxt(days)}</button></div>`, b2 => {
           b2.querySelector('#ok').onclick = async () => {
             try { const r = await rpc('cc_code_refer', { p_t: token, p_code: c.code, p_ref: b2.querySelector('#rc').value }); b2.remove(); bg.remove(); toast(`Listo: ${r.customer || r.code} ahora vence el ${fdate(r.expires)}`); render(); }
@@ -554,7 +620,29 @@ function codeSheet(c, fresh) {
       };
       const ren = bg.querySelector('#ren'); if (ren) ren.onclick = () => act('cc_code_renew', {}, 'Renovado 1 año');
       bg.querySelector('#add').onclick = () => askNumber('¿Cuántos aparatos agregas?', 1, n => act('cc_code_add', { p_n: n }, 'Aparatos agregados'), n => c.kind === 'paid' ? `Gasta ${num(n * (d != null && d < 183 ? .5 : 1))} créditos (proporcional a lo que queda del año)` : c.kind === 'trial' ? 'En prueba no gasta créditos' : 'Sin costo');
-      const rst = bg.querySelector('#rst'); if (rst) rst.onclick = () => confirmIn(bg, 'Los aparatos actuales tendrán que volver a escribir el código. ¿Liberar?', () => act('cc_code_set', { p_revoked: null, p_reset: true, p_customer: null, p_phone: null, p_note: null }, 'Aparatos liberados'));
+      bg.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+        const x = c.devices.find(y => y.key === b.dataset.del);
+        confirmIn(bg, `¿Quitar «${x.name || 'Aparato'}»? Deja de funcionar en unos minutos y no podrá volver a usar este código. Los demás aparatos siguen igual.`, () => act('cc_code_device_remove', { p_key: x.key }, 'Aparato quitado'));
+      });
+      bg.querySelectorAll('[data-allow]').forEach(b => b.onclick = () => act('cc_code_device_allow', { p_key: b.dataset.allow }, 'Ya puede volver a activarse'));
+      bg.querySelectorAll('[data-ren]').forEach(b => b.onclick = () => {
+        const x = c.devices.find(y => y.key === b.dataset.ren);
+        sheet(`<h2>Nombre del aparato</h2><input type="text" id="dn" value="${esc(x.name)}" maxlength="40" placeholder="Sala, Recámara, Celular de Juan…"><button class="btn pri full" style="margin-top:14px" id="ok">Guardar</button>`, b2 => {
+          b2.querySelector('#ok').onclick = async () => { b2.remove(); await act('cc_code_device_rename', { p_key: x.key, p_name: b2.querySelector('#dn').value.trim() }, 'Nombre guardado'); };
+        });
+      });
+      const srvc = bg.querySelector('#srvc'); if (srvc) srvc.onclick = async e => {
+        e.preventDefault();
+        const list = await loadServers(true);
+        if (!list.length) { toast('Primero agrega tu servidor en ' + (isMgr() ? 'Reglas' : 'Mi cuenta'), 1); return; }
+        if (isMgr() && c.reseller_id) { toast('Este código es de un distribuidor: él elige su servidor desde su panel', 1); return; }
+        sheet(`<h2>Servidor de este código</h2><p class="note">La app del cliente usa esta liga; solo escribe usuario y contraseña. Si la cambias, sus aparatos la toman solos en unos minutos.</p>
+          <div class="group" style="margin-top:12px"><button class="row" data-s=""><div class="main"><div class="t">Usar el de por defecto</div><div class="s">${esc((list.find(x => x.default) || {}).name || '')}</div></div>${!c.server_id ? '✓' : ''}</button>
+          ${list.map(x => `<button class="row" data-s="${x.id}"><div class="main"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.url)}</div></div>${c.server_id === x.id ? '✓' : ''}</button>`).join('')}</div>`, b2 => {
+          b2.querySelectorAll('[data-s]').forEach(r => r.onclick = async () => { b2.remove(); await act('cc_code_server', { p_server: r.dataset.s || null }, 'Servidor cambiado'); });
+        });
+      };
+      const rst = bg.querySelector('#rst'); if (rst) rst.onclick = () => confirmIn(bg, 'Todos los aparatos de este código tendrán que volver a escribirlo. ¿Liberar todos?', () => act('cc_code_set', { p_revoked: null, p_reset: true, p_customer: null, p_phone: null, p_note: null }, 'Aparatos liberados'));
       bg.querySelector('#rev').onclick = () => confirmIn(bg, c.revoked ? '¿Volver a activar este código?' : 'La app dejará de funcionar en sus aparatos la próxima vez que revise. ¿Desactivar?', () => act('cc_code_set', { p_revoked: !c.revoked, p_reset: false, p_customer: null, p_phone: null, p_note: null }, c.revoked ? 'Activado' : 'Desactivado'));
       bg.querySelector('#ed').onclick = () => {
         bg.remove();
@@ -679,11 +767,45 @@ async function ledgerSheet(r) {
   try { const l = await rpc('cc_ledger', { p_t: token, p_id: r.id }); sheet(`<h2>Movimientos de ${esc(r.name)}</h2>` + ledgerRows(l)); } catch (e) { toast(e.message, 1); }
 }
 
+// ---------- servidores (ligas del proveedor) ----------
+const SRV_HTML = `<div class="sec">Servidores (ligas de tu proveedor)</div><div id="srvbox"><div class="spin"></div></div>`;
+async function mountServers() {
+  const box = $('#srvbox'); if (!box) return;
+  const list = await loadServers(true);
+  if (!$('#srvbox')) return;
+  box.innerHTML = `<div class="group">${list.length ? list.map(x => `<div class="row"><div class="main"><div class="t">${esc(x.name)}${x.default ? ' <span class="pill activo">Por defecto</span>' : ''}</div><div class="s">${esc(x.url)}${x.codes ? ` · ${x.codes} ${x.codes == 1 ? 'código lo usa' : 'códigos lo usan'} fijo` : ''}</div></div>
+      ${x.default ? '' : `<button class="btn" style="min-height:38px;padding:8px 12px" data-def="${x.id}">Por defecto</button>`}<button class="btn" style="min-height:38px;padding:8px 12px" data-ed="${x.id}">Editar</button></div>`).join('')
+    : `<div class="row"><div class="main"><div class="s" style="white-space:normal">Aún no hay servidores. Agrega la liga que te dio tu proveedor y tus clientes solo escribirán usuario y contraseña.</div></div></div>`}</div>
+    <div class="btns" style="margin-top:10px"><button class="btn acc" id="srvadd">Agregar servidor</button></div>
+    <div class="note">Los códigos usan el servidor <b>por defecto</b>, salvo los que elijas uno distinto al abrir el código. Si tu proveedor cambia la liga, edítala aquí: todos los aparatos la toman solos en unos minutos, sin que el cliente haga nada.</div>`;
+  box.querySelectorAll('[data-def]').forEach(b => b.onclick = async () => { try { servers = await rpc('cc_srv_default', { p_t: token, p_id: b.dataset.def }); toast('Listo, ese es el de por defecto'); mountServers(); } catch (e) { toast(e.message, 1); } });
+  box.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => editServer(list.find(x => x.id === b.dataset.ed)));
+  $('#srvadd').onclick = () => editServer(null);
+}
+function editServer(x) {
+  sheet(`<h2>${x ? 'Editar servidor' : 'Nuevo servidor'}</h2>
+    <label for="sn">Nombre (solo lo ves tú)</label><input type="text" id="sn" maxlength="40" value="${esc(x ? x.name : '')}" placeholder="Ej. Principal, Respaldo, Proveedor 2">
+    <label for="su">Liga del servidor</label><input type="text" id="su" value="${esc(x ? x.url : '')}" placeholder="http://servidor.com:8080" autocapitalize="off" autocorrect="off" inputmode="url">
+    <div class="note">La misma que te dio tu proveedor (la que antes escribía el cliente). Con o sin «http://»; con el puerto si lo tiene.</div>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:14px"><input type="checkbox" id="sd" ${!x || x.default ? 'checked' : ''} style="width:22px;height:22px"> Usar como servidor por defecto</label>
+    <button class="btn pri full" style="margin-top:16px" id="ok">Guardar</button>
+    ${x ? `<button class="btn danger full" style="margin-top:8px" id="del">Borrar servidor</button>` : ''}`, bg => {
+    bg.querySelector('#ok').onclick = async e => {
+      e.target.disabled = true;
+      try { servers = await rpc('cc_srv_save', { p_t: token, p_id: x ? x.id : null, p_name: bg.querySelector('#sn').value, p_url: bg.querySelector('#su').value, p_default: bg.querySelector('#sd').checked }); bg.remove(); toast('Servidor guardado'); mountServers(); }
+      catch (err) { toast(/liga no valida/.test(err.message) ? 'Revisa la liga (ej. http://servidor.com:8080)' : err.message, 1); e.target.disabled = false; }
+    };
+    const del = bg.querySelector('#del'); if (del) del.onclick = () => confirmIn(bg, x.codes ? `${x.codes} códigos lo usan; pasarán al servidor por defecto. ¿Borrar?` : '¿Borrar este servidor?', async () => {
+      try { servers = await rpc('cc_srv_delete', { p_t: token, p_id: x.id }); bg.remove(); toast('Servidor borrado'); mountServers(); } catch (err) { toast(err.message, 1); }
+    });
+  });
+}
+
 // ---------- reglas ----------
 function viewRules() {
   const r = rules(); const lv = r.levels || [];
   const f = (id, l, v, h) => `<label for="${id}">${l}</label><input type="number" id="${id}" value="${v ?? ''}" inputmode="numeric">${h ? `<div class="note">${h}</div>` : ''}`;
-  $('#view').innerHTML = `
+  $('#view').innerHTML = `${SRV_HTML}
     <div class="sec">Pruebas gratis</div><div class="stat">
       ${f('td', 'Días de prueba', r.trial_days)}${f('tdv', 'Aparatos en una prueba', r.trial_devices)}${f('tcap', 'Pruebas por distribuidor al mes', r.trial_month_cap)}</div>
     <div class="sec">Distribuidores nuevos</div><div class="stat">${f('sc', 'Créditos de regalo al darse de alta', r.start_credits)}</div>
@@ -728,6 +850,7 @@ function viewRules() {
     } catch (e) { toast(e.message, 1); }
   };
   $('#out').onclick = () => logout();
+  mountServers();
 }
 
 // ---------- mi cuenta (distribuidor) ----------
@@ -745,6 +868,7 @@ function viewAccount() {
       <label for="apl">Tu liga de pago (Mercado Pago, transferencia, etc.)</label><input type="text" id="apl" value="${esc(me.pay_link || '')}" placeholder="https://mpago.la/...">
       <div class="note">Tus clientes ven el botón «Pagar» en la app con esta liga, y el dinero te llega directo a ti. Cuando te paguen, abre su código y toca «Cliente pagó».</div>
       <button class="btn pri full" style="margin-top:12px" id="asv">Guardar mis datos</button></div>
+    ${SRV_HTML}
     <div class="sec">Clientes con tele Roku</div>
     <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa.</b> El cliente lo hace solo desde su celular Android, en el mismo WiFi que la tele:</div>
       <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele y le dice qué tocar; la primera vez la tele pide crear una contraseña.</div>
@@ -763,6 +887,7 @@ function viewAccount() {
     try { me = await rpc('cc_rs_self', { p_t: token, p_phone: $('#aph').value, p_pay_link: $('#apl').value }); toast('Datos guardados'); }
     catch (e) { toast(e.message, 1); }
   };
+  mountServers();
 }
 
 // ---------- actualizaciones del panel ----------

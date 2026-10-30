@@ -297,6 +297,9 @@ private fun Line(label: String, value: String) {
 fun ServerDialog(onClose: () -> Unit) {
     val acc = Prefs.account.value ?: return
     var server by remember { mutableStateOf(acc.server) }
+    val vendorList by com.mauricio.cinecasa.data.License.servers.collectAsState()
+    var vendorPick by remember { mutableStateOf<String?>(if (Prefs.vendorServer) acc.server else null) }
+    LaunchedEffect(Unit) { runCatching { com.mauricio.cinecasa.data.License.loadServer() } }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -308,7 +311,11 @@ fun ServerDialog(onClose: () -> Unit) {
         ) {
             Text("Cambiar servidor", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text("Escribe la nueva dirección que te dio tu proveedor. Tu usuario y contraseña se conservan.", color = C.Mid, fontSize = 14.sp)
-            TvTextField(server, { server = it }, "http://servidor.com:8080", Modifier.fillMaxWidth(),
+            if (vendorList.isNotEmpty()) {
+                Text("Servidores de tu vendedor (si él cambia la liga, la app la toma sola):", color = C.Low, fontSize = 12.sp)
+                Wrap { vendorList.forEach { v -> Pill(v.name, vendorPick != null && vendorPick == v.url && server == v.url, { server = v.url; vendorPick = v.url }) } }
+            }
+            TvTextField(server, { server = it; vendorPick = null }, "http://servidor.com:8080", Modifier.fillMaxWidth(),
                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri, boxRequester = fr)
             if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)
             Wrap(gap = 12.dp) {
@@ -324,7 +331,7 @@ fun ServerDialog(onClose: () -> Unit) {
                             r.onSuccess { (ok, info) ->
                                 Prefs.serverFormats = info.formats
                                 Repo.clearAll()
-                                Prefs.setAccount(ok)
+                                Prefs.setAccount(ok, vendor = vendorPick != null && vendorPick == server)
                                 Repo.start(force = true)
                                 onClose()
                             }.onFailure { e ->

@@ -70,13 +70,20 @@ object Prefs {
         sp.getString("ua", null)?.let { Net.UA = it }
     }
 
-    fun setAccount(a: Account?) {
+    /**
+     * vendor = la liga del servidor la puso el vendedor en el Centro de control
+     * (si él la cambia, la app la sigue sola). Si el cliente escribió su propia liga, no se toca.
+     */
+    fun setAccount(a: Account?, vendor: Boolean = false) {
         sp.edit().apply {
-            if (a == null) { remove("server"); remove("user"); remove("pass") }
-            else { putString("server", a.server); putString("user", a.user); putString("pass", a.pass); putString("ua", Net.UA) }
+            if (a == null) { remove("server"); remove("user"); remove("pass"); remove("vendorSrv") }
+            else { putString("server", a.server); putString("user", a.user); putString("pass", a.pass); putString("ua", Net.UA); putBoolean("vendorSrv", vendor) }
         }.apply()
         _account.value = a
     }
+
+    /** La cuenta usa el servidor que puso el vendedor. */
+    val vendorServer: Boolean get() = sp.getBoolean("vendorSrv", false)
 
     const val DEMO_SERVER = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"
 
@@ -88,7 +95,8 @@ object Prefs {
         val cur = _account.value
         if (cur == null || cur.server == DEMO_SERVER) return // ya está en demostración: no tocar el respaldo
         sp.edit().putString("bk_server", cur.server).putString("bk_user", cur.user)
-            .putString("bk_pass", cur.pass).putString("bk_formats", sp.getString("formats", "")).apply()
+            .putString("bk_pass", cur.pass).putString("bk_formats", sp.getString("formats", ""))
+            .putBoolean("bk_vendor", vendorServer).apply()
         serverFormats = listOf("m3u8")
         setAccount(Account(DEMO_SERVER, "demo", "demo"))
     }
@@ -100,9 +108,10 @@ object Prefs {
     fun exitDemo(): Boolean {
         val s = sp.getString("bk_server", null); val u = sp.getString("bk_user", null); val p = sp.getString("bk_pass", null)
         val f = sp.getString("bk_formats", "")
-        sp.edit().remove("bk_server").remove("bk_user").remove("bk_pass").remove("bk_formats").putString("formats", f).apply()
+        val v = sp.getBoolean("bk_vendor", false)
+        sp.edit().remove("bk_server").remove("bk_user").remove("bk_pass").remove("bk_formats").remove("bk_vendor").putString("formats", f).apply()
         val ok = s != null && u != null && p != null && s != DEMO_SERVER
-        setAccount(if (ok) Account(s!!, u!!, p!!) else null)
+        setAccount(if (ok) Account(s!!, u!!, p!!) else null, vendor = ok && v)
         return ok
     }
 

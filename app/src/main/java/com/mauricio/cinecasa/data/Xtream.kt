@@ -56,9 +56,12 @@ class Xtream(private val acc: Account) {
             }
             val attempts = ArrayList<String>()
             var authFailed = false
+            var status = ""          // lo que dijo el proveedor de la cuenta (Expired, Banned…)
+            var dnsFailed = 0; var timeouts = 0; var tries = 0
             for (base in bases) {
                 val a = acc.copy(server = base)
                 for (ua in agents) {
+                    tries++
                     try {
                         val url = "${a.base}/player_api.php".toHttpUrl().newBuilder()
                             .addQueryParameter("username", a.user).addQueryParameter("password", a.pass).build()
@@ -77,6 +80,7 @@ class Xtream(private val acc: Account) {
                             val info = parseAccount(obj)
                             if (!info.ok) {
                                 authFailed = true
+                                if (info.status.isNotBlank()) status = info.status
                                 attempts += "${base.substringBefore("://")} · ${ua.take(18)} → usuario/contraseña rechazados (estado: ${info.status.ifBlank { "sin datos" }})"
                                 return@use
                             }
@@ -85,16 +89,30 @@ class Xtream(private val acc: Account) {
                         }
                     } catch (e: java.net.UnknownHostException) {
                         attempts += "No se encontró el servidor «${java.net.URI(base).host}» (revisa que esté bien escrito)."
+                        dnsFailed++
                         break
                     } catch (e: java.net.SocketTimeoutException) {
+                        timeouts++
                         attempts += "${base.substringBefore("://")} · ${ua.take(18)} → el servidor no respondió a tiempo"
                     } catch (e: Exception) {
                         attempts += "${base.substringBefore("://")} · ${ua.take(18)} → ${e.javaClass.simpleName}: ${e.message?.take(80)}"
                     }
                 }
             }
-            val title = if (authFailed) "El servidor respondió, pero rechazó el usuario o la contraseña. Revísalos letra por letra (mayúsculas y minúsculas cuentan)."
-            else "No se pudo conectar con el servidor."
+            val host = runCatching { java.net.URI(acc.base).host }.getOrNull() ?: acc.base
+            val st = status.lowercase()
+            val title = when {
+                authFailed && (st.contains("expired") || st.contains("vencid")) ->
+                    "Tu cuenta con tu proveedor está vencida. Renuévala con quien te vende el servicio (no es falla de CineCasa)."
+                authFailed && (st.contains("banned") || st.contains("disabled") || st.contains("inactive")) ->
+                    "Tu proveedor desactivó esta cuenta (estado: $status). Habla con quien te vende el servicio."
+                authFailed -> "El servidor respondió, pero rechazó el usuario o la contraseña. Revísalos letra por letra (mayúsculas y minúsculas cuentan)."
+                dnsFailed > 0 && dnsFailed >= bases.size ->
+                    "La liga del servidor «$host» no existe o ya no funciona. Pide la liga nueva a quien te vende el servicio. Si tu vendedor te la configuró, avísale para que la cambie en su panel."
+                timeouts > 0 && timeouts >= tries ->
+                    "El servidor «$host» no contestó. Puede estar saturado o caído, o tu internet está lento. Intenta en unos minutos."
+                else -> "No se pudo conectar con el servidor «$host». Revisa la liga y tu internet."
+            }
             throw LoginException(title, attempts.distinct().take(8).joinToString("\n"))
         }
 

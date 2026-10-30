@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,18 +56,29 @@ fun LoginScreen(onPair: () -> Unit = {}) {
     val first = remember { FocusRequester() }
     val userFr = remember { FocusRequester() }
     val passFr = remember { FocusRequester() }
+    // Servidor que puso el vendedor en el Centro de control: el cliente solo escribe usuario y contraseña
+    val vendorSrv by com.mauricio.cinecasa.data.License.server.collectAsState()
+    val vendorList by com.mauricio.cinecasa.data.License.servers.collectAsState()
+    var custom by remember { mutableStateOf(false) }
+    var pick by remember { mutableStateOf<com.mauricio.cinecasa.data.License.Server?>(null) }
+    LaunchedEffect(Unit) { runCatching { com.mauricio.cinecasa.data.License.loadServer() } }
+    val chosen = if (custom) null else (pick ?: vendorSrv)
+    val useVendor = chosen != null
 
-    fun submit() {
-        if (server.isBlank() || user.isBlank() || pass.isBlank()) { error = "Llena los tres datos."; detail = ""; return }
+    fun submit(demo: Boolean = false, typed: String? = null) {
+        val own = demo || typed != null
+        val srvUrl = typed ?: if (useVendor && !demo) chosen!!.url else server
+        if (srvUrl.isBlank() || user.isBlank() || pass.isBlank()) { error = if (useVendor) "Escribe tu usuario y contraseña." else "Llena los tres datos."; detail = ""; return }
         busy = true; error = ""; detail = ""
+        val vendor = useVendor && !own
         scope.launch {
-            val acc = Account(server.trim(), user.trim(), pass.trim())
+            val acc = Account(srvUrl.trim(), user.trim(), pass.trim())
             val result = withContext(Dispatchers.IO) { runCatching { Xtream.Login.login(acc) } }
             busy = false
             result.onSuccess { (okAcc, info) ->
                 Prefs.serverFormats = info.formats
                 Repo.clearAll()
-                Prefs.setAccount(okAcc)
+                Prefs.setAccount(okAcc, vendor = vendor)
             }.onFailure { e ->
                 if (e is Xtream.Login.LoginException) { error = e.title; detail = e.detail }
                 else { error = "No se pudo conectar con el servidor."; detail = "${e.javaClass.simpleName}: ${e.message}" }
@@ -83,20 +95,35 @@ fun LoginScreen(onPair: () -> Unit = {}) {
                 Text("CineCasa", color = C.Hi, fontSize = 40.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(10.dp))
                 if (DeviceUi.isTv) {
-                    PhoneSetup { s, u, p -> server = s; user = u; pass = p; submit() }
+                    PhoneSetup(known = useVendor) { s, u, p ->
+                        user = u; pass = p
+                        if (s.isNotBlank() && (!useVendor || s.trim() != chosen?.url)) { custom = true; server = s; submit(typed = s) } else submit()
+                    }
                 } else {
-                    Text("Escribe los datos que te dio tu proveedor. Solo se guardan en este aparato.", color = C.Mid, fontSize = 15.sp)
+                    Text(if (useVendor) "Escribe el usuario y la contraseña que te dio tu proveedor. Solo se guardan en este aparato." else "Escribe los datos que te dio tu proveedor. Solo se guardan en este aparato.", color = C.Mid, fontSize = 15.sp)
                 }
             }
             Column(
                 Modifier.paneWidth(420.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                TvTextField(server, { server = it }, "Servidor (ej. http://servidor.com:8080)", Modifier.fillMaxWidth(),
-                    keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, leading = Icons.Filled.Dns, boxRequester = first,
-                    onImeAction = { runCatching { userFr.requestFocus() } })
+                if (useVendor) {
+                    Column(Modifier.fillMaxWidth().background(C.Panel2, RoundedCornerShape(12.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Servidor: ${chosen!!.name}", color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Ya viene puesto por quien te vendió CineCasa.", color = C.Low, fontSize = 12.sp)
+                        if (vendorList.size > 1) Wrap {
+                            vendorList.forEach { v -> Pill(v.name, v.id == chosen.id, { pick = v }) }
+                        }
+                        Pill("Usar otro servidor", false, { custom = true; server = "" })
+                    }
+                } else {
+                    TvTextField(server, { server = it }, "Servidor (ej. http://servidor.com:8080)", Modifier.fillMaxWidth(),
+                        keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, leading = Icons.Filled.Dns, boxRequester = first,
+                        onImeAction = { runCatching { userFr.requestFocus() } })
+                    if (vendorSrv != null) Pill("Usar el servidor de mi vendedor (${vendorSrv!!.name})", false, { custom = false; pick = null })
+                }
                 TvTextField(user, { user = it }, "Usuario", Modifier.fillMaxWidth(), imeAction = ImeAction.Next,
-                    leading = Icons.Filled.Person, boxRequester = userFr, onImeAction = { runCatching { passFr.requestFocus() } })
+                    leading = Icons.Filled.Person, boxRequester = if (useVendor) first else userFr, onImeAction = { runCatching { passFr.requestFocus() } })
                 TvTextField(pass, { pass = it }, "Contraseña", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Go,
                     leading = Icons.Filled.Lock, boxRequester = passFr, onImeAction = { submit() })
                 if (error.isNotEmpty()) Text(error, color = C.Accent, fontSize = 13.sp)
@@ -107,18 +134,18 @@ fun LoginScreen(onPair: () -> Unit = {}) {
                 } else ActionButton("Entrar", { submit() }, Modifier.fillMaxWidth(), primary = true)
                 ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
                 ActionButton("Ver demostración", {
-                    server = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"; user = "demo"; pass = "demo"; submit()
+                    custom = true; server = "https://wnwecaapchcfhcljsvli.supabase.co/functions/v1/demo"; user = "demo"; pass = "demo"; submit(demo = true)
                 }, Modifier.fillMaxWidth())
             }
         }
     }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(useVendor) { kotlinx.coroutines.delay(60); runCatching { first.requestFocus() } }
 }
 
 
 /** En la tele: QR para escribir los datos desde el celular (sin batallar con el control). */
 @Composable
-private fun PhoneSetup(onData: (String, String, String) -> Unit) {
+private fun PhoneSetup(known: Boolean, onData: (String, String, String) -> Unit) {
     var code by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     var offer by remember { mutableStateOf<com.mauricio.cinecasa.data.Cloud.PairOffer?>(null) }
@@ -157,11 +184,11 @@ private fun PhoneSetup(onData: (String, String, String) -> Unit) {
     }
     Text("Escanea con tu celular", color = C.Hi, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(4.dp))
-    Text("Si ya usas CineCasa en tu celular, la tele se agrega sola a tu cuenta. Si no, escribe ahí los datos de tu proveedor.", color = C.Mid, fontSize = 14.sp)
+    Text(if (known) "Si ya usas CineCasa en tu celular, la tele se agrega sola a tu cuenta. Si no, escribe ahí tu usuario y contraseña (la liga del servidor ya está puesta)." else "Si ya usas CineCasa en tu celular, la tele se agrega sola a tu cuenta. Si no, escribe ahí los datos de tu proveedor.", color = C.Mid, fontSize = 14.sp)
     Spacer(Modifier.height(12.dp))
     val c = code
     if (c != null) {
-        val url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=$c" + (offer?.code?.let { "&p=$it" } ?: "")
+        val url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=$c" + (offer?.code?.let { "&p=$it" } ?: "") + (if (known) "&k=1" else "")
         val bmp = remember(url) { qrBitmap(url, 480) }
         Box(Modifier.size(190.dp).background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(14.dp)).padding(10.dp)) {
             androidx.compose.foundation.Image(bmp.asImageBitmap(), "Código QR", Modifier.fillMaxSize())

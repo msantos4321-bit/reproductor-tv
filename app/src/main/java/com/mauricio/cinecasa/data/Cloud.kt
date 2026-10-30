@@ -218,7 +218,8 @@ object Cloud {
             var n = 0
             while (true) {
                 try { syncNow() } catch (_: Exception) {}
-                if (n++ % 20 == 0) try { License.verify(quiet = true) } catch (_: Exception) {}
+                // Cada 3 minutos: así un aparato quitado deja de funcionar pronto y el panel sabe si está en uso
+                if (n++ % 4 == 0) try { License.verify(quiet = true) } catch (_: Exception) {}
                 delay(45_000)
             }
         }
@@ -278,6 +279,55 @@ object Cloud {
     suspend fun licCheck(code: String): String? = withContext(Dispatchers.IO) {
         try { rpc("cc_lic_check", JSONObject().put("p_code", code).put("p_device", deviceId)).trim().trim('"') } catch (_: Exception) { null }
     }
+
+    /**
+     * Revisión periódica: estado de la activación + servidor (liga) que puso el vendedor.
+     * Avisa si se está reproduciendo (sin decir qué) para que el panel muestre «en uso ahora».
+     */
+    suspend fun licPing(code: String, playing: Boolean): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            JSONObject(rpc("cc_lic_ping", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_playing", playing)
+                .put("p_model", listOf(Build.MANUFACTURER, Build.MODEL).filterNotNull().distinct().joinToString(" ").take(60))
+                .put("p_version", com.mauricio.cinecasa.BuildConfig.VERSION_NAME)))
+        } catch (_: Exception) {
+            // Si la nube aún no tiene la función nueva, la revisión de siempre
+            try { rpc("cc_lic_check", JSONObject().put("p_code", code).put("p_device", deviceId)).trim().trim('"').let { JSONObject().put("status", it) } } catch (_: Exception) { null }
+        }
+    }
+
+    private fun jsonOrNull(t: String): JSONObject? = t.trim().let { if (it.isEmpty() || it == "null") null else JSONObject(it) }
+
+    /** Servidor del vendedor para la pantalla de entrar (cliente con código). */
+    suspend fun licServer(code: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { jsonOrNull(rpc("cc_lic_server", JSONObject().put("p_code", code).put("p_device", deviceId))) } catch (_: Exception) { null }
+    }
+
+    /** Servidor por defecto del dueño (sus aparatos no tienen código). */
+    suspend fun ownerServer(): JSONObject? = withContext(Dispatchers.IO) {
+        if (!hasHousehold) return@withContext null
+        try { jsonOrNull(rpc("cc_owner_server", JSONObject().put("p_h", householdId).put("p_s", householdSecret))) } catch (_: Exception) { null }
+    }
+
+    /** «Mis aparatos»: los aparatos activados con el mismo código. */
+    suspend fun licDevices(code: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { jsonOrNull(rpc("cc_lic_devices", JSONObject().put("p_code", code).put("p_device", deviceId))) } catch (_: Exception) { null }
+    }
+
+    suspend fun licDeviceRemove(code: String, key: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_device_remove", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_key", key)).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    suspend fun licDeviceAllow(code: String, key: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_device_allow", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_key", key)).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    suspend fun licDeviceRename(code: String, key: String, name: String): String? = withContext(Dispatchers.IO) {
+        try { rpc("cc_lic_device_rename", JSONObject().put("p_code", code).put("p_device", deviceId).put("p_key", key).put("p_name", name.trim())).trim().trim('"') } catch (_: Exception) { null }
+    }
+
+    /** Llave corta del aparato (la misma que calcula la nube) para reconocerlo en las listas. */
+    fun deviceKey(id: String = deviceId): String =
+        MessageDigest.getInstance("MD5").digest(id.toByteArray()).joinToString("") { "%02x".format(it) }.take(10)
 
     suspend fun licCreate(note: String, devices: Int): String? = withContext(Dispatchers.IO) {
         try { rpc("cc_lic_create", JSONObject().put("p_h", householdId).put("p_s", householdSecret).put("p_note", note).put("p_devices", devices)).trim().trim('"') } catch (_: Exception) { null }

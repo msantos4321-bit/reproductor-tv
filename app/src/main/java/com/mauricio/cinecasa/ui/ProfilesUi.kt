@@ -465,6 +465,8 @@ fun DevicesSection() {
     var rename by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf(Cloud.deviceName) }
     val fmt = remember { SimpleDateFormat("d MMM, HH:mm", Locale("es", "MX")) }
+    var toRemove by remember { mutableStateOf<Devices.Device?>(null) }
+    val rscope = androidx.compose.runtime.rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Aparatos con CineCasa en tu hogar. Para agregar uno nuevo no hace falta escribir la contraseña: solo un código.", color = C.Mid, fontSize = 13.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -477,11 +479,26 @@ fun DevicesSection() {
                     Text(d.name + if (d.id == Cloud.deviceId) "  (este)" else "", color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Text("${d.model} · versión ${d.version} · conectado ${fmt.format(Date(d.seen))}", color = C.Low, fontSize = 11.sp)
                 }
-                if (d.id != Cloud.deviceId) Pill("Quitar", false, { Cloud.removeDevice(d.id) })
+                if (d.id != Cloud.deviceId) Pill("Quitar", false, { toRemove = d })
             }
         }
     }
     if (addOpen) AddDeviceDialog(onClose = { addOpen = false })
+    toRemove?.let { d ->
+        ConfirmDialog(
+            title = "¿Quitar «${d.name}»?",
+            message = "Sale de tu hogar y deja de funcionar en unos minutos (por ejemplo, si perdiste ese celular). Tus demás aparatos siguen igual.",
+            confirm = "Sí, quitar",
+            onConfirm = {
+                toRemove = null
+                Cloud.removeDevice(d.id)
+                // Si este aparato entra con código, también se libera su lugar y ya no puede volver a usarlo
+                val c = com.mauricio.cinecasa.data.License.code
+                if (c.isNotBlank()) rscope.launch { Cloud.licDeviceRemove(c, Cloud.deviceKey(d.id)) }
+            },
+            onDismiss = { toRemove = null },
+        )
+    }
     if (rename) {
         val fr = remember { FocusRequester() }
         Dialog(onDismissRequest = { rename = false }) {

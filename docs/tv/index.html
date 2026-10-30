@@ -32,7 +32,8 @@ button:disabled{opacity:.6}
   <div style="font-size:18px;font-weight:800;margin-bottom:10px">Es mi primera vez: escribir mis datos</div>
   <div style="font-size:14px;color:var(--mid)">Código que aparece en tu tele</div>
   <input id="c" inputmode="numeric" maxlength="6" placeholder="000000" class="code" style="margin-top:6px">
-  <label for="s">Servidor</label><input id="s" placeholder="http://servidor.com:8080" autocapitalize="off" autocorrect="off" inputmode="url">
+  <div id="sw"><label for="s">Servidor</label><input id="s" placeholder="http://servidor.com:8080" autocapitalize="off" autocorrect="off" inputmode="url"></div>
+  <p class="small" id="sk" style="display:none;margin-top:12px">La liga del servidor ya viene puesta en tu tele. Solo escribe tu usuario y contraseña.</p>
   <label for="u">Usuario</label><input id="u" autocapitalize="off" autocorrect="off">
   <label for="p">Contraseña</label><input id="p" type="password" autocapitalize="off" autocorrect="off">
   <button id="go">Enviar a mi tele</button>
@@ -50,11 +51,13 @@ if (pc.length === 6) {
   $('pairCard').style.display = 'block'; $('pc').textContent = pc;
   $('pairBtn').onclick = () => { location.href = 'intent://pair?c=' + pc + '#Intent;scheme=cinecasa;package=com.mauricio.cinecasa;end'; };
 }
-if (!$('c').value) $('c').focus(); else $('s').focus();
+const known = Q.get('k') === '1';   // la tele ya tiene el servidor de su vendedor
+if (known) { $('sw').style.display = 'none'; $('sk').style.display = 'block'; }
+if (!$('c').value) $('c').focus(); else (known ? $('u') : $('s')).focus();
 $('go').onclick = async () => {
   const c = $('c').value.trim(), s = $('s').value.trim(), u = $('u').value.trim(), p = $('p').value;
   const m = $('m');
-  if (c.length !== 6 || !s || !u || !p) { m.style.color = 'var(--warn)'; m.textContent = 'Llena el código y los tres datos.'; return; }
+  if (c.length !== 6 || (!s && !known) || !u || !p) { m.style.color = 'var(--warn)'; m.textContent = known ? 'Llena el código, usuario y contraseña.' : 'Llena el código y los tres datos.'; return; }
   $('go').disabled = true; m.style.color = 'var(--mid)'; m.textContent = 'Enviando…';
   try {
     const r = await fetch(U + 'cc_pair_set', { method: 'POST', headers: { apikey: K, 'Content-Type': 'application/json' },
