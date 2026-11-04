@@ -16,7 +16,10 @@ sub doRequest()
     x.InitClientCertificates()
     x.EnableEncodings(true)
     x.RetainBodyOnError(true)
-    x.AddHeader("User-Agent", "CineCasaRoku/1.1")
+    ua = "CineCasaRoku/1.3"
+    ' Algunos proveedores solo aceptan apps conocidas: con ellos se presenta como las más comunes
+    if Instr(1, r.url, "supabase.co") = 0 then ua = "IPTVSmartersPro"
+    x.AddHeader("User-Agent", ua)
     if r.headers <> invalid then
         for each k in r.headers
             x.AddHeader(k, r.headers[k])

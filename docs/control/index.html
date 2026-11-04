@@ -206,7 +206,7 @@ async function rpc(fn, args = {}) {
   let data = null; try { data = txt ? JSON.parse(txt) : null } catch { data = txt }
   if (!r.ok) {
     const msg = (data && data.message) || 'No se pudo completar';
-    if (/sesion invalida/.test(msg)) { logout(true); }
+    if (/sesion invalida|sesion vencio/.test(msg)) { logout(true, nice(msg)); }
     throw new Error(nice(msg));
   }
   return data;
@@ -218,6 +218,7 @@ function nice(m) {
     'tu cuenta de distribuidor esta en pausa': 'Tu cuenta está en pausa; habla con el gerente',
     'enlace vencido o ya usado': 'Este enlace ya se usó o venció. Pide uno nuevo.',
     'sesion invalida': 'Tu sesión terminó. Vuelve a entrar.',
+    'tu sesion vencio': 'Tu sesión venció por no usarla en 30 días. Entra otra vez con tu enlace (desde la app, o pídele uno al gerente).',
     'ese codigo ya es anual': 'Ese código ya es anual',
     'primero conviertela a anual': 'Primero conviértela a anual',
     'los codigos de regalo no vencen': 'Los códigos de regalo no vencen',
@@ -370,10 +371,21 @@ async function boot() {
   try { me = await rpc('cc_me', { p_t: token }); } catch (e) { renderLogin(e.message); return; }
   render();
 }
-function logout(silent) {
+function logout(silent, why) {
   if (!silent && token) rpc('cc_logout', { p_t: token }).catch(() => {});
   token = null; me = null; servers = null; store.set('cc_token', null);
-  renderLogin(silent ? 'Tu sesión terminó.' : '');
+  renderLogin(silent ? (why || 'Tu sesión terminó.') : '');
+}
+// Cierra la sesión en este y en todos los demás aparatos (por ejemplo, si perdiste el celular)
+function logoutAll(btn) {
+  btn.onclick = () => sheet(`<h2>¿Cerrar en todos tus aparatos?</h2><p class="note">Se cierra el panel en este y en cualquier otro aparato donde lo hayas abierto (por ejemplo, un celular perdido). Para volver a entrar necesitarás un enlace nuevo${isMgr() ? ' (desde la app: Ajustes → Centro de control)' : ' (pídeselo al gerente)'}.</p>
+    <div class="btns" style="margin-top:14px"><button class="btn" id="no">Cancelar</button><button class="btn danger" id="si">Sí, cerrar en todos</button></div>`, bg => {
+      bg.querySelector('#no').onclick = () => bg.remove();
+      bg.querySelector('#si').onclick = async () => {
+        try { await rpc('cc_logout_all', { p_t: token }); } catch (e) {}
+        bg.remove(); logout(true, 'Cerraste la sesión en todos tus aparatos.');
+      };
+    });
 }
 const LOGO = `<svg viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#1f1d1a"/><path d="M68 30 A26 26 0 1 0 68 70" fill="none" stroke="#d4b071" stroke-width="6" stroke-linecap="round"/><path d="M45 40 L62 50 L45 60 Z" fill="#d4b071"/></svg>`;
 function renderLogin(msg) {
@@ -706,7 +718,8 @@ function resellerSheet(r) {
     <div class="btns"><button class="btn acc" id="buy">Abonar créditos (me pagó)</button><button class="btn" id="gift">Regalar créditos</button><button class="btn" id="take">Quitar créditos</button></div>
     <div class="sec">Acceso</div>
     <div class="btns"><button class="btn wa" id="acc">Enviar acceso por WhatsApp</button><button class="btn" id="acccp">Copiar enlace de acceso</button></div>
-    <div class="note">El enlace sirve una vez y vence en 7 días. Si cambia de celular, mándale otro.</div>
+    <div class="btns"><button class="btn danger" id="kick">Cerrar sus sesiones</button></div>
+    <div class="note">El enlace sirve una vez y vence en 7 días. Si cambia o pierde su celular, cierra sus sesiones y mándale otro.</div>
     <div class="sec">Más</div>
     <div class="btns"><button class="btn" id="ed">Editar datos</button><button class="btn" id="mv">Ver movimientos</button><button class="btn danger" id="pz">${r.paused ? 'Quitar pausa' : 'Pausar'}</button></div>
     <div class="note">En pausa no puede crear códigos ni entrar al panel. Sus clientes que ya pagaron siguen funcionando.</div>`, bg => {
@@ -737,6 +750,9 @@ function resellerSheet(r) {
         try { const u = await link(); window.open(waLink(r.phone, `Hola ${r.name.split(' ')[0]}, este es tu acceso al Centro de control de CineCasa. Ábrelo en tu celular (sirve una vez, guárdalo en tu pantalla de inicio):\n${u}`), '_blank'); } catch (e) { toast(e.message, 1); }
       };
       bg.querySelector('#acccp').onclick = async () => { try { copy(await link()); } catch (e) { toast(e.message, 1); } };
+      bg.querySelector('#kick').onclick = () => confirmIn(bg, '¿Cerrar todas sus sesiones del panel? Necesitará un enlace nuevo para entrar.', async () => {
+        try { const n = await rpc('cc_rs_logout', { p_t: token, p_id: r.id }); toast(n ? `Listo: se cerraron ${n} ${n == 1 ? 'sesión' : 'sesiones'}` : 'No tenía sesiones abiertas'); } catch (e) { toast(e.message, 1); }
+      });
       bg.querySelector('#ed').onclick = () => { bg.remove(); editReseller(r); };
       bg.querySelector('#mv').onclick = () => { bg.remove(); ledgerSheet(r); };
       bg.querySelector('#pz').onclick = () => confirmIn(bg, r.paused ? '¿Quitar la pausa?' : '¿Pausar a este distribuidor?', async () => {
@@ -843,8 +859,10 @@ function viewRules() {
     <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa, aunque viva en otra ciudad.</b> El cliente lo hace solo con un celular Android en el mismo WiFi que la tele:</div>
       <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele, le dice qué tocar y hasta escribe la contraseña del permiso. 4. La tele entra sola con su código y sus datos: no escribe nada con el control.</div>
       <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi. Si se atora, en la app y en la tele tiene un botón para escribirte por WhatsApp.</div>
+      <div class="note"><b>Si lo instalas tú desde tu celular</b>, elige «No, es de otra persona»: así la tele no se queda con tus datos; ahí el cliente pone su código o su prueba.</div>
       <div class="btns" style="margin-top:12px"><a class="btn wa rokuwa" target="_blank" rel="noopener" href="#">Mandar los pasos por WhatsApp</a><button class="btn rokucp">Copiar liga de los pasos</button><a class="btn" href="../roku/Instalador-CineCasa-Roku.zip" download>Instalador para Windows</a></div></div>
-    <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button></div>`;
+    <div class="sec">Sesión</div><div class="btns"><button class="btn" id="other">Abrir en otro aparato</button><button class="btn danger" id="out">Cerrar sesión</button><button class="btn danger" id="outall">Cerrar en todos mis aparatos</button></div>
+    <div class="note">La sesión se cierra sola si no abres el panel en 30 días.</div>`;
   $('#sv').onclick = async () => {
     const v = id => Number($('#' + id).value);
     const data = { trial_days: v('td'), trial_devices: v('tdv'), trial_month_cap: v('tcap'), start_credits: v('sc'),
@@ -861,6 +879,7 @@ function viewRules() {
     } catch (e) { toast(e.message, 1); }
   };
   $('#out').onclick = () => logout();
+  logoutAll($('#outall'));
   mountServers(); mountRoku();
 }
 function mountRoku() {
@@ -888,6 +907,7 @@ function viewAccount() {
     <div class="stat"><div class="note" style="margin-top:0"><b>No tienes que ir a su casa, aunque viva en otra ciudad.</b> El cliente lo hace solo con un celular Android en el mismo WiFi que la tele:</div>
       <div class="note">1. Instala CineCasa en su celular (el mismo mensaje de invitación). 2. En el celular: Más → «Instalar CineCasa en una tele Roku». 3. El celular encuentra la tele, le dice qué tocar y hasta escribe la contraseña del permiso. 4. La tele entra sola con su código y sus datos: no escribe nada con el control.</div>
       <div class="note">¿Sin celular Android? Con una computadora Windows en el mismo WiFi. Si se atora, en la app y en la tele tiene un botón para escribirte por WhatsApp.</div>
+      <div class="note"><b>Si lo instalas tú desde tu celular</b>, elige «No, es de otra persona»: así la tele no se queda con tus datos; ahí el cliente pone su código o su prueba.</div>
       <div class="btns" style="margin-top:12px"><a class="btn wa rokuwa" target="_blank" rel="noopener" href="#">Mandar los pasos por WhatsApp</a><button class="btn rokucp">Copiar liga de los pasos</button><a class="btn" href="../roku/Instalador-CineCasa-Roku.zip" download>Instalador para Windows</a></div></div>
     <div class="sec">Cómo funciona</div>
     <div class="group">
@@ -896,8 +916,10 @@ function viewAccount() {
       <div class="row"><div class="main"><div class="t">Renovación</div><div class="s" style="white-space:normal">Antes de que venza, toca «Renovar 1 año». Gasta 1 crédito por aparato.</div></div></div>
       <div class="row"><div class="main"><div class="t">Niveles</div><div class="s" style="white-space:normal">${(r.levels || []).map(l => `${esc(l.name)}: desde ${l.min} aparatos al año, crédito a ${money(l.price)}`).join(' · ')}</div></div></div>
     </div>
-    <div class="sec">Sesión</div><button class="btn danger" id="out">Cerrar sesión</button>`;
+    <div class="sec">Sesión</div><div class="btns"><button class="btn danger" id="out">Cerrar sesión</button><button class="btn danger" id="outall">Cerrar en todos mis aparatos</button></div>
+    <div class="note">La sesión se cierra sola si no abres el panel en 30 días.</div>`;
   $('#out').onclick = () => logout();
+  logoutAll($('#outall'));
   $('#asv').onclick = async () => {
     try { me = await rpc('cc_rs_self', { p_t: token, p_phone: $('#aph').value, p_pay_link: $('#apl').value }); toast('Datos guardados'); }
     catch (e) { toast(e.message, 1); }

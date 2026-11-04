@@ -19,7 +19,7 @@ function getJson(url as string) as dynamic
     x.SetCertificatesFile("common:/certs/ca-bundle.crt")
     x.InitClientCertificates()
     x.EnableEncodings(true)
-    x.AddHeader("User-Agent", "CineCasaRoku/1.1")
+    x.AddHeader("User-Agent", "IPTVSmartersPro")
     t = x.GetToString()
     if t = "" then return invalid
     return ParseJson(t)

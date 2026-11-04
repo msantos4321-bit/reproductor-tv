@@ -1,0 +1,359 @@
+import Chalk = require('chalk');
+import type { ChalkFunction } from 'chalk';
+
+/* Excluded from this release type: chalk */
+
+/**
+ * A {@link Transport} that writes log messages to the console, routing each message to the matching
+ * `console` method (e.g. `console.warn` for warnings) and falling back to `console.log`.
+ * @public
+ */
+export declare class ConsoleTransport {
+    pipe(message: LogMessage): void;
+}
+
+/**
+ * Create a new logger that inherits all the properties of this current logger.
+ * This is a one-time copy of the parent's properties to the child, so future changes to the parent logger will not
+ * be reflected on the child logger.
+ * @public
+ */
+export declare const createLogger: {
+    (): Logger;
+    (prefix: string): Logger;
+    (options: Partial<LoggerOptions>): Logger;
+};
+
+/**
+ * A {@link Transport} that appends formatted log messages to a file. Messages logged before a file path
+ * is set are queued and flushed once {@link FileTransport.setLogFilePath} is called with a valid path.
+ * @public
+ */
+export declare class FileTransport extends QueuedTransport {
+    constructor(logFilePath?: string);
+    setLogFilePath(logfilePath?: string): void;
+}
+
+/**
+ * The core logger. Handles formatting, log-level filtering, prefixes, timing helpers, child loggers,
+ * and dispatching messages to its {@link Transport | transports}.
+ * @public
+ */
+export declare class Logger {
+    constructor(prefix?: string);
+    constructor(options?: Partial<LoggerOptions>);
+    /**
+     * The options used to drive the functionality of this logger
+     */
+    private options;
+    /**
+     * The timestamp format string. Defaults to 'HH:mm:ss.SSS' (24-hour time with milliseconds)
+     *
+     * https://date-fns.org/v2.30.0/docs/format
+     */
+    get timestampFormat(): string;
+    set timestampFormat(value: string | undefined);
+    /**
+     * The log level of this logger. If a log level is not specified, it will inherit from the parent logger or default to 'log'
+     */
+    get logLevel(): LogLevel | LogLevelNumeric;
+    set logLevel(value: LogLevel | LogLevelNumeric);
+    /**
+     * Given a LogLevel number or string, return the string representation of the LogLevel
+     */
+    getLogLevelText(logLevel: LogLevel | LogLevelNumeric): LogLevel;
+    /**
+     * Given a LogLevel number or string, return the string representation of the LogLevel
+     */
+    getLogLevelNumeric(logLevel: LogLevel | LogLevelNumeric): LogLevelNumeric;
+    /**
+     * Get the prefix of this logger and all its parents
+     */
+    private getPrefixes;
+    /**
+     * The prefix for the current logger only. This excludes prefixes inherited from parent loggers.
+     */
+    get prefix(): string | undefined;
+    set prefix(value: string | undefined);
+    get parent(): Logger | undefined;
+    set parent(value: Logger | undefined);
+    get transports(): Transport[];
+    set transports(value: Transport[]);
+    /**
+     * If true, colors will be used in transports that support it.
+     */
+    get enableColor(): boolean;
+    set enableColor(value: boolean);
+    /**
+     * Get colored text if color is enabled, or the raw text back if color is not enabled
+     */
+    private colorWrap;
+    /**
+     * Wrap the text in the color of the given logLevel
+     */
+    private logLevelColorWrap;
+    /**
+     * Should the log level be padded with trailing spaces when printed
+     */
+    get consistentLogLevelWidth(): boolean;
+    set consistentLogLevelWidth(value: boolean);
+    /**
+     * Should the log level be printed
+     */
+    get printLogLevel(): boolean;
+    set printLogLevel(value: boolean);
+    /**
+     * Should the timestamp be printed
+     */
+    get printTimestamp(): boolean;
+    set printTimestamp(value: boolean);
+    /**
+     * Get notified about every log message
+     * @param subscriber - a function that is called with the given log message
+     * @returns an unsubscribe function
+     */
+    subscribe(subscriber: MessageHandler): () => void;
+    /**
+     * Register a transport handler to be notified of all log events
+     */
+    addTransport(transport: Transport): () => void;
+    /**
+     * Remove a transport from this logger instance (but not parents
+     */
+    removeTransport(transport: Transport): void;
+    private emit;
+    formatTimestamp(date: Date): string;
+    /**
+     * Get the current date. Mostly here to allow mocking for unit tests
+     */
+    private getCurrentDate;
+    /**
+     * Given an array of args, stringify them
+     */
+    stringifyArgs(args: unknown[]): string;
+    /**
+     * Get all the leading parts of the message. This includes timestamp, log level, any message prefixes.
+     * This excludes actual body of the messages.
+     */
+    formatLeadingMessageParts(message: LogMessage, enableColor?: boolean): string;
+    /**
+     * Build a single string from the LogMessage in the Logger-standard format
+     */
+    formatMessage(message: LogMessage, enableColor?: boolean): string;
+    /**
+     * The base logging function. Provide a level
+     */
+    buildLogMessage(logLevel: LogLevel | LogLevelNumeric, ...args: unknown[]): LogMessage;
+    /**
+     * Determine if the specified logLevel is currently active.
+     */
+    isLogLevelEnabled(targetLogLevel: LogLevel | LogLevelNumeric): boolean;
+    /**
+     * Write a log entry IF the specified logLevel is enabled
+     */
+    write(logLevel: LogLevel | LogLevelNumeric, ...args: unknown[]): void;
+    trace(...messages: unknown[]): void;
+    debug(...messages: unknown[]): void;
+    info(...messages: unknown[]): void;
+    log(...messages: unknown[]): void;
+    warn(...messages: unknown[]): void;
+    error(...messages: unknown[]): void;
+    /**
+     * Writes to the log (if logLevel matches), and also provides a function that can be called to mark the end of a time.
+     */
+    timeStart(logLevel: LogLevel | LogLevelNumeric, ...messages: unknown[]): (status?: string) => void;
+    /**
+     * Writes to the log (if logLevel matches), and also times how long the action took to occur.
+     * `action` is called regardless of logLevel, so this function can be used to nicely wrap
+     * pieces of functionality.
+     * The action function also includes two parameters, `pause` and `resume`, which can be used to improve timings by focusing only on
+     * the actual logic of that action.
+     */
+    time<T>(logLevel: LogLevel | LogLevelNumeric, messages: any[], action: (pause: () => void, resume: () => void) => T): T;
+    /**
+     * Create a new logger that inherits all the properties of this current logger.
+     * This is a one-time copy of the parent's properties to the child, so future changes to the parent logger will not
+     * be reflected on the child logger.
+     */
+    createLogger(): Logger;
+    createLogger(prefix: string): Logger;
+    createLogger(options: Partial<LoggerOptions>): Logger;
+    /**
+     * Create a new logger and pass it in as the first parameter of a callback.
+     * This allows to created nested namespaced loggers without explicitly creating the
+     * intermediary logger variable.
+     * @returns any return value that the callback produces.
+     */
+    useLogger<T>(prefix: string, callback: (logger: Logger) => T): T;
+    useLogger<T>(options: Partial<LoggerOptions>, callback: (logger: Logger) => T): T;
+    /**
+     * Ensure we have a stable set of options.
+     * @param param - a prefix string or partial options object to normalize
+     * @returns the normalized {@link LoggerOptions}
+     */
+    private sanitizeOptions;
+    destroy(): void;
+}
+
+/**
+ * The default, shared logger instance. Writes to the console out of the box.
+ * @public
+ */
+declare const logger: Logger;
+export default logger;
+export { logger }
+
+/**
+ * The options used to construct or configure a {@link Logger}.
+ * @public
+ */
+export declare interface LoggerOptions {
+    /**
+     * The timestamp format string. Defaults to 'HH:mm:ss.SSS' (24-hour time with milliseconds)
+     *
+     * https://date-fns.org/v2.30.0/docs/format
+     */
+    timestampFormat?: string;
+    /**
+     * A prefix applied to every log entry. Appears directly after the logLevel
+     */
+    prefix: string | undefined;
+    /**
+     * The level of logging that should be emitted.
+     */
+    logLevel: LogLevel | LogLevelNumeric;
+    /**
+     * A list of functions that will be called whenever a log message is received
+     */
+    transports: Transport[];
+    /**
+     * A parent logger. Any unspecified options in the current logger will be loaded from the parent.
+     */
+    parent?: Logger;
+    /**
+     * If true, colors will be used in transports that support it. If the console you're using doesn't support colors, then colors will still be disabled.
+     * This is a way to disable colors globally in situations when color IS supported.
+     */
+    enableColor?: boolean;
+    /**
+     * Should the log level be padded with trailing spaces when printed
+     */
+    consistentLogLevelWidth?: boolean;
+    /**
+     * Should the log level be printed in the log message
+     */
+    printLogLevel?: boolean;
+    /**
+     * Should the timestamp be printed in the log message
+     */
+    printTimestamp?: boolean;
+}
+
+/**
+ * The set of textual log levels, ordered from least to most verbose.
+ * @public
+ */
+export declare type LogLevel = 'off' | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+
+/* Excluded from this release type: LogLevelColor */
+
+/**
+ * The numeric form of each {@link LogLevel}. Accepted anywhere a {@link LogLevel} is, for callers who
+ * prefer numeric levels.
+ * @public
+ */
+export declare enum LogLevelNumeric {
+    off = 0,
+    error = 1,
+    warn = 2,
+    log = 3,
+    info = 4,
+    debug = 5,
+    trace = 6
+}
+
+/**
+ * Maps each {@link LogLevel} to its numeric priority, used to decide whether a message at a given level
+ * should be emitted. Exposed so consumers can convert a {@link LogLevel} to its numeric form (the same
+ * conversion {@link Logger.getLogLevelNumeric} performs).
+ * @public
+ */
+export declare const LogLevelPriority: Record<string, number>;
+
+/**
+ * A single log entry as seen by {@link Transport | transports}. Carries the raw args, the formatted text,
+ * the level, timestamp, prefixes, and a reference back to the originating {@link Logger}.
+ * @public
+ */
+export declare interface LogMessage {
+    /**
+     * A js Date instance when the log message was created
+     */
+    date: Date;
+    /**
+     * A formatted timestamp string
+     */
+    timestamp: string;
+    /**
+     * The LogLevel this LogMessage was emitted with.
+     */
+    logLevel: LogLevel;
+    /**
+     * The list of prefixes at the time of this LogMessage. Empty prefixes are omitted.
+     */
+    prefixes: string[];
+    /**
+     * The arguments passed to the log function
+     */
+    args: unknown[];
+    /**
+     * The stringified version of the arguments
+     */
+    argsText: string;
+    /**
+     * The instance of the logger this message was created with
+     */
+    logger: Logger;
+}
+
+/**
+ * A function that receives a {@link LogMessage}. Used by {@link Logger.subscribe} and as the writer for
+ * queue-based transports.
+ * @public
+ */
+export declare type MessageHandler = (message: LogMessage) => void;
+
+/**
+ * A {@link Transport} that holds incoming messages in an in-memory queue until a writer function is supplied.
+ * Once a writer is set, queued messages are flushed to it and subsequent messages are written immediately.
+ * Useful as a base for transports whose destination isn't available yet (see {@link FileTransport}).
+ * @public
+ */
+export declare class QueuedTransport {
+    constructor(
+    /**
+     * A function to be called any time a message needs to be written
+     */
+    writer?: MessageHandler);
+    private messageQueue;
+    private writer?;
+    setWriter(writer: MessageHandler | undefined): void;
+    pipe(message: LogMessage): void;
+}
+
+/**
+ * The contract a transport must implement to receive log messages from a {@link Logger}.
+ * @public
+ */
+export declare interface Transport {
+    /**
+     * Receives the incoming message
+     */
+    pipe(message: LogMessage): void;
+    /**
+     * Called whenever the logger is destroyed, allows the transport to clean itself up
+     */
+    destroy?(): void;
+}
+
+export { }

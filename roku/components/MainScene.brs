@@ -40,6 +40,12 @@ sub init()
     m.formItems = []
     m.pairCode = ""
     m.hpCode = ""
+    m.pairTok = ""
+    m.pairOld = false
+    m.httpsTried = false
+    m.live = invalid
+    m.helpFrom = ""
+    m.blockedMode = ""
 
     m.formList.observeField("itemSelected", "onFormSelect")
     m.video.observeField("state", "onVideoState")
@@ -95,6 +101,11 @@ function base() as string
         s = Left(s, Len(s) - 1)
     end while
     return s
+end function
+
+' Liga de un video del proveedor (usuario y contraseña codificados por si traen símbolos)
+function streamUrl(kind as string, id as string, ext as string) as string
+    return base() + "/" + kind + "/" + m.user.EncodeUriComponent() + "/" + m.pass.EncodeUriComponent() + "/" + id + "." + ext
 end function
 
 function api(action as string) as string
@@ -178,25 +189,49 @@ end sub
 
 ' ---------- revisión periódica (cada 3 min): activación, servidor del vendedor y «en uso ahora» ----------
 sub ping(id as string)
-    rpc(id, "cc_lic_ping", { p_code: m.code, p_device: m.deviceId, p_playing: m.video.visible, p_model: m.deviceName, p_version: "1.2.0" })
+    rpc(id, "cc_lic_ping", { p_code: m.code, p_device: m.deviceId, p_playing: m.video.visible, p_model: m.deviceName, p_version: "1.3.0" })
 end sub
 
 sub onPingTick()
     if m.code <> "" and not m.owner then ping("ping")
 end sub
 
+function nowSec() as integer
+    return CreateObject("roDateTime").AsSeconds()
+end function
+
+' Se guarda cuándo fue la última revisión buena: sin poder revisar se sigue viendo hasta 7 días
+sub markOk()
+    rset("okAt", Str(nowSec()).Trim())
+end sub
+
+function recentOk() as boolean
+    t = rget("okAt")
+    if t = "" then return false
+    return nowSec() - Int(Val(t)) < 7 * 24 * 3600
+end function
+
 sub onPing(first as boolean, code as integer, data as object)
     st = ""
     if data <> invalid and type(data) = "roAssociativeArray" then st = Str2(data.status)
     if code <> 200 or st = "" then
-        ' sin internet hacia la nube: deja ver (se revisa la próxima vez)
-        if first then
-            showHome()
-            m.pingTimer.control = "start"
+        ' sin internet hacia la nube: deja ver hasta 7 días desde la última revisión buena
+        if recentOk() then
+            if first then
+                showHome()
+                m.pingTimer.control = "start"
+            end if
+        else
+            m.pingTimer.control = "stop"
+            if m.video.visible then stopVideo()
+            m.blockedMode = "offline"
+            showForm("Sin conexión", "No se pudo revisar tu activación desde hace varios días. Revisa que la tele tenga internet e inténtalo de nuevo.", ["Reintentar", "Mi cuenta"], "offline")
         end if
         return
     end if
     if st = "ok" then
+        markOk()
+        m.blockedMode = ""
         followServer(data.server)
         if data.server <> invalid then m.vsrv = data.server
         if data.servers <> invalid then m.vsrvAll = data.servers
@@ -214,8 +249,12 @@ sub onPing(first as boolean, code as integer, data as object)
     end if
     m.pingTimer.control = "stop"
     if m.video.visible then stopVideo()
+    if st = "expired" then
+        ' el código se conserva: al renovar sigue funcionando sin escribir nada
+        showExpired("")
+        return
+    end if
     msg = "Tu activación ya no es válida."
-    if st = "expired" then msg = "Tu plan venció. Pide tu renovación a quien te lo vendió; tu código sigue siendo el mismo."
     if st = "revoked" then msg = "Tu código fue desactivado."
     if st = "blocked" then
         msg = "Esta tele se quitó de la cuenta desde otro aparato o por tu vendedor. Si fue un error, pide que la permitan otra vez."
@@ -223,8 +262,20 @@ sub onPing(first as boolean, code as integer, data as object)
         m.reg.Delete("server") : m.reg.Delete("user") : m.reg.Delete("pass") : m.reg.Delete("vs")
         m.server = "" : m.user = "" : m.pass = ""
     end if
+    if m.code <> "" then rset("lastCode", m.code)
     m.code = "" : m.reg.Delete("code") : m.reg.Flush()
     showActivation(msg)
+end sub
+
+' ---------- vencido: QR para pagar o escribir al vendedor ----------
+sub showExpired(msg as string)
+    m.helpFrom = "expired"
+    m.blockedMode = "expired"
+    items = ["Ya pagué, revisar otra vez", "Escribir otro código", "Unir a mi cuenta (desde mi celular o tablet)"]
+    m.formItems = items
+    showForm("Tu CineCasa venció", "Renuévala y sigue viendo: tu código " + m.code + " es el mismo, no tienes que reinstalar nada.", items, "expired")
+    m.formMsg.text = msg
+    rpc("help", "cc_lic_help", { p_code: m.code, p_device: m.deviceId })
 end sub
 
 ' Si la cuenta usa el servidor del vendedor y él cambió la liga, se toma sola
@@ -269,7 +320,9 @@ end sub
 sub askHelp()
     m.helpFrom = m.mode
     m.formMsg.text = "Buscando el WhatsApp de tu vendedor…"
-    rpc("help", "cc_lic_info", { p_code: m.code, p_device: m.deviceId })
+    c = m.code
+    if c = "" then c = rget("lastCode")
+    rpc("help", "cc_lic_help", { p_code: c, p_device: m.deviceId })
 end sub
 
 sub onHelp(data as object)
@@ -280,19 +333,54 @@ sub onHelp(data as object)
         ch = Mid(ph, k, 1)
         if ch >= "0" and ch <= "9" then digits = digits + ch
     end for
-    if Len(digits) < 10 then
-        m.formMsg.text = "Tu vendedor todavía no puso su WhatsApp. Escríbele por donde te vendió CineCasa."
+    pay = ""
+    price = ""
+    seller = ""
+    if data <> invalid and type(data) = "roAssociativeArray" then
+        pay = Str2(data.pay_link)
+        if data.price <> invalid then price = Str2(data.price)
+        seller = Str2(data.seller)
+    end if
+    if Left(pay, 4) <> "http" then pay = ""
+    expired = (m.helpFrom = "expired")
+    if Len(digits) < 10 and pay = "" then
+        if expired then
+            m.formMsg.text = "Pide tu renovación a quien te vendió CineCasa."
+        else
+            m.formMsg.text = "Tu vendedor todavía no puso su WhatsApp. Escríbele por donde te vendió CineCasa."
+        end if
         return
     end if
     wa = digits
     if Len(wa) = 10 then wa = "52" + wa
-    txt = "Hola, necesito ayuda con CineCasa en mi tele Roku. Mi código es " + m.code + "."
-    showForm("Ayuda de tu vendedor", "Escanea el código con tu celular para escribirle por WhatsApp, o márcale al " + digits + ". Ya va tu código en el mensaje.", ["Volver"], "help")
-    m.qrTitle.text = "WhatsApp de tu vendedor"
-    m.qrText.text = "Abre la cámara de tu celular y apunta al código."
-    m.qrUrl.text = digits
+    c = m.code
+    if c = "" then c = rget("lastCode")
+    if expired then
+        txt = "Hola, quiero renovar mi CineCasa. Mi código es " + c + "."
+    else
+        txt = "Hola, necesito ayuda con CineCasa en mi tele Roku. Mi código es " + c + "."
+    end if
+    if not expired then showForm("Ayuda de tu vendedor", "Escanea el código con tu celular para escribirle por WhatsApp, o márcale al " + digits + ". Ya va tu código en el mensaje.", ["Volver"], "help")
+    if expired then
+        t = "Renuévala y sigue viendo: tu código " + c + " es el mismo, no tienes que reinstalar nada."
+        if price <> "" and price <> "0" then t = t + " Renovación: $" + price + "."
+        if seller <> "" then t = t + " Te atiende: " + seller + "."
+        if pay <> "" then t = t + " Para pagar en línea entra a: " + pay
+        m.formText.text = t
+    end if
+    if Len(digits) >= 10 then
+        m.qrTitle.text = "Escríbele por WhatsApp"
+        m.qrText.text = "Abre la cámara de tu celular y apunta al código. Ya va tu código en el mensaje."
+        m.qrUrl.text = digits
+        u = "https://wa.me/" + wa + "?text=" + txt.EncodeUriComponent()
+    else
+        m.qrTitle.text = "Paga desde tu celular"
+        m.qrText.text = "Abre la cámara de tu celular y apunta al código."
+        m.qrUrl.text = ""
+        u = pay
+    end if
     m.qrCode.text = ""
-    m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + ("https://wa.me/" + wa + "?text=" + txt.EncodeUriComponent()).EncodeUriComponent()
+    m.qr.uri = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + u.EncodeUriComponent()
     m.qrBox.visible = true
 end sub
 
@@ -425,6 +513,22 @@ sub onFormSelect()
         else
             showLogin("")
         end if
+    else if m.mode = "offline" then
+        if i = 0 then
+            m.formMsg.text = "Revisando…"
+            ping("check")
+        else
+            showAccount("")
+        end if
+    else if m.mode = "expired" then
+        if i = 0 then
+            m.formMsg.text = "Revisando…"
+            ping("check")
+        else if i = 1 then
+            ask("Tu código (ej. CC-7F3K-92QD)", "", "code")
+        else if i = 2 then
+            startHousePair()
+        end if
     else if m.mode = "help" then
         if m.helpFrom = "login" then showLogin("") else showAccount("")
     else if m.mode = "wait" then
@@ -464,11 +568,7 @@ end sub
 
 sub newHp()
     m.hpCode = Str(100000 + Rnd(899999)).Trim()
-    t = ""
-    for k = 1 to 32
-        t = t + Mid("0123456789abcdef", Rnd(16), 1)
-    end for
-    m.hpToken = t
+    m.hpToken = CreateObject("roDeviceInfo").GetRandomUUID() + CreateObject("roDeviceInfo").GetRandomUUID()
     rpc("hpReq", "cc_pair_request", { p_code: m.hpCode, p_token: m.hpToken })
     m.hpStarted = CreateObject("roDateTime").AsSeconds()
 end sub
@@ -576,6 +676,7 @@ sub doLogin()
         return
     end if
     m.formMsg.text = "Conectando…"
+    m.httpsTried = false
     request("login", api(""), "GET", "", invalid)
 end sub
 
@@ -587,7 +688,18 @@ sub startPairing()
     m.qrBox.visible = true
     if m.pairCode <> "" then return
     newHp()   ' el QR también trae un código para unir la tele a la cuenta del celular
-    rpc("pairNew", "cc_pair_new", {})
+    pairNewReq()
+end sub
+
+' Código para el QR protegido con una llave que solo conoce esta tele
+sub pairNewReq()
+    m.pairTok = CreateObject("roDeviceInfo").GetRandomUUID()
+    if m.pairOld then
+        m.pairTok = ""
+        rpc("pairNew", "cc_pair_new", {})
+    else
+        rpc("pairNew", "cc_pair_new2", { p_token: m.pairTok })
+    end if
 end sub
 
 sub stopPairing()
@@ -599,7 +711,14 @@ end sub
 
 sub onPairNew(body as string)
     c = body.Replace(Chr(34), "").Trim()
-    if Len(c) <> 6 then return
+    if Len(c) <> 6 then
+        ' la nube todavía no tiene la función con llave: usa la de antes
+        if not m.pairOld then
+            m.pairOld = true
+            pairNewReq()
+        end if
+        return
+    end if
     m.pairCode = c
     m.pairStarted = CreateObject("roDateTime").AsSeconds()
     url = "https://msantos4321-bit.github.io/reproductor-tv/tv/?c=" + c
@@ -624,10 +743,14 @@ sub onPairTick()
         m.pairCode = ""
         m.pairTimer.control = "stop"
         newHp()
-        rpc("pairNew", "cc_pair_new", {})
+        pairNewReq()
         return
     end if
-    rpc("pairGet", "cc_pair_get", { p_code: m.pairCode })
+    if m.pairTok <> "" then
+        rpc("pairGet", "cc_pair_get2", { p_code: m.pairCode, p_token: m.pairTok })
+    else
+        rpc("pairGet", "cc_pair_get", { p_code: m.pairCode })
+    end if
     if m.hpCode <> "" then rpc("hpPoll", "cc_pair_poll", { p_code: m.hpCode, p_token: m.hpToken })
 end sub
 
@@ -645,11 +768,18 @@ sub onPairGet(data as object)
         m.pairCode = ""
         m.pairTimer.control = "stop"
         newHp()
-        rpc("pairNew", "cc_pair_new", {})
+        pairNewReq()
     end if
 end sub
 
 sub onLogin(code as integer, data as object)
+    if code <= 0 and not m.httpsTried and Left(LCase(m.server.Trim()), 7) = "http://" then
+        m.httpsTried = true
+        m.server = "https://" + Mid(m.server.Trim(), 8)
+        request("login", api(""), "GET", "", invalid)
+        return
+    end if
+    m.httpsTried = false
     if code = 200 and data <> invalid and data.user_info <> invalid and Str2(data.user_info.auth) = "1" then
         rset("server", m.server) : rset("user", m.user) : rset("pass", m.pass)
         if useVendor() then rset("vs", "1") else rset("vs", "0")
@@ -672,7 +802,7 @@ sub onTrial(data as object)
     res = ""
     if data.result <> invalid then res = data.result
     if e = "" and res = "ok" then
-        m.code = data.code : rset("code", m.code)
+        m.code = data.code : rset("code", m.code) : markOk()
         m.vsrvAsked = false
         start()
     else if e = "trial_used" or res = "trial_used" then
@@ -689,7 +819,7 @@ end sub
 sub onActivate(body as string)
     r = body.Replace(Chr(34), "").Trim()
     if r = "ok" then
-        m.code = m.pendingCode : rset("code", m.code)
+        m.code = m.pendingCode : rset("code", m.code) : markOk()
         m.vsrvAsked = false
         start()
     else if r <> "full" and r <> "blocked" and m.mode <> "activation" and m.mode <> "login" then
@@ -833,6 +963,11 @@ end sub
 
 ' Regresa a la app sin volver a cargar todo (desde Mi cuenta)
 sub backToHome()
+    if m.blockedMode <> "" then
+        ' vencido o sin poder revisar: no se regresa al inicio
+        if m.blockedMode = "expired" then showExpired("") else ping("check")
+        return
+    end if
     m.form.visible = false
     m.brand.visible = false
     m.sub.visible = false
@@ -1317,7 +1452,7 @@ sub onGridSelect()
     it = m.grid.content.getChild(m.grid.itemSelected)
     if it = invalid then return
     if it.kind = "live" then
-        play(it.title, base() + "/live/" + m.user + "/" + m.pass + "/" + it.xid + ".m3u8", "hls", true, invalid, 0)
+        playLiveFrom(m.grid.content, m.grid.itemSelected)
     else
         openDetail(it, m.grid)
     end if
@@ -1554,7 +1689,7 @@ sub playEpisode(ep as object, season as dynamic, startSec as integer)
     s = Int(Val(Str2(season)))
     t = Str2(ep.title)
     meta = { kind: "episode", id: Int(Val(Str2(ep.id))), sid: Int(Val(m.dItem.sid)), t: m.dItem.title, st: "T" + Str(s).Trim() + " E" + Str(num).Trim() + " · " + t, img: m.dItem.poster, s: s, e: num }
-    play(m.dItem.title + " · T" + Str(s).Trim() + " E" + Str(num).Trim(), base() + "/series/" + m.user + "/" + m.pass + "/" + Str2(ep.id) + "." + ext, fmt(ext), false, meta, startSec)
+    play(m.dItem.title + " · T" + Str(s).Trim() + " E" + Str(num).Trim(), streamUrl("series", Str2(ep.id), ext), fmt(ext), false, meta, startSec)
 end sub
 
 function findEpisode(epId as string) as object
@@ -1586,7 +1721,7 @@ sub onDetailButton()
         ext = m.dItem.ext
         if ext = "" then ext = "mp4"
         meta = { kind: "movie", id: Int(Val(m.dItem.xid)), sid: 0, t: m.dItem.title, st: Str2(m.dItem.year), img: m.dItem.poster, s: 0, e: 0 }
-        play(m.dItem.title, base() + "/movie/" + m.user + "/" + m.pass + "/" + m.dItem.xid + "." + ext, fmt(ext), false, meta, st)
+        play(m.dItem.title, streamUrl("movie", m.dItem.xid, ext), fmt(ext), false, meta, st)
     else if a = "resumeEp" and m.sCont <> invalid then
         f = findEpisode(Str2(m.sCont.id))
         if f <> invalid then playEpisode(f.ep, f.season, Int(m.sCont.pos / 1000))
@@ -1675,7 +1810,7 @@ sub onSRowSelect()
     if it = invalid then return
     addRecent(m.kb.text.Trim())
     if it.kind = "live" then
-        play(it.title, base() + "/live/" + m.user + "/" + m.pass + "/" + it.xid + ".m3u8", "hls", true, invalid, 0)
+        playLiveFrom(m.sRows.content.getChild(f[0]), f[1])
     else
         openDetail(it, m.sRows)
     end if
@@ -1750,12 +1885,45 @@ sub onAccountSelect(i as integer)
 end sub
 
 ' ---------------- reproductor ----------------
+ ' Guarda los canales de esa lista para cambiar con ▲ ▼ mientras se ve
+sub playLiveFrom(parent as object, idx as integer)
+    list = []
+    for i = 0 to parent.getChildCount() - 1
+        n = parent.getChild(i)
+        if n.kind = "live" then
+            if i = idx then idx = list.Count()
+            list.Push({ title: n.title, xid: n.xid })
+        end if
+    end for
+    if list.Count() = 0 then return
+    m.live = { list: list, idx: idx, fmt: 0, tries: 0 }
+    playLiveNow()
+end sub
+
+sub playLiveNow()
+    ch = m.live.list[m.live.idx]
+    exts = ["m3u8", "ts"]
+    formats = ["hls", "ts"]
+    k = m.live.fmt mod 2
+    play(ch.title, streamUrl("live", ch.xid, exts[k]), formats[k], true, invalid, 0)
+    m.info.text = ch.title
+end sub
+
+sub liveStep(d as integer)
+    n = m.live.list.Count()
+    m.live.idx = (m.live.idx + d + n) mod n
+    m.live.tries = 0
+    playLiveNow()
+end sub
+
 sub play(title as string, url as string, format as string, live as boolean, meta as dynamic, startSec as integer)
+    if not live then m.live = invalid
     c = CreateObject("roSGNode", "ContentNode")
     c.title = title
     c.url = url
     c.streamFormat = format
     c.live = live
+    c.HttpHeaders = ["User-Agent: IPTVSmartersPro"]
     if startSec > 5 then c.PlayStart = startSec - 3
     m.returnFocus = m.top.focusedChild
     m.playMeta = meta
@@ -1833,6 +2001,14 @@ end sub
 
 sub onVideoState()
     s = m.video.state
+    if s = "playing" and m.live <> invalid then m.live.tries = 0
+    if s = "error" and m.live <> invalid and m.live.tries < 4 then
+        ' en vivo: prueba el otro formato y reintenta antes de rendirse
+        m.live.tries = m.live.tries + 1
+        m.live.fmt = m.live.fmt + 1
+        playLiveNow()
+        return
+    end if
     if s = "error" then
         m.info.text = "No se pudo reproducir (" + m.video.errorMsg + ")."
         m.dMeta.text = "No se pudo reproducir. Intenta de nuevo o elige otra versión."
@@ -1847,8 +2023,18 @@ function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
     if m.video.visible then
         if key = "back" then
+            m.live = invalid
             stopVideo()
             return true
+        end if
+        if m.live <> invalid then
+            if key = "up" or key = "channelup" then
+                liveStep(1)
+                return true
+            else if key = "down" or key = "channeldown" then
+                liveStep(-1)
+                return true
+            end if
         end if
         return false
     end if

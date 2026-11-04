@@ -47,9 +47,17 @@ const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 $('c').value = (Q.get('c') || '').replace(/\D/g, '').slice(0, 6);
 const pc = (Q.get('p') || '').replace(/\D/g, '').slice(0, 6);
-if (pc.length === 6) {
+// Solo en Android (CineCasa no existe para iPhone). Sirve con la versión de Downloader y con la de Google Play.
+const android = /Android/i.test(navigator.userAgent);
+if (pc.length === 6 && android) {
   $('pairCard').style.display = 'block'; $('pc').textContent = pc;
-  $('pairBtn').onclick = () => { location.href = 'intent://pair?c=' + pc + '#Intent;scheme=cinecasa;package=com.mauricio.cinecasa;end'; };
+  $('pairBtn').onclick = () => {
+    const back = location.origin + location.pathname + '?nf=1&p=' + pc + ($('c').value ? '&c=' + $('c').value : '') + (Q.get('k') === '1' ? '&k=1' : '');
+    location.href = 'intent://pair?c=' + pc + '#Intent;scheme=cinecasa;S.browser_fallback_url=' + encodeURIComponent(back) + ';end';
+  };
+}
+if (Q.get('nf') === '1' && pc.length === 6) {
+  $('pairHelp').innerHTML = '<b style="color:var(--warn)">No se abrió CineCasa en este celular.</b> Si la tienes, ábrela y ve a Más → «Agregar otra tele o celular» y escribe el código <b>' + pc + '</b>. Si no la tienes, escribe abajo tus datos.';
 }
 const known = Q.get('k') === '1';   // la tele ya tiene el servidor de su vendedor
 if (known) { $('sw').style.display = 'none'; $('sk').style.display = 'block'; }
