@@ -32,10 +32,15 @@ import kotlinx.coroutines.launch
 /** Abre el asistente "Instalar CineCasa en una tele Roku". */
 val rokuOpen = mutableStateOf(false)
 
-private enum class RStep { Search, Pick, Enable, Wait, Pass, Working, Done }
+private enum class RStep { Who, Search, Pick, Enable, Wait, Pass, Working, Done }
 
-/** Datos que el celular le pasa a la tele para que entre sola (código, proveedor y cuenta de la casa). */
-private fun launchParams(): Map<String, String> {
+/**
+ * Datos que el celular le pasa a la tele para que entre sola.
+ * - Tele de esta casa: código, proveedor y cuenta de este celular.
+ * - Tele de otra persona (un cliente): NADA de este celular; solo el código del cliente si se escribió.
+ */
+private fun launchParams(forOther: Boolean, otherCode: String): Map<String, String> {
+    if (forOther) return if (otherCode.isNotBlank()) mapOf("lic" to otherCode.trim().uppercase()) else emptyMap()
     val a = com.mauricio.cinecasa.data.Prefs.account.value
     val real = a != null && !com.mauricio.cinecasa.data.Prefs.inDemo
     val cl = com.mauricio.cinecasa.data.Cloud
@@ -54,7 +59,9 @@ fun RokuInstallDialog(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val sp = remember { ctx.getSharedPreferences("roku", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
-    var step by remember { mutableStateOf(RStep.Search) }
+    var step by remember { mutableStateOf(RStep.Who) }
+    var forOther by remember { mutableStateOf(false) }
+    var otherCode by remember { mutableStateOf("") }
     var tvs by remember { mutableStateOf(listOf<RokuInstaller.Tv>()) }
     var tv by remember { mutableStateOf<RokuInstaller.Tv?>(null) }
     var pass by remember { mutableStateOf("") }
@@ -71,7 +78,7 @@ fun RokuInstallDialog(onClose: () -> Unit) {
                 "ok" -> {
                     sp.edit().putString("pw_${t.ip}", pass).apply()
                     msg = "Abriendo CineCasa en la tele con tus datos…"
-                    RokuInstaller.launchWith(t.ip, launchParams())
+                    RokuInstaller.launchWith(t.ip, launchParams(forOther, otherCode))
                     msg = ""; step = RStep.Done
                 }
                 "password" -> { msg = "La tele no aceptó la contraseña. Escribe la que pusiste en la tele."; step = RStep.Pass }
@@ -94,6 +101,7 @@ fun RokuInstallDialog(onClose: () -> Unit) {
     }
 
     LaunchedEffect(searchRun) {
+        if (searchRun == 0) return@LaunchedEffect   // primero se pregunta para quién es la tele
         step = RStep.Search; msg = ""
         tvs = RokuInstaller.discover(ctx)
         when (tvs.size) {
@@ -118,6 +126,16 @@ fun RokuInstallDialog(onClose: () -> Unit) {
         ) {
             Text("Instalar CineCasa en una tele Roku", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             when (step) {
+                RStep.Who -> {
+                    Text("¿La tele es de esta casa?", color = C.Hi, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Si es tuya, entra sola con tu misma cuenta. Si es de otra persona (por ejemplo un cliente), se instala sin tus datos: la tele le pide su prueba gratis o su código, y su usuario y contraseña.", color = C.Mid, fontSize = 13.sp)
+                    ActionButton("Sí, es de mi casa", { forOther = false; searchRun++ }, Modifier.fillMaxWidth(), primary = true)
+                    ActionButton("No, es de otra persona", { forOther = true }, Modifier.fillMaxWidth())
+                    if (forOther) {
+                        TvTextField(otherCode, { otherCode = it.uppercase().take(14) }, "Código de esa persona (opcional, ej. CC-7F3K-92QD)", Modifier.fillMaxWidth())
+                        ActionButton("Buscar la tele", { searchRun++ }, Modifier.fillMaxWidth(), primary = true)
+                    }
+                }
                 RStep.Search, RStep.Working -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spinner(size = 24.dp)
                     Text(if (step == RStep.Search) "Buscando teles Roku en tu WiFi…" else "Un momento…", color = C.Mid, fontSize = 14.sp)
@@ -177,7 +195,8 @@ fun RokuInstallDialog(onClose: () -> Unit) {
                 }
                 RStep.Done -> {
                     Text("¡Listo! CineCasa ya se abrió en tu tele.", color = C.Good, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("La tele entra sola con los datos de este celular. Si te pide algo, escanea su QR con este celular.\n\nPara abrirla después, búscala en la pantalla de inicio de la tele. Si algún día desaparece o hay versión nueva, repite esto desde aquí: ya no tendrás que hacer los pasos de la primera vez.", color = C.Mid, fontSize = 14.sp)
+                    Text((if (forOther) "La tele quedó lista sin tus datos: ahí la persona activa su prueba o su código y escribe su usuario y contraseña (o escanea el QR con su celular)."
+                        else "La tele entra sola con los datos de este celular. Si te pide algo, escanea su QR con este celular.") + "\n\nPara abrirla después, búscala en la pantalla de inicio de la tele. Si algún día desaparece o hay versión nueva, repite esto desde aquí: ya no tendrás que hacer los pasos de la primera vez.", color = C.Mid, fontSize = 14.sp)
                 }
             }
             if (msg.isNotEmpty()) Text(msg, color = C.Warn, fontSize = 13.sp)

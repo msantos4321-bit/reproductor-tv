@@ -92,8 +92,17 @@ class Xtream(private val acc: Account) {
                         dnsFailed++
                         break
                     } catch (e: java.net.SocketTimeoutException) {
+                        // Si no contesta, cambiar de «agente» no ayuda: se pasa a la otra forma (http/https)
                         timeouts++
                         attempts += "${base.substringBefore("://")} · ${ua.take(18)} → el servidor no respondió a tiempo"
+                        break
+                    } catch (e: java.net.ConnectException) {
+                        timeouts++
+                        attempts += "${base.substringBefore("://")} → no aceptó la conexión (${e.message?.take(60)})"
+                        break
+                    } catch (e: javax.net.ssl.SSLException) {
+                        attempts += "${base.substringBefore("://")} → error de conexión segura (${e.message?.take(60)})"
+                        break
                     } catch (e: Exception) {
                         attempts += "${base.substringBefore("://")} · ${ua.take(18)} → ${e.javaClass.simpleName}: ${e.message?.take(80)}"
                     }
@@ -109,7 +118,7 @@ class Xtream(private val acc: Account) {
                 authFailed -> "El servidor respondió, pero rechazó el usuario o la contraseña. Revísalos letra por letra (mayúsculas y minúsculas cuentan)."
                 dnsFailed > 0 && dnsFailed >= bases.size ->
                     "La liga del servidor «$host» no existe o ya no funciona. Pide la liga nueva a quien te vende el servicio. Si tu vendedor te la configuró, avísale para que la cambie en su panel."
-                timeouts > 0 && timeouts >= tries ->
+                timeouts > 0 && timeouts + dnsFailed >= bases.size ->
                     "El servidor «$host» no contestó. Puede estar saturado o caído, o tu internet está lento. Intenta en unos minutos."
                 else -> "No se pudo conectar con el servidor «$host». Revisa la liga y tu internet."
             }

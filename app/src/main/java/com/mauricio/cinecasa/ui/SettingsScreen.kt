@@ -62,9 +62,11 @@ fun SettingsScreen() {
     var confirmLogout by remember { mutableStateOf(false) }
     val me by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
     val isAdmin = me?.admin == true
+    val owner by com.mauricio.cinecasa.data.License.owner.collectAsState()
     val acct by Prefs.account.collectAsState()
     val demoNow = acct?.server == Prefs.DEMO_SERVER
     var serverDlg by remember { mutableStateOf(false) }
+    var checkDlg by remember { mutableStateOf(false) }
     val firstFr = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -78,6 +80,10 @@ fun SettingsScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("Ajustes", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Section("¿Algo no funciona?") {
+            Text("Revisa en un momento tu internet, tu activación, la liga de tu servidor y tu cuenta con el proveedor. Te dice en palabras qué falla y si es de la app o de tu proveedor.", color = C.Mid, fontSize = 13.sp)
+            ActionButton("Revisar mi servicio", { checkDlg = true }, primary = true)
+        }
         Section("Agregar otra tele o celular") {
             Text("Pon CineCasa en otro aparato de tu casa con tu misma cuenta, sin escribir contraseñas: abre la app en el aparato nuevo y escribe aquí el código que te muestra.", color = C.Mid, fontSize = 13.sp)
             ActionButton("Agregar aparato", { addDeviceOpen.value = true }, primary = true)
@@ -115,7 +121,6 @@ fun SettingsScreen() {
         }
         if (!isAdmin) Text("La cuenta, los perfiles y los aparatos solo los cambia el administrador.", color = C.Low, fontSize = 12.sp)
 
-        val owner by com.mauricio.cinecasa.data.License.owner.collectAsState()
         var asClient by remember { mutableStateOf(false) }
         var previewAct by remember { mutableStateOf(false) }
         if (isAdmin && owner && !asClient) Section("Centro de control") { ControlCenterSection() }
@@ -249,6 +254,15 @@ fun SettingsScreen() {
                 }, icon = Icons.Filled.Refresh)
                 Text("Tienes la versión ${BuildConfig.VERSION_NAME}", color = C.Low, fontSize = 13.sp)
             }
+            if (owner && isAdmin) {
+                var ch by remember { mutableStateOf(if (com.mauricio.cinecasa.data.Updater.beta) "beta" else "stable") }
+                Text("Este aparato recibe:", color = C.Mid, fontSize = 13.sp)
+                Wrap {
+                    Pill("Versiones de prueba", ch == "beta", { ch = "beta"; Prefs.updateChannel = "beta" })
+                    Pill("Solo las de todos", ch == "stable", { ch = "stable"; Prefs.updateChannel = "stable" })
+                }
+                Text("Las versiones de prueba llegan solo a tus aparatos. Tus clientes reciben una versión hasta que la publicas para todos.", color = C.Low, fontSize = 12.sp)
+            }
         }
 
         Section("Acerca de") {
@@ -258,6 +272,7 @@ fun SettingsScreen() {
     }
 
     if (serverDlg) ServerDialog { serverDlg = false }
+    if (checkDlg) ServiceCheckDialog { checkDlg = false }
     if (confirmLogout) {
         ConfirmDialog(
             title = "¿Cambiar de cuenta?",

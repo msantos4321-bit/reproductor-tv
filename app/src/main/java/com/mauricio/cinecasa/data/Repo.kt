@@ -225,15 +225,32 @@ object Repo {
             Prefs.lastRefresh = System.currentTimeMillis()
             _state.value = LoadState.Ready
             saveCache(c)
-        } catch (e: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
             if (_catalog.value.movies.isEmpty() && _catalog.value.channels.isEmpty()) {
-                _state.value = LoadState.Error(
-                    if (e is java.net.UnknownHostException) "No se encuentra el servidor. Es probable que tu proveedor haya cambiado la dirección: pídele la nueva y elige «Cambiar servidor»."
-                    else "No se pudo descargar el catálogo: ${e.message ?: e.javaClass.simpleName}",
-                )
+                _state.value = LoadState.Error(friendlyError(e))
             } else {
                 _state.value = LoadState.Ready
             }
+        }
+    }
+
+    /** Explica en palabras sencillas por qué no se pudo bajar el catálogo. */
+    private fun friendlyError(e: Throwable): String {
+        val host = runCatching { java.net.URI(Prefs.account.value?.base.orEmpty()).host }.getOrNull().orEmpty()
+        val who = if (Prefs.vendorServer) "Avísale a quien te vendió CineCasa para que la cambie en su panel; tu app la toma sola."
+            else "Pide la liga nueva a tu proveedor."
+        val code = Regex("HTTP (\\d{3})").find(e.message.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
+        return when {
+            e is OutOfMemoryError -> "Tu lista es demasiado grande para la memoria de esta tele. Cierra otras apps o reinicia la tele e intenta de nuevo."
+            e is java.net.UnknownHostException -> "La liga de tu servidor («$host») no existe o ya no funciona. $who"
+            e is java.net.SocketTimeoutException -> "Tu proveedor no contestó a tiempo. Puede estar saturado o caído, o tu internet está lento. Intenta en unos minutos."
+            e is java.net.ConnectException -> "No se pudo conectar con tu proveedor («$host»). Revisa tu internet; si sigue igual, tu proveedor puede estar caído."
+            code == 401 || code == 403 -> "Tu proveedor rechazó la conexión: tu cuenta puede estar vencida, bloqueada o con la contraseña cambiada. Habla con quien te vende el servicio."
+            code != null && code >= 500 -> "El servidor de tu proveedor tiene una falla (código $code). No es la app: intenta más tarde o avísale a tu proveedor."
+            code == 404 -> "La liga de tu servidor está mal o cambió. $who"
+            else -> "No se pudo descargar tu lista de canales y películas. Toca «Revisar mi servicio» para ver qué falla."
         }
     }
 

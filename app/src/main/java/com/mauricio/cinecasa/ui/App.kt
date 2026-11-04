@@ -115,7 +115,7 @@ fun App() {
         when (val l = lic) {
             com.mauricio.cinecasa.data.License.State.Checking -> CenterMessage("CineCasa", "Revisando activación…", loading = true)
             is com.mauricio.cinecasa.data.License.State.Need ->
-                if (pairing) PairScreen { pairing = false } else ActivationScreen(l.msg, onPair = { pairing = true })
+                if (pairing) PairScreen { pairing = false } else key(l) { ActivationScreen(l.msg, onPair = { pairing = true }, reason = l.reason) }
             com.mauricio.cinecasa.data.License.State.Ok ->
                 if (account == null) {
                     if (pairing) PairScreen { pairing = false } else LoginScreen(onPair = { pairing = true })
@@ -137,6 +137,13 @@ private fun ProfileGate() {
     var ready by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withTimeoutOrNull(8000) { Cloud.ensureHousehold(); Cloud.syncNow() }
+        // Aparato que se acaba de unir a una casa: espera sus perfiles en vez de crear otro «Principal»
+        if (Cloud.joinedPending && Profiles.list.value.isEmpty()) {
+            repeat(4) {
+                if (Profiles.list.value.isEmpty()) kotlinx.coroutines.withTimeoutOrNull(8000) { runCatching { Cloud.syncNow() } }
+            }
+        }
+        if (Profiles.list.value.isNotEmpty()) Cloud.joinedPending = false
         Profiles.ensureFirst()
         val d = Profiles.deviceDefault
         Profiles.list.value.firstOrNull { it.id == d && !it.hasPin }?.let { Profiles.select(it) }
@@ -165,8 +172,8 @@ private fun Shell() {
     val memories = remember { HashMap<String, FocusMemory>() }
     val state = remember { HashMap<String, Any>() }
     val scope = rememberCoroutineScope()
-    var askPlay by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var serverDlg by remember { mutableStateOf(false) }
+    var checkDlg by remember { mutableStateOf(false) }
     val loadState by Repo.state.collectAsState()
 
     LaunchedEffect(Unit) { Repo.start() }
@@ -182,13 +189,6 @@ private fun Shell() {
         stack.add(Route.LivePlay(list, list.indexOf(last).coerceAtLeast(0)))
     }
 
-    fun withConnectionCheck(action: () -> Unit) {
-        // El conteo de "pantallas en uso" del proveedor no es confiable (cuenta sesiones viejas
-        // que ya se cerraron), así que ya no se pregunta antes de reproducir. Si de verdad
-        // se rebasa el límite, el reproductor muestra el aviso del servidor.
-        action()
-    }
-
     val nav = remember {
         Nav(
             go = { r ->
@@ -198,12 +198,8 @@ private fun Shell() {
                 } else stack.add(r)
             },
             back = { if (stack.size > 1) stack.removeAt(stack.lastIndex) },
-            play = { items, start, pos ->
-                // Lo descargado no usa pantallas de la cuenta: se reproduce directo
-                if (items.all { com.mauricio.cinecasa.data.Downloads.localUri(it.key) != null }) stack.add(Route.Play(items, start, pos))
-                else withConnectionCheck { stack.add(Route.Play(items, start, pos)) }
-            },
-            playLive = { ch, i -> withConnectionCheck { stack.add(Route.LivePlay(ch, i)) } },
+            play = { items, start, pos -> stack.add(Route.Play(items, start, pos)) },
+            playLive = { ch, i -> stack.add(Route.LivePlay(ch, i)) },
             memory = { k -> memories.getOrPut(k) { FocusMemory() } },
             state = state,
         )
@@ -222,12 +218,16 @@ private fun Shell() {
             emptyCatalog && (ls is LoadState.Loading || ls is LoadState.Idle) ->
                 CenterMessage("Preparando tu catálogo", (ls as? LoadState.Loading)?.msg ?: "Un momento…", loading = true)
             emptyCatalog && ls is LoadState.Error ->
-                CenterMessage("No se pudo cargar", ls.msg) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CenterMessage("No se pudo cargar tu catálogo", ls.msg) {
+                    val admin = Profiles.current.value?.admin == true
+                    Wrap(gap = 12.dp) {
                         ActionButton("Reintentar", { Repo.start(force = true) }, primary = true)
-                        ActionButton("Ver mis descargas", { stack.clear(); stack.add(Route.Downloads); Repo.markOffline() })
-                        ActionButton("Cambiar servidor", { serverDlg = true })
-                        ActionButton("Cambiar cuenta", { Repo.logout() })
+                        ActionButton("Revisar mi servicio", { checkDlg = true })
+                        if (com.mauricio.cinecasa.data.Downloads.list.value.any { it.finished })
+                            ActionButton("Ver mis descargas", { stack.clear(); stack.add(Route.Downloads); Repo.markOffline() })
+                        // La liga la pone el vendedor: el cliente no la cambia aquí
+                        if (admin && !Prefs.vendorServer) ActionButton("Cambiar servidor", { serverDlg = true })
+                        if (admin) ActionButton("Cambiar de cuenta", { Repo.logout() })
                     }
                 }
             top is Route.Play -> PlayerScreen(top.items, top.start, top.startPos)
@@ -260,16 +260,8 @@ private fun Shell() {
     }
 
     if (serverDlg) ServerDialog { serverDlg = false }
+    if (checkDlg) ServiceCheckDialog { checkDlg = false }
     ExpiryReminder()
-    askPlay?.let { (msg, action) ->
-        ConfirmDialog(
-            title = "Pantallas ocupadas",
-            message = msg,
-            confirm = "Reproducir de todos modos",
-            onConfirm = { askPlay = null; action() },
-            onDismiss = { askPlay = null },
-        )
-    }
 }
 
 private fun isTopLevel(r: Route) = r == Route.Home || r is Route.Search || r is Route.Movies || r is Route.Series ||
@@ -429,6 +421,8 @@ private fun PhoneShell(top: Route, canBack: Boolean) {
 private fun MoreScreen() {
     val nav = LocalNav.current
     val me by Profiles.current.collectAsState()
+    var checkOpen by remember { mutableStateOf(false) }
+    if (checkOpen) ServiceCheckDialog { checkOpen = false }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -461,6 +455,7 @@ private fun MoreScreen() {
             ) { DeviceUi.toggleRotationLock() }
             MoreRow(Icons.Filled.Tv, "Agregar otra tele o celular") { addDeviceOpen.value = true }
             if (!DeviceUi.isTv) MoreRow(Icons.Filled.LiveTv, "Instalar CineCasa en una tele Roku") { rokuOpen.value = true }
+            MoreRow(Icons.Filled.Settings, "Revisar mi servicio", value = "¿Algo no funciona?") { checkOpen = true }
             MoreRow(Icons.Filled.Settings, "Ajustes", last = true) { nav.go(Route.Settings) }
         }
         Text("Los videos siempre se ven a lo ancho. El candado deja fija la orientación del resto de la app.", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))
@@ -508,23 +503,27 @@ private fun ExpiryReminder() {
         val trial = i.optString("kind") == "trial"
         val seller = i.optString("seller").takeIf { it.isNotBlank() && it != "null" }
         show = (if (trial) "Tu prueba gratis" else "Tu CineCasa") + (if (days == 0) " vence hoy." else " vence en $days ${if (days == 1) "día" else "días"}.") +
-            (if (seller != null) " Pídele a $seller tu ${if (trial) "plan anual" else "renovación"} para no quedarte sin ver." else " Pide tu ${if (trial) "plan anual" else "renovación"} a quien te la vendió.") +
+            (if (seller != null) " Pídele a $seller tu ${if (trial) "plan anual" else "renovación"} para no quedarte sin ver." else if (trial) " Contrata tu plan anual para no quedarte sin ver." else " Renuévala para no quedarte sin ver.") +
             " Tu código sigue siendo el mismo."
     }
     show?.let { msg ->
-        val phone = info?.optString("seller_phone")?.filter { it.isDigit() }.orEmpty()
-        ConfirmDialog(
-            title = "Tu suscripción está por vencer", message = msg,
-            confirm = if (phone.length >= 10) "Escribirle por WhatsApp" else "Entendido",
-            onConfirm = {
-                show = null
-                if (phone.length >= 10) runCatching {
-                    val p = if (phone.length == 10) "52$phone" else phone
-                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/$p?text=" + android.net.Uri.encode("Hola, quiero renovar mi CineCasa (código ${com.mauricio.cinecasa.data.License.code}).")))
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            },
-            onDismiss = { show = null }, cancel = "Después",
-        )
+        val i = info
+        val trial = i?.optString("kind") == "trial"
+        val fr = remember { androidx.compose.ui.focus.FocusRequester() }
+        Dialog(onDismissRequest = { show = null }) {
+            Column(
+                Modifier.cardWidth(500.dp).background(C.Panel, RoundedCornerShape(16.dp)).padding(26.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Tu suscripción está por vencer", color = C.Hi, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Text(msg, color = C.Mid, fontSize = 15.sp)
+                ContactActions(i, if (trial) "Hola, quiero contratar el plan anual de CineCasa. Mi código es ${com.mauricio.cinecasa.data.License.code}."
+                    else "Hola, quiero renovar mi CineCasa. Mi código es ${com.mauricio.cinecasa.data.License.code}.",
+                    payLabel = if (trial) "Pagar plan anual" else "Pagar renovación", showSeller = false)
+                ActionButton("Después", { show = null }, Modifier.focusRequester(fr))
+            }
+        }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(80); runCatching { fr.requestFocus() } }
     }
 }
+

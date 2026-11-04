@@ -127,7 +127,11 @@ fun LoginScreen(onPair: () -> Unit = {}) {
                 TvTextField(pass, { pass = it }, "Contraseña", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Go,
                     leading = Icons.Filled.Lock, boxRequester = passFr, onImeAction = { submit() })
                 if (error.isNotEmpty()) Text(error, color = C.Accent, fontSize = 13.sp)
-                if (detail.isNotEmpty()) Text("Detalle técnico (mándame foto de esto si sigue fallando):\n$detail", color = C.Low, fontSize = 11.sp, lineHeight = 15.sp)
+                if (detail.isNotEmpty()) {
+                    var showDetail by remember { mutableStateOf(false) }
+                    if (showDetail) Text("Detalle técnico:\n$detail", color = C.Low, fontSize = 11.sp, lineHeight = 15.sp)
+                    else Pill("Ver detalle técnico", false, { showDetail = true })
+                }
                 Spacer(Modifier.height(4.dp))
                 if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Spinner(size = 28.dp); Text("Conectando…", color = C.Mid, fontSize = 14.sp)
@@ -166,14 +170,14 @@ private fun PhoneSetup(known: Boolean, onData: (String, String, String) -> Unit)
     }
     LaunchedEffect(Unit) {
         while (true) {
-            val c = com.mauricio.cinecasa.data.Cloud.pairNew()
-            if (c == null) { failed = true; kotlinx.coroutines.delay(10_000); continue }
-            failed = false; code = c
+            val tp = com.mauricio.cinecasa.data.Cloud.pairNew()
+            if (tp == null) { failed = true; kotlinx.coroutines.delay(10_000); continue }
+            failed = false; code = tp.code
             val until = System.currentTimeMillis() + 14 * 60_000
             var done = false
             while (System.currentTimeMillis() < until && !done) {
                 kotlinx.coroutines.delay(3_000)
-                val r = com.mauricio.cinecasa.data.Cloud.pairGet(c) ?: continue
+                val r = com.mauricio.cinecasa.data.Cloud.pairGet(tp) ?: continue
                 when (r.optString("status")) {
                     "ok" -> { done = true; onData(r.optString("server"), r.optString("user"), r.optString("pass")) }
                     "expired" -> break
@@ -199,11 +203,4 @@ private fun PhoneSetup(known: Boolean, onData: (String, String, String) -> Unit)
     } else Text(if (failed) "Sin conexión para el QR. Escribe tus datos a la derecha." else "Preparando el código…", color = C.Low, fontSize = 13.sp)
     Spacer(Modifier.height(10.dp))
     Text("También puedes escribirlos aquí con el control.", color = C.Low, fontSize = 12.sp)
-}
-
-private fun qrBitmap(text: String, size: Int): android.graphics.Bitmap {
-    val m = com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size,
-        mapOf(com.google.zxing.EncodeHintType.MARGIN to 0))
-    val px = IntArray(size * size) { i -> if (m[i % size, i / size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
-    return android.graphics.Bitmap.createBitmap(px, size, size, android.graphics.Bitmap.Config.ARGB_8888)
 }

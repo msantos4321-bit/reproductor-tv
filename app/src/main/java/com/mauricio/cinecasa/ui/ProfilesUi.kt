@@ -83,12 +83,15 @@ val addDeviceOpen = androidx.compose.runtime.mutableStateOf(false)
 /** Lo que pasa cuando un aparato del hogar aprobó a este: queda con la misma cuenta y activación. */
 fun finishPair(p: org.json.JSONObject, done: () -> Unit) {
     License.scope.launch {
-        Cloud.setHousehold(p.optString("hh"), p.optString("hs"))
+        Cloud.setHousehold(p.optString("hh"), p.optString("hs"), joined = true)
         if (p.optString("ua").isNotBlank()) Net.UA = p.optString("ua")
         Repo.clearAll()
         Prefs.setAccount(Account(p.optString("server"), p.optString("user"), p.optString("pass")))
-        p.optString("lic").takeIf { it.isNotBlank() }?.let { License.activate(it) }
-        License.refresh()
+        val lic = p.optString("lic").takeIf { it.isNotBlank() && it != "null" }
+        val err = lic?.let { License.activate(it) }
+        // Si el código ya no tiene lugar (o venció), se dice claro en vez de quedarse a medias
+        if (err != null) License.need(err, if (err.contains("venció")) "expired" else if (err.contains("todos los aparatos")) "removed" else "")
+        else License.refresh()
         done()
     }
 }
@@ -434,6 +437,12 @@ fun AddDeviceDialog(onClose: () -> Unit, initial: String = "") {
         Column(Modifier.cardWidth(500.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Agregar otra tele o celular", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(if (initial.isNotEmpty()) "Toca «Aprobar» y la tele nueva entra sola con tu misma cuenta." else "Abre CineCasa en el aparato nuevo: verás un código de 6 números (o escanea su QR con este celular). Escríbelo aquí y entra solo, sin contraseñas.", color = C.Mid, fontSize = 13.sp)
+            val owner by License.owner.collectAsState()
+            Text(
+                if (owner) "Solo para aparatos de TU casa: entran con tu cuenta del proveedor y sin licencia. Para la tele de un cliente, que use su prueba gratis o su código."
+                else "Solo para aparatos de tu casa: entran con tu misma cuenta y usan un lugar de tu código.",
+                color = if (owner) C.Warn else C.Low, fontSize = 12.sp,
+            )
             TvTextField(code, { code = it.filter { c -> c.isDigit() }.take(6) }, "Código de 6 números", Modifier.fillMaxWidth(), keyboardType = KeyboardType.Number, boxRequester = fr)
             if (msg.isNotEmpty()) Text(msg, color = if (msg.startsWith("Listo")) C.Good else C.Warn, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

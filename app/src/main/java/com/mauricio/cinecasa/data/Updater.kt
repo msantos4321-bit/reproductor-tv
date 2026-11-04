@@ -21,8 +21,9 @@ import java.io.File
  */
 object Updater {
     private const val API = "https://api.github.com/repos/msantos4321-bit/reproductor-tv/releases/latest"
+    private const val API_ALL = "https://api.github.com/repos/msantos4321-bit/reproductor-tv/releases"
 
-    data class Release(val versionCode: Int, val name: String, val apkUrl: String, val notes: String)
+    data class Release(val versionCode: Int, val name: String, val apkUrl: String, val notes: String, val beta: Boolean = false)
 
     sealed interface State {
         data object Idle : State
@@ -37,30 +38,58 @@ object Updater {
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> get() = _state
 
-    /** Solo se ofrece una vez por versión al abrir la app (en Ajustes siempre se puede). */
-    var dismissedCode: Int = 0
+    /**
+     * Canal de actualizaciones:
+     * - estable: lo que ya se publicó para todos los clientes.
+     * - prueba: cada versión nueva en cuanto se compila (para el dueño, antes de mandarla a todos).
+     * Por defecto los aparatos del dueño reciben las de prueba y los clientes solo las estables.
+     */
+    val beta: Boolean get() = when (Prefs.updateChannel) {
+        "beta" -> true
+        "stable" -> false
+        else -> License.owner.value
+    }
+
+    /** «Más tarde»: no vuelve a preguntar por esa misma versión durante 3 días. */
+    fun dismiss(r: Release) { Prefs.updDismissCode = r.versionCode; Prefs.updDismissAt = System.currentTimeMillis() }
+    fun dismissed(r: Release): Boolean =
+        Prefs.updDismissCode == r.versionCode && System.currentTimeMillis() - Prefs.updDismissAt < 3L * 24 * 3600_000
+
+    private fun fetch(url: String): String {
+        val req = Request.Builder().url(url).header("Accept", "application/vnd.github+json").build()
+        return Net.quick.newCall(req).execute().use { r ->
+            if (r.code == 403 || r.code == 429) throw java.io.IOException("GitHub está ocupado, intenta en un rato")
+            if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}")
+            r.body?.string().orEmpty()
+        }
+    }
+
+    private fun parse(o: JSONObject): Release? {
+        if (o.optBoolean("draft")) return null
+        val tag = o.optString("tag_name") // v1.0.N
+        val code = tag.substringAfterLast('.').toIntOrNull() ?: return null
+        val assets = o.optJSONArray("assets") ?: return null
+        var url = ""
+        for (i in 0 until assets.length()) {
+            val a = assets.optJSONObject(i) ?: continue
+            if (a.optString("name") == "CineCasa.apk") { url = a.optString("browser_download_url"); break }
+        }
+        if (url.isBlank()) return null
+        val notes = o.optString("body").lines().map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("Descarga directa") && !it.startsWith("Versión de prueba") && !it.startsWith("Versión para todos") && !it.startsWith("Co-Authored") && !it.startsWith("Claude-Session") }
+            .take(6).joinToString("\n")
+        return Release(code, o.optString("name").ifBlank { tag }, url, notes, o.optBoolean("prerelease"))
+    }
 
     suspend fun check(): Release? = withContext(Dispatchers.IO) {
         _state.value = State.Checking
         try {
-            val req = Request.Builder().url(API).header("Accept", "application/vnd.github+json").build()
-            val txt = Net.quick.newCall(req).execute().use { r ->
-                if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}")
-                r.body?.string().orEmpty()
-            }
-            val o = JSONObject(txt)
-            val tag = o.optString("tag_name") // v1.0.N
-            val code = tag.substringAfterLast('.').toIntOrNull() ?: 0
-            val assets = o.optJSONArray("assets")
-            var url = ""
-            if (assets != null) for (i in 0 until assets.length()) {
-                val a = assets.optJSONObject(i) ?: continue
-                if (a.optString("name").endsWith(".apk")) { url = a.optString("browser_download_url"); break }
-            }
-            if (code > BuildConfig.VERSION_CODE && url.isNotBlank()) {
-                val r = Release(code, o.optString("name").ifBlank { tag }, url, o.optString("body"))
-                _state.value = State.Available(r)
-                r
+            val best = if (beta) {
+                val arr = org.json.JSONArray(fetch("$API_ALL?per_page=15"))
+                (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::parse) }.maxByOrNull { it.versionCode }
+            } else parse(JSONObject(fetch(API)))
+            if (best != null && best.versionCode > BuildConfig.VERSION_CODE) {
+                _state.value = State.Available(best)
+                best
             } else {
                 _state.value = State.UpToDate
                 null

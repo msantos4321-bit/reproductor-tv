@@ -34,6 +34,7 @@ import androidx.tv.material3.Text
 import com.mauricio.cinecasa.BuildConfig
 import com.mauricio.cinecasa.data.Updater
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Si el diálogo de actualización está abierto (se abre solo al haber versión nueva, o desde Ajustes). */
@@ -44,8 +45,12 @@ val updateDialogOpen = mutableStateOf(false)
 fun AutoUpdateCheck() {
     LaunchedEffect(Unit) {
         delay(1500)
+        // espera a saber si es aparato del dueño (recibe versiones de prueba)
+        kotlinx.coroutines.withTimeoutOrNull(20_000) {
+            com.mauricio.cinecasa.data.License.state.first { it !is com.mauricio.cinecasa.data.License.State.Checking }
+        }
         val r = Updater.check()
-        if (r != null && r.versionCode != Updater.dismissedCode) updateDialogOpen.value = true
+        if (r != null && !Updater.dismissed(r)) updateDialogOpen.value = true
     }
     if (updateDialogOpen.value) UpdateDialog { updateDialogOpen.value = false }
 }
@@ -76,7 +81,7 @@ fun UpdateDialog(onClose: () -> Unit) {
 
     Dialog(onDismissRequest = onClose) {
         Column(
-            Modifier.width(480.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
+            Modifier.cardWidth(480.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row {
@@ -94,12 +99,14 @@ fun UpdateDialog(onClose: () -> Unit) {
                 }
                 is Updater.State.Available -> {
                     Text("Hay una versión nueva: ${s.r.name}. Tienes la ${BuildConfig.VERSION_NAME}.", color = C.Mid, fontSize = 15.sp)
+                    if (s.r.beta) Text("Versión de prueba: solo la reciben tus aparatos. Cuando la apruebes, se publica para todos.", color = C.Warn, fontSize = 13.sp)
+                    if (s.r.notes.isNotBlank()) Text(s.r.notes, color = C.Low, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 6)
                     Text("Se descarga e instala en menos de un minuto. Tu cuenta, tu lista y lo que ibas viendo se conservan.", color = C.Low, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("Actualizar ahora", {
                             uiScope.launch { Updater.download(ctx, s.r)?.let { startInstall(it) } }
                         }, Modifier.focusRequester(fr), primary = true)
-                        ActionButton("Más tarde", { Updater.dismissedCode = s.r.versionCode; onClose() })
+                        ActionButton("Más tarde", { Updater.dismiss(s.r); onClose() })
                     }
                 }
                 is Updater.State.Downloading -> {

@@ -1,0 +1,35 @@
+name: Publicar para todos
+
+# Convierte una versión de prueba en la versión para todos los clientes:
+# la app de los clientes la ofrece sola, y Downloader (8835880) y la página de descarga la bajan.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar (ej. v1.0.60). Vacío = la versión de prueba más nueva."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          V: ${{ inputs.version }}
+        run: |
+          set -e
+          if [ -z "$V" ]; then
+            V=$(gh release list -R "$REPO" -L 30 --json tagName,isPrerelease,createdAt \
+                -q '[.[] | select(.isPrerelease)] | sort_by(.createdAt) | last | .tagName')
+          fi
+          if [ -z "$V" ] || [ "$V" = "null" ]; then echo "::error::No hay versión de prueba para publicar"; exit 1; fi
+          gh release view "$V" -R "$REPO" --json assets -q '.assets[].name' | grep -qx 'CineCasa.apk' || { echo "::error::$V no tiene CineCasa.apk"; exit 1; }
+          NOTES=$(gh release view "$V" -R "$REPO" --json body -q .body | sed '1s/^Versión de prueba.*$/Versión para todos./')
+          gh release edit "$V" -R "$REPO" --prerelease=false --latest --notes "$NOTES"
+          echo "Publicada para todos: $V" >> "$GITHUB_STEP_SUMMARY"

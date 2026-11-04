@@ -68,22 +68,30 @@ fun shareInvite(ctx: Context, code: String, max: Int, name: String, email: Boole
     return try { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (_: Exception) { false }
 }
 
-/** Primera pantalla en un aparato sin activar. */
+/** Primera pantalla en un aparato sin activar (o vencido, o quitado de la cuenta). */
 @Composable
-fun ActivationScreen(msg: String, onPair: () -> Unit, preview: (() -> Unit)? = null) {
+fun ActivationScreen(msg: String, onPair: () -> Unit, preview: (() -> Unit)? = null, reason: String = "") {
     var code by remember { mutableStateOf(License.code) }
     var ref by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(msg) }
     var trialGone by remember { mutableStateOf(false) }
-    var withCode by remember { mutableStateOf(License.code.isNotBlank()) }
+    var withCode by remember { mutableStateOf(License.code.isNotBlank() || reason == "blocked") }
+    // Vencido, quitado o sin prueba: se muestra a quién pagar y escribir
+    var helpWanted by remember { mutableStateOf(reason in setOf("expired", "blocked", "revoked", "removed")) }
+    var help by remember { mutableStateOf<JSONObject?>(null) }
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
+    LaunchedEffect(helpWanted) { if (helpWanted && help == null && preview == null) help = License.helpInfo() }
     fun go() {
         if (preview != null) { error = "Vista previa: aquí el cliente activaría su código."; return }
         if (code.isBlank()) { error = "Escribe tu código."; return }
         busy = true; error = ""
-        scope.launch { error = License.activate(code) ?: ""; busy = false }
+        scope.launch {
+            val e = License.activate(code)
+            error = e ?: ""; busy = false
+            if (e != null && (e.contains("venció") || e.contains("todos los aparatos") || e.contains("quitado"))) helpWanted = true
+        }
     }
     fun trial() {
         if (preview != null) { error = "Vista previa: aquí el cliente recibiría su prueba gratis de 21 días."; return }
@@ -91,17 +99,35 @@ fun ActivationScreen(msg: String, onPair: () -> Unit, preview: (() -> Unit)? = n
         scope.launch {
             val e = License.startTrial(ref)
             busy = false
-            if (e != null) { error = e; if (e.contains("ya usó")) { trialGone = true; withCode = true } }
+            if (e != null) { error = e; if (e.contains("ya usó")) { trialGone = true; withCode = true; helpWanted = true } }
         }
     }
+    val trialEnded = reason == "expired" && License.info.value?.optString("kind") == "trial"
     Box(Modifier.fillMaxSize().background(C.Bg), contentAlignment = Alignment.Center) {
         AdaptivePane(56.dp) {
-            Column(Modifier.paneWidth(320.dp)) {
+            Column(Modifier.paneWidth(340.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("CINECASA", color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Light, letterSpacing = 6.sp)
-                Spacer(Modifier.height(12.dp))
-                Text(if (withCode) "Activa este aparato con el código que te dieron." else "Pruébala gratis 21 días en hasta 5 aparatos. No necesitas código.", color = C.Mid, fontSize = 15.sp)
-                Spacer(Modifier.height(10.dp))
-                Text("CineCasa es un reproductor: funciona con el servicio que tú ya tienes.", color = C.Low, fontSize = 13.sp)
+                if (helpWanted) {
+                    Text(
+                        when (reason) {
+                            "expired" -> if (trialEnded) "Tu prueba gratis terminó" else "Renueva tu CineCasa"
+                            "blocked" -> "Este aparato se quitó de la cuenta"
+                            else -> "¿Quieres seguir viendo?"
+                        }, color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    val c = License.code
+                    val wa = when {
+                        reason == "blocked" -> "Hola, quitaron mi aparato «${com.mauricio.cinecasa.data.Cloud.deviceName}» de mi CineCasa. ¿Lo pueden permitir otra vez?"
+                        trialEnded || trialGone -> "Hola, quiero contratar el plan anual de CineCasa." + (if (c.isNotBlank()) " Mi código es $c." else "")
+                        else -> "Hola, quiero renovar mi CineCasa." + (if (c.isNotBlank()) " Mi código es $c." else "")
+                    }
+                    if (help == null) Text("Buscando a quién escribir…", color = C.Low, fontSize = 13.sp)
+                    else ContactActions(help, wa, payLabel = if (trialEnded || trialGone) "Pagar plan anual" else "Pagar renovación", showPrice = reason != "blocked")
+                    if (reason == "expired") Text("Cuando pagues, toca «Ya pagué, revisar» y listo: no tienes que reinstalar nada.", color = C.Low, fontSize = 12.sp)
+                } else {
+                    Text(if (withCode) "Activa este aparato con el código que te dieron." else "Pruébala gratis 21 días en hasta 5 aparatos. No necesitas código.", color = C.Mid, fontSize = 15.sp)
+                    Text("CineCasa es un reproductor: funciona con el servicio que tú ya tienes.", color = C.Low, fontSize = 13.sp)
+                }
             }
             Column(
                 Modifier.paneWidth(420.dp).background(C.Panel, RoundedCornerShape(18.dp)).padding(28.dp),
@@ -118,10 +144,11 @@ fun ActivationScreen(msg: String, onPair: () -> Unit, preview: (() -> Unit)? = n
                     TvTextField(code, { code = it.uppercase() }, "Código (ej. CC-7F3K-92QD)", Modifier.fillMaxWidth(),
                         imeAction = ImeAction.Go, leading = Icons.Filled.Key, boxRequester = fr, onImeAction = { go() })
                     if (error.isNotEmpty()) Text(error, color = C.Warn, fontSize = 13.sp)
-                    if (busy) Row(verticalAlignment = Alignment.CenterVertically) { Spinner(size = 24.dp); Text("  Activando…", color = C.Mid, fontSize = 14.sp) }
-                    else ActionButton("Activar", { go() }, Modifier.fillMaxWidth(), primary = true)
-                    if (!trialGone) ActionButton("Quiero la prueba gratis", { withCode = false; error = "" }, Modifier.fillMaxWidth())
+                    if (busy) Row(verticalAlignment = Alignment.CenterVertically) { Spinner(size = 24.dp); Text("  Revisando…", color = C.Mid, fontSize = 14.sp) }
+                    else ActionButton(if (reason == "expired" && code == License.code) "Ya pagué, revisar" else "Activar", { go() }, Modifier.fillMaxWidth(), primary = true)
+                    if (!trialGone && reason != "expired" && reason != "blocked") ActionButton("Quiero la prueba gratis", { withCode = false; error = "" }, Modifier.fillMaxWidth())
                 }
+                if (!helpWanted && preview == null) ActionButton("Quiero contratar o necesito ayuda", { helpWanted = true }, Modifier.fillMaxWidth())
                 if (preview != null) ActionButton("Salir de la vista previa", preview, Modifier.fillMaxWidth(), primary = true)
                 else ActionButton("Tengo CineCasa en otro aparato", onPair, Modifier.fillMaxWidth())
             }
@@ -188,24 +215,14 @@ fun SubscriptionSection(sample: Boolean = false) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val code = if (sample) "CC-EJEM-PL0S" else License.code
-    val price = i.optDouble("price", 0.0).toInt()
-    // En Google Play no se manda a pagar fuera de la tienda: solo contacto con el vendedor
-    val pay = i.optString("pay_link").takeIf { it.startsWith("http") && !com.mauricio.cinecasa.BuildConfig.PLAY }
-    val help = i.optString("help_phone").filter { it.isDigit() }.let { if (it.length == 10) "52$it" else it }
-    fun open(u: String) = runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     var note by remember { mutableStateOf("") }
     val isTrial = i.optString("kind") == "trial"
     if (i.optString("kind") != "gift") {
-        if (!com.mauricio.cinecasa.BuildConfig.PLAY) Text(if (isTrial) "Plan anual desde $$price al año (1 aparato)." else "Renovación por un año: $$price.", color = C.Hi, fontSize = 14.sp)
-        else Text(if (isTrial) "Para seguir después de la prueba, habla con quien te compartió CineCasa." else "Para renovar, habla con quien te compartió CineCasa.", color = C.Hi, fontSize = 14.sp)
-        Wrap {
-            if (pay != null) ActionButton(if (isTrial) "Pagar plan anual" else "Pagar renovación", { if (!open(pay)) note = "Abre esta liga en tu celular: $pay" }, primary = true)
-            if (help.length >= 10) ActionButton("Escribir por WhatsApp", {
-                val t = if (com.mauricio.cinecasa.BuildConfig.PLAY) "Hola, te escribo por CineCasa. Mi código es $code."
-                    else (if (isTrial) "Hola, quiero contratar el plan anual de CineCasa. Mi código es $code." else "Hola, quiero renovar CineCasa. Mi código es $code.") + (if (pay != null) " Ya hice el pago." else "")
-                if (!open("https://wa.me/$help?text=" + Uri.encode(t))) note = "Escribe al WhatsApp $help"
-            }, primary = pay == null)
-        }
+        if (com.mauricio.cinecasa.BuildConfig.PLAY) Text(if (isTrial) "Para seguir después de la prueba, habla con quien te compartió CineCasa." else "Para renovar, habla con quien te compartió CineCasa.", color = C.Hi, fontSize = 14.sp)
+        val pay = i.optString("pay_link").takeIf { it.startsWith("http") && !com.mauricio.cinecasa.BuildConfig.PLAY }
+        val t = if (com.mauricio.cinecasa.BuildConfig.PLAY) "Hola, te escribo por CineCasa. Mi código es $code."
+            else (if (isTrial) "Hola, quiero contratar el plan anual de CineCasa. Mi código es $code." else "Hola, quiero renovar CineCasa. Mi código es $code.")
+        ContactActions(i, t, payLabel = if (isTrial) "Pagar plan anual" else "Pagar renovación", showSeller = false)
         Text(if (pay != null) "Después de pagar avisa por WhatsApp y tu código queda activo; no tienes que reinstalar nada." else "Tu código sigue siendo el mismo; no tienes que reinstalar nada.", color = C.Low, fontSize = 12.sp)
     }
     // Recomienda y gana

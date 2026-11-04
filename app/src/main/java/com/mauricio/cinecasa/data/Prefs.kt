@@ -151,6 +151,17 @@ object Prefs {
         get() = sp.getLong("lastRefresh", 0L)
         set(v) = sp.edit().putLong("lastRefresh", v).apply()
 
+    /** Canal de actualizaciones: "auto" (dueño = prueba, clientes = estable), "beta" o "stable". */
+    var updateChannel: String
+        get() = sp.getString("updChannel", "auto") ?: "auto"
+        set(v) = sp.edit().putString("updChannel", v).apply()
+    var updDismissCode: Int
+        get() = sp.getInt("updDismiss", 0)
+        set(v) = sp.edit().putInt("updDismiss", v).apply()
+    var updDismissAt: Long
+        get() = sp.getLong("updDismissAt", 0L)
+        set(v) = sp.edit().putLong("updDismissAt", v).apply()
+
     var recentSearches: List<String>
         get() = try {
             val a = JSONArray(sp.getString("recentSearches", "[]"))

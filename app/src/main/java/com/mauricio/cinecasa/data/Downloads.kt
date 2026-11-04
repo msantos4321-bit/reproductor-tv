@@ -95,6 +95,13 @@ object Downloads {
         persist()
     }
 
+    /** Borra todas las descargas (cuando este aparato se quita de la cuenta). */
+    fun removeAll() {
+        if (!::sp.isInitialized) return
+        _list.value.map { it.key }.forEach { remove(it) }
+        runCatching { dir().listFiles()?.forEach { it.delete() } }
+    }
+
     /** Actualiza avance y estado consultando al administrador de descargas. */
     fun refresh() {
         val cur = _list.value

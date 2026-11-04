@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -308,7 +309,7 @@ fun CenterMessage(title: String, sub: String = "", loading: Boolean = false, act
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (loading) Spinner()
             Text(title, color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-            if (sub.isNotBlank()) Text(sub, color = C.Mid, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.width(520.dp))
+            if (sub.isNotBlank()) Text(sub, color = C.Mid, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 520.dp).padding(horizontal = 16.dp))
             action?.invoke()
         }
     }

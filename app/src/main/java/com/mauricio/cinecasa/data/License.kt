@@ -18,7 +18,8 @@ object License {
     sealed interface State {
         data object Checking : State
         data object Ok : State
-        data class Need(val msg: String) : State
+        /** reason: "expired" | "blocked" | "revoked" | "removed" | "unknown" | "offline" | "" (sin código) */
+        data class Need(val msg: String, val reason: String = "") : State
     }
 
     private val _state = MutableStateFlow<State>(State.Checking)
@@ -99,7 +100,9 @@ object License {
 
     /** Este aparato fue quitado de la cuenta: deja de funcionar y se borran aquí los datos de la cuenta. */
     private suspend fun wipeRemoved() {
+        if (code.isNotBlank()) lastCode = code   // para poder mostrarle a quién pedir que lo permitan otra vez
         code = ""; info.value = null; server.value = null; servers.value = emptyList()
+        runCatching { Downloads.removeAll() }
         Cloud.prefs.edit().remove("licServer").remove("licOkAt").apply()
         kotlinx.coroutines.withContext(Dispatchers.Main) { if (Prefs.account.value != null && !Prefs.inDemo) Repo.logout() }
     }
@@ -126,6 +129,20 @@ object License {
     var code: String
         get() = Cloud.prefs.getString("licCode", "") ?: ""
         set(v) = Cloud.prefs.edit().putString("licCode", v.trim().uppercase()).apply()
+    /** Último código que tuvo este aparato (si lo quitaron), para saber a quién escribir. */
+    private var lastCode: String
+        get() = Cloud.prefs.getString("licLastCode", "") ?: ""
+        set(v) = Cloud.prefs.edit().putString("licLastCode", v).apply()
+
+    /** Muestra la pantalla de activación con un mensaje (p. ej. al unir una tele con un código lleno). */
+    fun need(msg: String, reason: String = "") { _state.value = State.Need(msg, reason) }
+
+    /** A quién pagar y escribir: el vendedor de este código, o el contacto general si no hay. */
+    suspend fun helpInfo(): org.json.JSONObject? {
+        val c = code.ifBlank { lastCode }
+        if (c.isNotBlank()) Cloud.licHelp(c)?.let { return it }
+        return Cloud.salesContact()
+    }
     private var okAt: Long
         get() = Cloud.prefs.getLong("licOkAt", 0L)
         set(v) = Cloud.prefs.edit().putLong("licOkAt", v).apply()
@@ -150,6 +167,7 @@ object License {
         val c = code
         if (c.isBlank()) { _state.value = State.Need(""); return }
         val ping = Cloud.licPing(c, playing)
+        if (ping?.optString("status") == "expired" && info.value == null) info.value = Cloud.licInfo(c)
         when (ping?.optString("status")) {
             "ok" -> {
                 ok(false); takeServers(ping); scope.launch { followServer() }
@@ -157,18 +175,20 @@ object License {
             }
             "blocked" -> {
                 wipeRemoved()
-                _state.value = State.Need("Este aparato se quitó de la cuenta $c desde otro aparato o por tu vendedor. Si fue un error, pide que lo permitan otra vez.")
+                _state.value = State.Need("Este aparato se quitó de la cuenta $c desde otro aparato o por tu vendedor. Si fue un error, pide que lo permitan otra vez.", "blocked")
             }
-            "expired" -> _state.value = State.Need("Tu periodo de CineCasa terminó. Pide a quien te la vendió que la renueve; tu código sigue siendo el mismo.")
-            "revoked" -> _state.value = State.Need("Este código fue desactivado. Pide uno nuevo a quien te compartió CineCasa.")
+            "expired" -> _state.value = State.Need(
+                if (info.value?.optString("kind") == "trial") "Tu prueba gratis terminó. Contrata tu plan anual y sigue viendo: tu código es el mismo, no tienes que reinstalar nada."
+                else "Tu CineCasa venció. Renuévala y sigue viendo: tu código es el mismo, no tienes que reinstalar nada.", "expired")
+            "revoked" -> _state.value = State.Need("Este código fue desactivado. Pide uno nuevo a quien te compartió CineCasa.", "revoked")
             "removed" -> {
                 // Se reiniciaron los aparatos de este código: intenta volver a activarse
                 if (Cloud.licActivate(c) == "ok") ok(false)
-                else _state.value = State.Need("Este aparato ya no está activado con el código $c.")
+                else _state.value = State.Need("Este aparato ya no está activado con el código $c. Si tu código ya está en todos sus aparatos, quita uno desde otro aparato (Ajustes → Tu suscripción → Mis aparatos) o pide uno más a tu vendedor.", "removed")
             }
-            "unknown" -> _state.value = State.Need("El código $c no existe.")
-            null -> if (recent) _state.value = State.Ok else _state.value = State.Need("Sin conexión para revisar tu activación. Conéctate a internet e inténtalo de nuevo.")
-            else -> if (recent) _state.value = State.Ok else _state.value = State.Need("No se pudo revisar la activación.")
+            "unknown" -> _state.value = State.Need("El código $c no existe.", "unknown")
+            null -> if (recent) _state.value = State.Ok else _state.value = State.Need("Sin conexión para revisar tu activación. Conéctate a internet e inténtalo de nuevo.", "offline")
+            else -> if (recent) _state.value = State.Ok else _state.value = State.Need("No se pudo revisar la activación.", "offline")
         }
     }
 
@@ -196,7 +216,7 @@ object License {
             "ok" -> { code = c; ok(false); info.value = Cloud.licInfo(c); loadServer(); null }
             "expired" -> "Ese código ya venció. Pide que lo renueven."
             "trial_used" -> "Este aparato ya usó su prueba gratis. Pide un código anual a quien te la compartió."
-            "full" -> "Ese código ya se usó en todos los aparatos que permite. Desde otro aparato de la cuenta puedes quitar uno en Ajustes → Tu suscripción → Mis aparatos."
+            "full" -> "Ese código ya está en todos los aparatos que permite. Quita uno desde otro aparato (Ajustes → Tu suscripción → Mis aparatos) o pide un aparato más a tu vendedor."
             "blocked" -> "Este aparato fue quitado de ese código. Pide a quien te lo vendió que lo permita otra vez."
             "unknown" -> "Ese código no existe. Revísalo letra por letra."
             null -> "Sin conexión. Revisa tu internet."

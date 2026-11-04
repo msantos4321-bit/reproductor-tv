@@ -75,9 +75,14 @@ object Cloud {
         set(v) { sp.edit().putString("deviceName", v.trim()).apply(); registerDevice() }
     val hasHousehold: Boolean get() = householdId.isNotBlank() && householdSecret.isNotBlank()
 
-    fun setHousehold(id: String, secret: String) {
-        sp.edit().putString("hhId", id).putString("hhSecret", secret).remove("since").apply()
+    /** joined = este aparato se unió a un hogar que ya existía (sus perfiles vienen de la nube). */
+    fun setHousehold(id: String, secret: String, joined: Boolean = false) {
+        sp.edit().putString("hhId", id).putString("hhSecret", secret).remove("since").putBoolean("hhJoined", joined).apply()
     }
+    /** Se unió a un hogar y todavía no ha bajado sus perfiles. */
+    var joinedPending: Boolean
+        get() = sp.getBoolean("hhJoined", false)
+        set(v) = sp.edit().putBoolean("hhJoined", v).apply()
 
     fun forgetHousehold() {
         sp.edit().remove("hhId").remove("hhSecret").remove("since").remove("outbox").apply()
@@ -94,8 +99,13 @@ object Cloud {
     // ---------------- Llamadas ----------------
     /** Envía el motivo de un cierre inesperado para poder corregirlo. */
     fun reportCrash(text: String): Boolean = try {
-        rpc("cc_crash", JSONObject().put("p_device", deviceId).put("p_text", text)); true
+        rpc("cc_crash", JSONObject().put("p_device", deviceId).put("p_text", clean(text))); true
     } catch (_: Throwable) { false }
+
+    /** Quita usuario y contraseña del proveedor de cualquier texto que se mande a la nube. */
+    fun clean(t: String): String = t
+        .replace(Regex("/(live|movie|series|timeshift)/[^/\\s]+/[^/\\s]+/"), "/$1/***/***/")
+        .replace(Regex("(username|password)=[^&\\s\"]*", RegexOption.IGNORE_CASE), "$1=***")
 
     private fun rpc(fn: String, body: JSONObject): String {
         val req = Request.Builder().url(URL + fn)
@@ -251,14 +261,34 @@ object Cloud {
         try { JSONObject(rpc("cc_trial_auto", JSONObject().put("p_device", deviceId).put("p_name", deviceName).put("p_fp", hardwareId).put("p_ref", ref.trim().uppercase()))) } catch (_: Exception) { null }
     }
 
-    /** Configurar la tele desde el celular: pide un código de 6 dígitos para el QR. */
-    suspend fun pairNew(): String? = withContext(Dispatchers.IO) {
-        try { rpc("cc_pair_new", JSONObject()).trim().trim('"').takeIf { it.length == 6 } } catch (_: Exception) { null }
+    /** Configurar la tele desde el celular: código de 6 números para el QR, protegido con una llave que solo conoce esta tele. */
+    data class TvPair(val code: String, val token: String)
+    suspend fun pairNew(): TvPair? = withContext(Dispatchers.IO) {
+        val token = randomSecret()
+        try {
+            rpc("cc_pair_new2", JSONObject().put("p_token", token)).trim().trim('"').takeIf { it.length == 6 }?.let { TvPair(it, token) }
+        } catch (_: Exception) {
+            // Si la nube aún no tiene la función nueva, la de siempre
+            try { rpc("cc_pair_new", JSONObject()).trim().trim('"').takeIf { it.length == 6 }?.let { TvPair(it, "") } } catch (_: Exception) { null }
+        }
     }
 
     /** Revisa si el celular ya mandó servidor/usuario/contraseña para ese código. */
-    suspend fun pairGet(code: String): JSONObject? = withContext(Dispatchers.IO) {
-        try { JSONObject(rpc("cc_pair_get", JSONObject().put("p_code", code))) } catch (_: Exception) { null }
+    suspend fun pairGet(p: TvPair): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            if (p.token.isEmpty()) JSONObject(rpc("cc_pair_get", JSONObject().put("p_code", p.code)))
+            else JSONObject(rpc("cc_pair_get2", JSONObject().put("p_code", p.code).put("p_token", p.token)))
+        } catch (_: Exception) { null }
+    }
+
+    /** A quién pagar y escribir, aunque el código esté vencido o este aparato se haya quitado. */
+    suspend fun licHelp(code: String): JSONObject? = withContext(Dispatchers.IO) {
+        try { jsonOrNull(rpc("cc_lic_help", JSONObject().put("p_code", code).put("p_device", deviceId))) } catch (_: Exception) { null }
+    }
+
+    /** WhatsApp, liga de pago y precio generales (para quien no tiene código). */
+    suspend fun salesContact(): JSONObject? = withContext(Dispatchers.IO) {
+        try { jsonOrNull(rpc("cc_sales_contact", JSONObject())) } catch (_: Exception) { null }
     }
 
     /** Registra quién recomendó a este cliente. */

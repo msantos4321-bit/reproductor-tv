@@ -123,14 +123,45 @@ fun buildPlayer(ctx: Context, live: Boolean): ExoPlayer {
     return p
 }
 
-private fun errorText(e: PlaybackException): String {
+private fun httpCode(e: PlaybackException): Int? {
     var c: Throwable? = e
-    var http: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException? = null
-    while (c != null && http == null) { http = c as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException; c = c.cause }
-    val extra = http?.let { " (código ${it.responseCode})" } ?: ""
-    val where = http?.dataSpec?.uri?.host.orEmpty()
-    Thread { com.mauricio.cinecasa.data.Cloud.reportCrash("PLAY ${e.errorCodeName}$extra $where") }.start()
-    return baseErrorText(e) + extra
+    while (c != null) {
+        (c as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.let { return it.responseCode }
+        c = c.cause
+    }
+    return null
+}
+
+/** Cortes de red o del servidor que suelen arreglarse solos reintentando. */
+private fun retryable(e: PlaybackException): Boolean {
+    val code = httpCode(e)
+    return when (e.errorCode) {
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED, PlaybackException.ERROR_CODE_TIMEOUT, PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> true
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> code != null && code >= 500 && code != 509
+        else -> false
+    }
+}
+
+private val reported = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+private fun errorText(e: PlaybackException): String {
+    val code = httpCode(e)
+    val extra = code?.let { " (código $it)" } ?: ""
+    // Se avisa a la nube una vez cada 10 min por tipo de error (sin liga ni datos de la cuenta)
+    val k = e.errorCodeName + extra
+    val now = System.currentTimeMillis()
+    if (now - (reported[k] ?: 0L) > 10 * 60_000) {
+        reported[k] = now
+        Thread { com.mauricio.cinecasa.data.Cloud.reportCrash("PLAY ${e.errorCodeName}$extra") }.start()
+    }
+    return when (code) {
+        401, 403 -> "Tu proveedor no dejó abrir este video (código $code). Puede que tu cuenta tenga todas sus pantallas ocupadas o que haya vencido."
+        404 -> "Tu proveedor ya no tiene este video (código 404). Prueba otra versión o avísale a tu proveedor."
+        509 -> "Tu cuenta ya tiene todas sus pantallas en uso (código 509). Cierra CineCasa en otro aparato e intenta de nuevo."
+        else -> baseErrorText(e) + extra
+    }
 }
 
 private fun baseErrorText(e: PlaybackException): String = when (e.errorCode) {
@@ -164,6 +195,8 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
     var viewRef by remember { mutableStateOf<PlayerView?>(null) }
     var seekHint by remember { mutableStateOf("") }
     var seekTick by remember { mutableIntStateOf(0) }
+    var retries by remember { mutableIntStateOf(0) }
+    var reconnecting by remember { mutableStateOf(false) }
 
     fun save() {
         val it = items.getOrNull(player.currentMediaItemIndex) ?: return
@@ -186,8 +219,13 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
                 current = player.currentMediaItemIndex
                 error = null
             }
-            override fun onPlayerError(e: PlaybackException) { error = errorText(e) }
+            override fun onPlayerError(e: PlaybackException) {
+                // Un corte de internet o del servidor: reintenta solo, en el mismo punto
+                if (retries < 4 && retryable(e)) { retries++; reconnecting = true }
+                else { reconnecting = false; error = errorText(e) }
+            }
             override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) { retries = 0; reconnecting = false }
                 if (state == Player.STATE_ENDED) {
                     items.getOrNull(player.currentMediaItemIndex)?.let { Library.saveProgress(it, 1, 1) }
                     nav.back()
@@ -218,6 +256,9 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
     }
 
     LaunchedEffect(seekTick) { if (seekTick > 0) { delay(900); seekHint = "" } }
+    LaunchedEffect(reconnecting, retries) {
+        if (reconnecting) { delay(1500L * retries); player.prepare(); player.play() }
+    }
 
     val item = items.getOrNull(current)
     Box(
@@ -283,6 +324,11 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
         AnimatedVisibility(ctrlVisible || error != null, Modifier.align(Alignment.TopStart), enter = fadeIn(), exit = fadeOut()) {
             TouchBack({ nav.back() }, Modifier.padding(start = 14.dp, top = 22.dp))
         }
+        if (reconnecting && error == null) {
+            Row(Modifier.align(Alignment.Center).background(Color(0xAA000000), RoundedCornerShape(10.dp)).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spinner(size = 26.dp); Text("  Reconectando…", color = Color.White, fontSize = 16.sp)
+            }
+        }
         if (seekHint.isNotEmpty()) {
             Text(seekHint, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000), RoundedCornerShape(10.dp)).padding(horizontal = 20.dp, vertical = 10.dp))
@@ -308,7 +354,7 @@ fun PlayerScreen(items: List<PlayItem>, start: Int, startPos: Long) {
             LaunchedEffect(msg) {
                 viewRef?.setOnKeyListener { _, code, ev ->
                     if (ev.action == AKeyEvent.ACTION_UP && (code == AKeyEvent.KEYCODE_DPAD_CENTER || code == AKeyEvent.KEYCODE_ENTER) && error != null) {
-                        error = null; player.prepare(); player.play(); true
+                        error = null; retries = 0; player.prepare(); player.play(); true
                     } else false
                 }
             }
@@ -339,25 +385,15 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
     var buffering by remember { mutableStateOf(true) }
     var digits by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
+    var retryTick by remember { mutableIntStateOf(0) }
     val rootFr = remember { FocusRequester() }
     val listFr = remember { FocusRequester() }
     val ch = channels.getOrNull(index)
 
-    fun formatsFor(): List<String> {
-        val pref = Prefs.liveFormat
-        val allowed = Prefs.serverFormats
-        val base = when (pref) {
-            "ts" -> listOf("ts", "m3u8")
-            "m3u8" -> listOf("m3u8", "ts")
-            else -> if (allowed.isNotEmpty() && "ts" !in allowed && "m3u8" in allowed) listOf("m3u8", "ts") else listOf("ts", "m3u8")
-        }
-        return base
-    }
-
     fun load(i: Int, tryN: Int = 0) {
         val chan = channels.getOrNull(i) ?: return
         val x = Repo.xtream() ?: return
-        val fmts = formatsFor()
+        val fmts = liveFormats()
         val fmt = fmts[(tryN) % fmts.size]
         val mi = MediaItem.Builder().setUri(x.liveUrl(chan.id, fmt)).apply { if (fmt == "m3u8") setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
         player.setMediaItem(mi)
@@ -372,12 +408,18 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) attempt = 0
+                if (state == Player.STATE_READY) { attempt = 0; error = null }
             }
             override fun onPlayerError(e: PlaybackException) {
-                if (attempt < 3) {
+                // Se quedó atrás de la transmisión: regresa al directo
+                if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && attempt < 6) {
+                    attempt++; player.seekToDefaultPosition(); player.prepare(); return
+                }
+                // Primero prueba el otro formato; si es un corte, sigue reintentando unos segundos
+                val maxTries = if (retryable(e)) 6 else 2
+                if (attempt < maxTries) {
                     attempt++
-                    load(index, attempt) // prueba el otro formato y reintenta
+                    retryTick++
                 } else error = errorText(e)
             }
         }
@@ -385,6 +427,9 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
         onDispose { player.removeListener(listener); player.release() }
     }
 
+    LaunchedEffect(retryTick) {
+        if (retryTick > 0) { if (attempt > 2) delay(2500); load(index, attempt) }
+    }
     LaunchedEffect(index) {
         attempt = 0
         load(index)
