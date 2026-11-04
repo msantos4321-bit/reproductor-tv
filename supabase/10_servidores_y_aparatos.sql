@@ -4,7 +4,7 @@
 -- 2) Quitar UN aparato de un código (sin liberar todos). El aparato quitado no se puede volver a activar
 --    con ese código hasta que se le dé «Permitir otra vez».
 -- 3) «En uso ahora»: la app avisa cada pocos minutos si está abierta o reproduciendo (sin decir qué).
--- Se puede volver a correr sin romper nada.
+-- OJO: ya está aplicado. NO volver a correrlo solo: lo reemplazan archivos posteriores (ver LEEME.md).
 
 create table if not exists servers (
   id uuid primary key default gen_random_uuid(),

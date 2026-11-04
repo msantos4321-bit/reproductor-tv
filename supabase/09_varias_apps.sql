@@ -1,7 +1,7 @@
 -- Un solo Centro de control para varias apps (CineCasa, Vista y las que vengan).
 -- Cada código pertenece a UNA app: un código de Vista no activa CineCasa y al revés.
 -- Créditos: 1 crédito = 1 aparato por 1 año, en cualquier app.
--- Se puede volver a correr sin romper nada.
+-- OJO: ya está aplicado. NO volver a correrlo solo: lo reemplazan archivos posteriores (ver LEEME.md).
 
 alter table licenses add column if not exists app text not null default 'cinecasa';
 create index if not exists licenses_app on licenses (app, created_at desc);

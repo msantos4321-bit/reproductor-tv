@@ -3,7 +3,7 @@
 -- El panel web entra con una sesión (token) que nace de:
 --   * gerente: un enlace de un solo uso que pide la app del dueño (cc_mgr_link)
 --   * distribuidor: un enlace que genera el gerente (cc_rs_link)
--- Se puede volver a correr sin romper nada.
+-- OJO: ya está aplicado. NO volver a correrlo solo: lo reemplazan archivos posteriores (ver LEEME.md).
 
 create table if not exists resellers (
   id uuid primary key default gen_random_uuid(),
