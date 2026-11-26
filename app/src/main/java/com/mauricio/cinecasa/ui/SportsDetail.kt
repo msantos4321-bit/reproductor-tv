@@ -391,11 +391,13 @@ fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPa
                     Column { SectionTitle("En vivo ahora"); ScoreCard(live, onFocused = {}) { sheet = live } }
                 }
             }
-            if (p.next.isNotEmpty()) item("next") {
+            val liveId = board.events.firstOrNull { it.live && it.has(key) }?.id
+            val upcoming = p.next.filter { it.id != liveId && it.st != "in" }
+            if (upcoming.isNotEmpty()) item("next") {
                 Column {
                     SectionTitle("Próximos partidos")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
-                        items(p.next, key = { it.id }) { g ->
+                        items(upcoming, key = { it.id }) { g ->
                             val ev = board.events.firstOrNull { it.lg == lg && it.id == g.id } ?: gameToEvent(lg, t, g)
                             ScoreCard(ev, channel = g.tv.joinToString(" · ").ifBlank { null }) { sheet = ev }
                         }
