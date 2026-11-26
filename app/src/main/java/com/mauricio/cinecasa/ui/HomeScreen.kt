@@ -69,7 +69,7 @@ sealed interface Tile {
     data class Ch(val ch: Channel, val list: List<Channel>) : Tile { override val key = "c${ch.id}" }
 }
 
-data class HomeRow(val id: String, val title: String, val tiles: List<Tile>, val wide: Boolean = false)
+data class HomeRow(val id: String, val title: String, val tiles: List<Tile>, val wide: Boolean = false, val top10: Boolean = false)
 
 fun heroFor(t: Tile, c: Catalog): Hero = when (t) {
     is Tile.Ch -> Hero(t.key, t.ch.name, listOf("En vivo", c.liveCatName[t.ch.cat].orEmpty()), 0f, "Presiona OK para volver a este canal.", "")
@@ -118,7 +118,13 @@ fun HomeScreen() {
     val favCh by Library.favChannels.collectAsState()
     val recentCh by Library.recentChannels.collectAsState()
     val who by com.mauricio.cinecasa.data.Profiles.current.collectAsState()
-    val rows = remember(c, progress, myList, lf, favCh, recentCh, who) { buildHomeRows(c) }
+    // Top 10 de la semana (solo si hay clave de TMDB): lo más visto que sí está en tu catálogo
+    val trending by androidx.compose.runtime.produceState(Pair(emptyList<String>(), emptyList<String>()), c.movies.size) {
+        if (com.mauricio.cinecasa.data.Tmdb.enabled) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.mauricio.cinecasa.data.Tmdb.trending("movie") to com.mauricio.cinecasa.data.Tmdb.trending("tv")
+        }
+    }
+    val rows = remember(c, progress, myList, lf, favCh, recentCh, who, trending) { buildHomeRows(c, trending) }
     var hero by remember { mutableStateOf<Hero?>(null) }
     var focusedTile by remember { mutableStateOf<Tile?>(null) }
 
@@ -184,7 +190,12 @@ fun HomeScreen() {
                                     val m = Modifier
                                         .rememberFocus(mem, fk)
                                         .then(if (ri == 0 && t === row.tiles.first()) Modifier.focusRequester(firstFr) else Modifier)
-                                    TileCard(t, row.wide, m, c, onFocused = { focusedTile = t },
+                                    if (row.top10) Row(verticalAlignment = Alignment.Bottom) {
+                                        // Número grande al estilo de los «Top 10»
+                                        Text("${row.tiles.indexOf(t) + 1}", color = C.Line, fontSize = 92.sp, fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(end = 2.dp), lineHeight = 92.sp)
+                                        TileCard(t, false, m, c, onFocused = { focusedTile = t }) { openTile(t, nav, c) }
+                                    } else TileCard(t, row.wide, m, c, onFocused = { focusedTile = t },
                                         onLongClick = if (t is Tile.P) ({ Library.clearProgress(t.p.key) }) else null) { openTile(t, nav, c) }
                                 }
                             }
@@ -207,15 +218,22 @@ fun TileCard(t: Tile, wide: Boolean, modifier: Modifier, c: Catalog, onFocused: 
             WideCard(t.p.title, t.p.subtitle, img, onClick, modifier, progress = t.p.fraction, onFocused = onFocused, onLongClick = onLongClick)
         }
         is Tile.M -> PosterCard(t.v.title, t.v.icon, onClick, modifier, onFocused = onFocused,
-            badge = c.movieLangs(t.v).ifBlank { null },
+            badge = listOfNotNull(if (isRecent(t.v.added)) "NUEVO" else null, c.movieLangs(t.v).ifBlank { null }).joinToString(" · ").ifBlank { null },
             progress = Library.progressOf("movie:${t.v.id}")?.fraction, onLongClick = onLongClick)
         is Tile.S -> PosterCard(t.s.title, t.s.cover, onClick, modifier, onFocused = onFocused, onLongClick = onLongClick,
-            badge = c.showLangs(t.s).ifBlank { null })
+            badge = listOfNotNull(if (isRecent(t.s.lastMod)) "EP. NUEVO" else null, c.showLangs(t.s).ifBlank { null }).joinToString(" · ").ifBlank { null })
         is Tile.L -> PosterCard(t.s.title, t.s.image, onClick, modifier, onFocused = onFocused)
     }
 }
 
-private fun buildHomeRows(c: Catalog): List<HomeRow> {
+/** Agregado en los últimos 7 días (el proveedor manda segundos o milisegundos). */
+fun isRecent(t: Long): Boolean {
+    if (t <= 0) return false
+    val ms = if (t < 10_000_000_000L) t * 1000 else t
+    return System.currentTimeMillis() - ms in 0..7L * 86400_000
+}
+
+private fun buildHomeRows(c: Catalog, trending: Pair<List<String>, List<String>> = emptyList<String>() to emptyList()): List<HomeRow> {
     val rows = ArrayList<HomeRow>()
     // Lo de cada persona primero: lo que va viendo, su lista y sus canales
     val who = com.mauricio.cinecasa.data.Profiles.current.value?.name?.takeIf { it.isNotBlank() && it != "Invitado" }
@@ -233,6 +251,14 @@ private fun buildHomeRows(c: Catalog): List<HomeRow> {
     val year = Calendar.getInstance().get(Calendar.YEAR)
     fun List<Vod>.uniq() = c.dedupeMovies(this)
     fun List<Show>.uniqS() = c.dedupeShows(this)
+    run {
+        val tm = trending.first.mapNotNull { id -> c.movieByTmdb[id]?.firstOrNull() }.map { Tile.M(it) as Tile }
+        val ts = trending.second.mapNotNull { id -> c.showByTmdb[id]?.firstOrNull() }.map { Tile.S(it) as Tile }
+        // Intercala películas y series y deja las 10 primeras
+        val mix = ArrayList<Tile>()
+        for (i in 0 until maxOf(tm.size, ts.size)) { tm.getOrNull(i)?.let { mix += it }; ts.getOrNull(i)?.let { mix += it } }
+        if (mix.size >= 5) rows += HomeRow("top10", "Top 10 de la semana", mix.distinctBy { it.key }.take(10), top10 = true)
+    }
     if (movies.isNotEmpty()) {
         rows += HomeRow("newm", "Películas agregadas recientemente", movies.sortedByDescending { it.added }.uniq().take(40).map { Tile.M(it) })
         val estrenos = movies.filter { it.year >= year - 1 }.sortedWith(compareByDescending<Vod> { it.year }.thenByDescending { it.added }).uniq().take(40)

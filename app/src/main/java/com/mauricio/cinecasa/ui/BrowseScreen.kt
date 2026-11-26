@@ -116,7 +116,8 @@ fun BrowseScreen(isSeries: Boolean, initialCat: String?) {
                     androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { Pill("Todas", cat == ALL, { cat = ALL; pendingCat = ALL; nav.state["cat_$kind"] = ALL }) }
                         items(cats.filter { (counts[it.id] ?: 0) > 0 }, key = { it.id }) { k ->
-                            Pill(k.name, cat == k.id, { cat = k.id; pendingCat = k.id; nav.state["cat_$kind"] = k.id })
+                            Pill(k.name, cat == k.id, { cat = k.id; pendingCat = k.id; nav.state["cat_$kind"] = k.id },
+                                leading = platformLogo(k.name)?.let { u -> { PlatformIcon(u, 18.dp) } })
                         }
                     }
                     androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -222,6 +223,7 @@ private fun CatItem(name: String, count: Int, selected: Boolean, modifier: Modif
         ),
     ) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            platformLogo(name)?.let { PlatformIcon(it, 22.dp); Spacer(Modifier.width(9.dp)) }
             Text(name, Modifier.weight(1f), fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(count.toString(), fontSize = 11.sp, color = C.Low)
         }

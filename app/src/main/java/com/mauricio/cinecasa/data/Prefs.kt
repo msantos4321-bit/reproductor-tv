@@ -162,6 +162,28 @@ object Prefs {
         get() = sp.getLong("updDismissAt", 0L)
         set(v) = sp.edit().putLong("updDismissAt", v).apply()
 
+    // ---------- Deportes ----------
+    /** Categorías de la pestaña Deportes elegidas a mano (null = automáticas). */
+    var sportsCats: Set<String>?
+        get() = sp.getString("sportsCats", null)?.let { s -> s.split(',').filter { it.isNotBlank() }.toSet() }
+        set(v) = sp.edit().apply { if (v == null) remove("sportsCats") else putString("sportsCats", v.joinToString(",")) }.apply()
+    /** Quitar los canales de deportes de «TV en vivo» (quedan solo en Deportes). */
+    var sportsHideFromLive: Boolean
+        get() = sp.getBoolean("sportsHide", true)
+        set(v) = sp.edit().putBoolean("sportsHide", v).apply()
+    /** Mostrar momios (nunca en la versión de Google Play). */
+    var showOdds: Boolean
+        get() = !com.mauricio.cinecasa.BuildConfig.PLAY && sp.getBoolean("showOdds", true)
+        set(v) = sp.edit().putBoolean("showOdds", v).apply()
+    /** Avisos de los partidos de mis equipos. */
+    var sportAlerts: Boolean
+        get() = sp.getBoolean("sportAlerts", true)
+        set(v) = sp.edit().putBoolean("sportAlerts", v).apply()
+    /** Marcador chiquito en la esquina mientras ves otra cosa. */
+    var miniScore: Boolean
+        get() = sp.getBoolean("miniScore", true)
+        set(v) = sp.edit().putBoolean("miniScore", v).apply()
+
     var recentSearches: List<String>
         get() = try {
             val a = JSONArray(sp.getString("recentSearches", "[]"))

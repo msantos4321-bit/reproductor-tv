@@ -82,17 +82,21 @@ fun DownloadsScreen() {
     val list by Downloads.list.collectAsState()
     val prog by Library.progress.collectAsState()
     LaunchedEffect(Unit) { while (true) { Downloads.refresh(); delay(2000) } }
+    val recs by com.mauricio.cinecasa.data.Recorder.list.collectAsState()
+    val hasRecs = recs.any { it.status != com.mauricio.cinecasa.data.Recorder.CANCELED }
 
-    if (list.isEmpty()) {
+    if (list.isEmpty() && !hasRecs) {
         CenterMessage(
-            "Aún no tienes descargas",
+            "Aún no tienes descargas ni grabaciones",
             "En la ficha de una película o serie elige «Descargar» para verla sin internet (ideal en el celular o la tableta). " +
-                "Mientras se descarga, ocupa una de las pantallas de tu cuenta.",
+                "Para grabar un partido o un canal, ábrelo en Deportes o en TV en vivo y elige «Grabar». " +
+                "Mientras se descarga o graba, ocupa una de las pantallas de tu cuenta.",
         )
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 26.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
+        if (hasRecs) item("recs") { RecordingsSection(LocalCompact.current) }
+        if (list.isNotEmpty()) item {
             Column(Modifier.padding(bottom = 8.dp)) {
                 Text("Descargas", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 Text("Espacio libre en este aparato: ${bytes(Downloads.freeBytes())}", color = C.Low, fontSize = 12.sp)

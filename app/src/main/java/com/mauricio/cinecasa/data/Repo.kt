@@ -178,10 +178,15 @@ object Repo {
         Cloud.init(ctx)
         Profiles.init(ctx)
         Downloads.init(ctx)
+        Quiniela.init(ctx)
+        Recorder.init(ctx)
         Translate.init(ctx)
     }
 
     fun xtream(): Xtream? = Prefs.account.value?.let { Xtream(it) }
+
+    /** Solo para pruebas. */
+    internal fun debugSetCatalog(c: Catalog) { _catalog.value = c }
 
     // ---------------- Catálogo ----------------
     fun start(force: Boolean = false) {

@@ -82,6 +82,7 @@ import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
+import androidx.compose.material.icons.filled.FiberManualRecord
 import com.mauricio.cinecasa.data.Channel
 import com.mauricio.cinecasa.data.Library
 import com.mauricio.cinecasa.data.Net
@@ -101,7 +102,7 @@ fun buildPlayer(ctx: Context, live: Boolean): ExoPlayer {
     val extractors = DefaultExtractorsFactory()
         .setConstantBitrateSeekingEnabled(true)
         .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS)
-    val msf = DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx, http), extractors)
+    val msf = DefaultMediaSourceFactory(com.mauricio.cinecasa.data.RecordingAwareDataSource.Factory(DefaultDataSource.Factory(ctx, http)), extractors)
     val renderers = DefaultRenderersFactory(ctx)
         .setEnableDecoderFallback(true)
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
@@ -453,6 +454,8 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
         if (showList) { delay(80); runCatching { listFr.requestFocus() } } else { delay(30); runCatching { rootFr.requestFocus() } }
     }
 
+    var recDlg by remember { mutableStateOf(false) }
+    if (recDlg && ch != null) RecordChannelDialog(ch) { recDlg = false }
     BackHandler {
         when {
             showList -> showList = false
@@ -528,7 +531,8 @@ fun LivePlayerScreen(channels: List<Channel>, startIndex: Int) {
         AnimatedVisibility(showList, Modifier.align(Alignment.CenterStart), enter = slideInHorizontally { -it } + fadeIn(), exit = slideOutHorizontally { -it } + fadeOut()) {
             val listState = rememberLazyListState(initialFirstVisibleItemIndex = (index - 3).coerceAtLeast(0))
             Column(Modifier.width(430.dp).fillMaxHeight().background(Brush.horizontalGradient(listOf(Color(0xF2050608), Color(0xCC050608))))) {
-                Text("Canales · Mantén OK para favorito", color = PLow, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp))
+                if (ch != null) ActionButton("Grabar este canal", { recDlg = true }, Modifier.padding(start = 16.dp, top = 16.dp), icon = androidx.compose.material.icons.Icons.Filled.FiberManualRecord)
+                Text("Canales · Mantén OK para favorito", color = PLow, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 6.dp))
                 LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     itemsIndexed(channels, key = { _, k -> k.id }) { i, k ->
                         ChannelRow(

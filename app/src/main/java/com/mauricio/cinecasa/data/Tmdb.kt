@@ -72,4 +72,11 @@ object Tmdb {
         }
         return ""
     }
+
+    /** Lo más visto de la semana en TMDB ("movie" o "tv"): ids de TMDB en orden. */
+    fun trending(kind: String): List<String> = try {
+        val root = JSONObject(Net.get(url("/trending/$kind/week"), Net.quick))
+        val arr = root.optJSONArray("results")
+        if (arr == null) emptyList() else (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optInt("id")?.takeIf { id -> id > 0 }?.toString() }
+    } catch (e: Exception) { emptyList() }
 }

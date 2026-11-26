@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -81,6 +82,11 @@ sealed interface Route {
     data class Movies(val cat: String? = null) : Route
     data class Series(val cat: String? = null) : Route
     data object Live : Route
+    data object Sports : Route
+    data object SportsLive : Route
+    data class Team(val lg: String, val team: com.mauricio.cinecasa.data.SpTeam) : Route
+    data class Game(val ev: com.mauricio.cinecasa.data.SpEvent) : Route
+    data class Table(val lg: String) : Route
     data object MyList : Route
     data object Downloads : Route
     data object More : Route
@@ -246,6 +252,11 @@ private fun Shell() {
                         is Route.Movies -> key(top) { BrowseScreen(isSeries = false, initialCat = top.cat) }
                         is Route.Series -> key(top) { BrowseScreen(isSeries = true, initialCat = top.cat) }
                         Route.Live -> LiveScreen()
+                        Route.Sports -> SportsScreen()
+                        Route.SportsLive -> LiveScreen(sportsOnly = true)
+                        is Route.Team -> key(top) { TeamScreen(top.lg, top.team) }
+                        is Route.Game -> key(top) { GameScreen(top.ev) }
+                        is Route.Table -> key(top) { TableScreen(top.lg) }
                         Route.MyList -> MyListScreen()
                         Route.Downloads -> DownloadsScreen()
                         Route.Settings -> SettingsScreen()
@@ -257,6 +268,12 @@ private fun Shell() {
                 ClockLabel(Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 24.dp))
             }
         }
+        // Avisos de mis equipos y marcador en la esquina (encima de todo)
+        val watching = top is Route.Play || top is Route.LivePlay || top is Route.MultiView
+        Box(Modifier.fillMaxSize()) {
+            SportsWatcher(playing = watching)
+            if (watching) MiniScore()
+        }
     }
 
     if (serverDlg) ServerDialog { serverDlg = false }
@@ -265,7 +282,7 @@ private fun Shell() {
 }
 
 private fun isTopLevel(r: Route) = r == Route.Home || r is Route.Search || r is Route.Movies || r is Route.Series ||
-    r == Route.Live || r == Route.MyList || r == Route.Settings || r == Route.Downloads || r == Route.More
+    r == Route.Live || r == Route.Sports || r == Route.MyList || r == Route.Settings || r == Route.Downloads || r == Route.More
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: Route, val match: (Route) -> Boolean)
 
@@ -275,6 +292,7 @@ private val navItems = listOf(
     NavItem("Películas", Icons.Filled.Movie, Route.Movies()) { it is Route.Movies },
     NavItem("Series", Icons.Filled.Tv, Route.Series()) { it is Route.Series },
     NavItem("TV en vivo", Icons.Filled.LiveTv, Route.Live) { it == Route.Live },
+    NavItem("Deportes", Icons.Filled.EmojiEvents, Route.Sports) { it == Route.Sports || it == Route.SportsLive || it is Route.Team || it is Route.Game || it is Route.Table },
     NavItem("Mi lista", Icons.Filled.Bookmarks, Route.MyList) { it == Route.MyList },
     NavItem("Descargas", Icons.Filled.Download, Route.Downloads) { it == Route.Downloads },
     NavItem("Ajustes", Icons.Filled.Settings, Route.Settings) { it == Route.Settings },
@@ -374,8 +392,8 @@ private val phoneTabs = listOf(
     Tab("Inicio", Icons.Filled.Home, Route.Home) { it == Route.Home || it is Route.Movies || it is Route.Series },
     Tab("Buscar", Icons.Filled.Search, Route.Search()) { it is Route.Search },
     Tab("En vivo", Icons.Filled.LiveTv, Route.Live) { it == Route.Live },
-    Tab("Descargas", Icons.Filled.Download, Route.Downloads) { it == Route.Downloads },
-    Tab("Más", Icons.Filled.Menu, Route.More) { it == Route.More || it == Route.MyList || it == Route.Settings },
+    Tab("Deportes", Icons.Filled.EmojiEvents, Route.Sports) { it == Route.Sports || it == Route.SportsLive || it is Route.Team || it is Route.Game || it is Route.Table },
+    Tab("Más", Icons.Filled.Menu, Route.More) { it == Route.More || it == Route.MyList || it == Route.Settings || it == Route.Downloads },
 )
 
 @Composable
@@ -390,6 +408,11 @@ private fun PhoneShell(top: Route, canBack: Boolean) {
                 is Route.Movies -> key(top) { BrowseScreen(isSeries = false, initialCat = top.cat) }
                 is Route.Series -> key(top) { BrowseScreen(isSeries = true, initialCat = top.cat) }
                 Route.Live -> LiveScreen()
+                Route.Sports -> SportsScreen()
+                Route.SportsLive -> LiveScreen(sportsOnly = true)
+                is Route.Team -> key(top) { TeamScreen(top.lg, top.team) }
+                is Route.Game -> key(top) { GameScreen(top.ev) }
+                is Route.Table -> key(top) { TableScreen(top.lg) }
                 Route.MyList -> MyListScreen()
                 Route.Downloads -> DownloadsScreen()
                 Route.Settings -> SettingsScreen()
@@ -445,7 +468,7 @@ private fun MoreScreen() {
             MoreRow(Icons.Filled.Bookmarks, "Mi lista") { nav.go(Route.MyList) }
             MoreRow(Icons.Filled.Movie, "Películas") { nav.go(Route.Movies()) }
             MoreRow(Icons.Filled.Tv, "Series") { nav.go(Route.Series()) }
-            MoreRow(Icons.Filled.Download, "Descargas", last = true) { nav.go(Route.Downloads) }
+            MoreRow(Icons.Filled.Download, "Descargas y grabaciones", last = true) { nav.go(Route.Downloads) }
         }
         Group {
             MoreRow(

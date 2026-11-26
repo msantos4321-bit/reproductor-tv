@@ -44,6 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -89,15 +93,23 @@ fun rememberEpg(ch: Channel, delayMs: Long = 350): List<EpgItem> {
 }
 
 @Composable
-fun LiveScreen() {
+fun LiveScreen(sportsOnly: Boolean = false) {
     val nav = LocalNav.current
     val c by Repo.catalog.collectAsState()
     val favs by Library.favChannels.collectAsState()
     val recent by Library.recentChannels.collectAsState()
-    val mem = remember { nav.memory("live") }
-    var cat by remember { mutableStateOf((nav.state["live_cat"] as? String) ?: if (favs.isNotEmpty()) FAVS else ALLCH) }
+    val pre = if (sportsOnly) "sp" else "live"
+    val mem = remember { nav.memory(pre) }
+    // Los canales de deportes viven en su propia pestaña (si así se eligió en Ajustes)
+    val sportsIds = remember(c) { com.mauricio.cinecasa.data.SportsCats.ids(c) }
+    val hideSports = !sportsOnly && com.mauricio.cinecasa.data.Prefs.sportsHideFromLive && sportsIds.isNotEmpty()
+    val base = remember(c, sportsIds, sportsOnly, hideSports) {
+        when { sportsOnly -> c.visChannels.filter { it.cat in sportsIds }; hideSports -> c.visChannels.filter { it.cat !in sportsIds }; else -> c.visChannels }
+    }
+    var cat by remember { mutableStateOf((nav.state["${pre}_cat"] as? String) ?: if (favs.isNotEmpty() && !sportsOnly) FAVS else ALLCH) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
-    val chState = remember(cat) { nav.state.getOrPut("live_list_$cat") { LazyListState() } as LazyListState }
+    var recCh by remember { mutableStateOf<Channel?>(null) }
+    val chState = remember(cat) { nav.state.getOrPut("${pre}_list_$cat") { LazyListState() } as LazyListState }
     val firstFr = remember { FocusRequester() }
     val ctx = LocalContext.current
 
@@ -129,21 +141,29 @@ fun LiveScreen() {
         liveMediaItem(ch)?.let { preview.setMediaItem(it); preview.prepare(); preview.playWhenReady = true }
     }
 
-    val cats = remember(c, favs, recent) {
+    val cats = remember(c, favs, recent, sportsIds, sportsOnly, hideSports) {
         buildList {
-            if (favs.isNotEmpty()) add(FAVS to "★ Favoritos")
-            if (recent.isNotEmpty()) add(RECENT to "Vistos recientemente")
-            add(ALLCH to "Todos los canales")
-            c.visLiveCats.forEach { add(it.id to it.name) }
+            if (!sportsOnly) {
+                if (favs.isNotEmpty()) add(FAVS to "★ Favoritos")
+                if (recent.isNotEmpty()) add(RECENT to "Vistos recientemente")
+            }
+            add(ALLCH to if (sportsOnly) "Todos los de deportes" else "Todos los canales")
+            c.visLiveCats.forEach { k ->
+                if (sportsOnly && k.id !in sportsIds) return@forEach
+                if (hideSports && k.id in sportsIds) return@forEach
+                add(k.id to k.name)
+            }
         }
     }
     val counts = remember(c) { c.visChannels.groupingBy { it.cat }.eachCount() }
-    val list = remember(c, cat, favs, recent) { channelsFor(cat, c, favs, recent) }
+    val list = remember(c, cat, favs, recent, base) { if (cat == ALLCH) base else channelsFor(cat, c, favs, recent) }
 
-    if (c.channels.isEmpty()) {
-        CenterMessage("Tu cuenta no tiene canales en vivo")
+    if (c.channels.isEmpty() || (sportsOnly && base.isEmpty())) {
+        CenterMessage(if (sportsOnly) "No encontré canales de deportes" else "Tu cuenta no tiene canales en vivo",
+            if (sportsOnly) "En Ajustes → Deportes puedes elegir qué categorías de tu proveedor son de deportes." else "")
         return
     }
+    recCh?.let { k -> RecordChannelDialog(k) { recCh = null } }
 
     if (LocalCompact.current) {
         // Celular: el canal que tocas se ve arriba (como YouTube/Apple TV); toca el video para verlo en grande
@@ -165,7 +185,7 @@ fun LiveScreen() {
             Column(m) {
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
                     items(cats.filter { (id, _) -> when (id) { FAVS -> favs.isNotEmpty(); RECENT -> recent.isNotEmpty(); ALLCH -> true; else -> (counts[id] ?: 0) > 0 } }, key = { it.first }) { (id, name) ->
-                        Pill(name, cat == id, { cat = id; nav.state["live_cat"] = id })
+                        Pill(name, cat == id, { cat = id; nav.state["${pre}_cat"] = id })
                     }
                 }
                 LazyColumn(state = chState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -182,16 +202,16 @@ fun LiveScreen() {
                 Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                        if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty()) { full() }
+                        if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty(), { recCh = pc }) { full() }
                     }
                     listUi(Modifier.width(320.dp).fillMaxHeight())
                 }
             } else {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    PhoneTopBar("En vivo")
+                    PhoneTopBar(if (sportsOnly) "Canales de deportes" else "En vivo")
                     Spacer(Modifier.height(8.dp))
                     video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                    if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty()) { full() }
+                    if (pc != null) PhoneNowPlaying(pc, c.liveCatName[pc.cat].orEmpty(), { recCh = pc }) { full() }
                     listUi(Modifier.fillMaxWidth().weight(1f))
                 }
             }
@@ -205,14 +225,14 @@ fun LiveScreen() {
             contentPadding = PaddingValues(start = 14.dp, end = 10.dp, top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            item { Text("TV en vivo", color = C.Hi, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 10.dp)) }
+            item { Text(if (sportsOnly) "Canales de deportes" else "TV en vivo", color = C.Hi, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp, bottom = 10.dp)) }
             item {
                 ActionButton("Pantalla múltiple", { preview.stop(); nav.state.remove("mv_slots"); nav.go(Route.MultiView(list, focusedCh)) }, Modifier.fillMaxWidth().padding(bottom = 10.dp), icon = Icons.Filled.GridView)
             }
             items(cats, key = { it.first }) { (id, name) ->
-                val n = when (id) { FAVS -> favs.size; RECENT -> recent.size; ALLCH -> c.visChannels.size; else -> counts[id] ?: 0 }
+                val n = when (id) { FAVS -> favs.size; RECENT -> recent.size; ALLCH -> base.size; else -> counts[id] ?: 0 }
                 if (n > 0) LiveCatItem(name, n, cat == id, Modifier.rememberFocus(mem, "cat:$id")) {
-                    cat = id; nav.state["live_cat"] = id
+                    cat = id; nav.state["${pre}_cat"] = id
                 }
             }
         }
@@ -225,7 +245,10 @@ fun LiveScreen() {
             itemsIndexed(list, key = { _, ch -> ch.id }) { i, ch ->
                 ChannelRow(
                     ch, ch.id in favs,
-                    Modifier.rememberFocus(mem, "ch:$cat:${ch.id}").then(if (i == 0) Modifier.focusRequester(firstFr) else Modifier),
+                    Modifier.rememberFocus(mem, "ch:$cat:${ch.id}").then(if (i == 0) Modifier.focusRequester(firstFr) else Modifier)
+                        .onPreviewKeyEvent { e ->
+                            if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionRight) { recCh = ch; true } else false
+                        },
                     onFocused = { focusedCh = ch },
                     onLongClick = { Library.toggleFavChannel(ch.id) },
                 ) { preview.stop(); nav.playLive(list, i) }
@@ -234,7 +257,7 @@ fun LiveScreen() {
         // Panel de información del canal enfocado
         Box(Modifier.fillMaxSize().padding(start = 12.dp, end = 20.dp, top = 24.dp, bottom = 20.dp)) {
             val ch = focusedCh
-            if (ch != null) ChannelInfoPanel(ch, c.liveCatName[ch.cat].orEmpty()) {
+            if (ch != null) ChannelInfoPanel(ch, c.liveCatName[ch.cat].orEmpty(), onRecord = { recCh = ch }) {
                 // Vista previa 16:9
                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
                     if (previewCh?.id == ch.id && !previewFail) MiniVideo(preview, Modifier.fillMaxSize())
@@ -254,11 +277,11 @@ fun LiveScreen() {
 }
 
 @Composable
-private fun ChannelInfoPanel(ch: Channel, catName: String, video: @Composable () -> Unit) {
+private fun ChannelInfoPanel(ch: Channel, catName: String, onRecord: () -> Unit, video: @Composable () -> Unit) {
     val epg = rememberEpg(ch, 300)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         video()
-        Text("OK para ver en pantalla completa", color = C.Low, fontSize = 11.sp)
+        Text("OK para ver en pantalla completa · ► para grabar", color = C.Low, fontSize = 11.sp)
         Text(ch.name, color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)
         Text(listOfNotNull(if (ch.num > 0) "Canal ${ch.num}" else null, catName.ifBlank { null }, if (ch.archiveDays > 0) "Guarda ${ch.archiveDays} días" else null).joinToString(" · "), color = C.Low, fontSize = 12.sp)
         Spacer(Modifier.height(6.dp))
@@ -342,7 +365,7 @@ private fun LiveCatItem(name: String, count: Int, selected: Boolean, modifier: M
 
 
 @Composable
-private fun PhoneNowPlaying(ch: Channel, catName: String, onFull: () -> Unit) {
+private fun PhoneNowPlaying(ch: Channel, catName: String, onRecord: () -> Unit, onFull: () -> Unit) {
     val nav = LocalNav.current
     val epg = rememberEpg(ch, 0)
     Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -351,6 +374,7 @@ private fun PhoneNowPlaying(ch: Channel, catName: String, onFull: () -> Unit) {
             Text(epg.firstOrNull()?.let { "Ahora: " + it.title } ?: catName, color = C.Mid, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             epg.firstOrNull()?.let { ProgressBar(it.progress(), Modifier.fillMaxWidth(0.7f).padding(top = 4.dp)) }
         }
+        Icon(androidx.compose.material.icons.Icons.Filled.FiberManualRecord, "Grabar", Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { onRecord() }.padding(10.dp), tint = Live)
         Icon(Icons.Filled.GridView, "Pantalla múltiple", Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { nav.state.remove("mv_slots"); nav.go(Route.MultiView(listOf(ch), ch)) }.padding(8.dp), tint = C.Mid)
         Icon(Icons.Filled.Fullscreen, "Pantalla completa", Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { onFull() }.padding(8.dp), tint = C.Accent)
     }
