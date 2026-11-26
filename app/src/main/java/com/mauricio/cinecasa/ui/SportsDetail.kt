@@ -338,11 +338,16 @@ private fun gameToEvent(lg: String, me: SpTeam, g: SpGame): SpEvent {
 
 @Composable
 fun TeamScreen(lg: String, team: SpTeam) {
+    val page by produceState<com.mauricio.cinecasa.data.SpTeamPage?>(null, lg, team.id) { value = Sports.team(lg, team.id) }
+    val table by produceState<com.mauricio.cinecasa.data.SpTable?>(null, lg) { value = if (lg == "lmp" || lg == "ufc") null else Sports.table(lg) }
+    TeamBody(lg, team, page, table)
+}
+
+@Composable
+fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPage?, table: com.mauricio.cinecasa.data.SpTable?) {
     val nav = LocalNav.current
     val c by Repo.catalog.collectAsState()
     val board = rememberBoard()
-    val page by produceState<com.mauricio.cinecasa.data.SpTeamPage?>(null, lg, team.id) { value = Sports.team(lg, team.id) }
-    val table by produceState<com.mauricio.cinecasa.data.SpTable?>(null, lg) { value = if (lg == "lmp" || lg == "ufc") null else Sports.table(lg) }
     val teams by Teams.list.collectAsState()
     val ns by Teams.noSpoil.collectAsState()
     val key = "$lg:${team.id}"

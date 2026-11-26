@@ -127,8 +127,12 @@ class ShotsTest {
         println("tabla nfl desde la nube: " + (t?.groups?.size ?: "sin internet"))
     }
 
-    @Test fun fichaEquipo() = shoot("4_ficha_equipo", h = 1300, waitRounds = 12) {
-        TeamScreen("nfl", com.mauricio.cinecasa.data.SpTeam("12", "Chiefs", "Kansas City Chiefs", "KC", "", "e31837"))
+    @Test fun fichaEquipo() {
+        val page = Sports.parseTeamPage("nfl", Muestra.json("team.json"))
+        val table = kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(20_000) { Sports.table("nfl") } }
+        shoot("4_ficha_equipo", h = 1500) {
+            com.mauricio.cinecasa.ui.TeamBody("nfl", com.mauricio.cinecasa.data.SpTeam("12", "Chiefs", "Kansas City Chiefs", "KC", "", "e31837"), page, table)
+        }
     }
 
     @Test fun grabaciones() {
