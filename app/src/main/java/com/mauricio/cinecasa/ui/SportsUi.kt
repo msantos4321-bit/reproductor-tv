@@ -584,9 +584,8 @@ private fun HeroTeam(t: SpTeam, ev: SpEvent, hide: Boolean, compact: Boolean) {
         TeamBadge(t, if (compact) 34.dp else 44.dp)
         Spacer(Modifier.width(12.dp))
         Text(t.full.ifBlank { t.n }, color = if (lost) C.Low else C.Hi, fontSize = if (compact) 18.sp else 24.sp, fontWeight = FontWeight.Bold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        if (t.rec.isNotBlank()) Text("  ${t.rec}", color = C.Low, fontSize = 13.sp)
-        Spacer(Modifier.weight(1f))
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (t.rec.isNotBlank() && (ev.upcoming || hide)) Text("  ${t.rec}", color = C.Low, fontSize = 13.sp)
         if (!ev.upcoming && !hide) Text(t.sc, color = if (lost) C.Low else C.Hi, fontSize = if (compact) 26.sp else 36.sp, fontWeight = FontWeight.Bold)
     }
 }

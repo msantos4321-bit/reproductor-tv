@@ -90,8 +90,8 @@ class ShotsTest {
             }
         }
         idle(1500)
-        Thread.sleep(2500) // deja terminar lo que llega de internet (fichas de equipos)
-        idle(800)
+        // Deja terminar lo que llega de internet o de la memoria (fichas de equipos)
+        repeat(4) { Thread.sleep(700); idle(400) }
         save(draw(act.window.decorView, w, h), name)
     }
 
