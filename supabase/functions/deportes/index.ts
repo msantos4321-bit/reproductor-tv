@@ -659,7 +659,9 @@ function h2h(s: J): J[] {
 
 function playsOf(sp: string, s: J): J[] {
   let raw: J[] = [];
-  if (sp === "football") raw = [...(s.drives?.previous ?? []).flatMap((d: J) => d.plays ?? []), ...(s.drives?.current?.plays ?? [])];
+  // Futbol americano: cada jugada toma el equipo de su serie (ESPN no lo pone en la jugada)
+  const withTeam = (d: J) => (d?.plays ?? []).map((p: J) => (p.team ? p : { ...p, team: d.team }));
+  if (sp === "football") raw = [...(s.drives?.previous ?? []).flatMap(withTeam), ...withTeam(s.drives?.current)];
   else if (sp === "soccer") raw = s.commentary ?? s.keyEvents ?? [];
   else raw = s.plays ?? [];
   return raw.slice(-45).reverse().map((p: J) => ({
@@ -669,7 +671,7 @@ function playsOf(sp: string, s: J): J[] {
     team: String(p.team?.id ?? p.play?.team?.id ?? ""),
     sc: !!(p.scoringPlay ?? p.play?.scoringPlay),
     score: p.awayScore != null && p.homeScore != null ? `${p.awayScore}-${p.homeScore}` : "",
-  })).filter((p: J) => p.t && !/^(END GAME|End of Game)$/i.test(p.t));
+  })).filter((p: J) => p.t && !/^(END GAME|End of Game|Game End)$/i.test(p.t.trim()));
 }
 
 function keyPlays(sp: string, s: J): J[] {
@@ -795,7 +797,7 @@ Deno.serve(async (req) => {
         return reply(await cached(`table:${lg}`, () => 30 * 60_000, () => table(lg)), 200, 600);
       case "game": {
         if (!LEAGUES[lg] || !okId(id)) return reply({ error: "datos" }, 400);
-        const v = await cached(`game2:${lg}:${id}`, (g) => (g?.st === "in" ? 20_000 : 10 * 60_000), () => game(lg, id!));
+        const v = await cached(`game3:${lg}:${id}`, (g) => (g?.st === "in" ? 20_000 : 10 * 60_000), () => game(lg, id!));
         return reply(v, 200, v.st === "in" ? 15 : 300);
       }
       case "teams":
