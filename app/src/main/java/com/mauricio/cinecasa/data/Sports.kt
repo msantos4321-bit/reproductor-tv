@@ -176,7 +176,7 @@ object Sports {
         try { make().also { memo[k] = System.currentTimeMillis() to it } } catch (_: Exception) { memo[k]?.second as T? }
     }
 
-    suspend fun team(lg: String, id: String): SpTeamPage? = memoGet("team:$lg:$id", 5 * 60_000) {
+    suspend fun team(lg: String, id: String): SpTeamPage? = memoGet("team:$lg:$id", 5 * 60_000L) {
         val o = JSONObject(get("$FN?q=team&lg=$lg&id=$id"))
         val t = o.getJSONObject("team")
         SpTeamPage(
@@ -188,7 +188,7 @@ object Sports {
         )
     }
 
-    suspend fun table(lg: String): SpTable? = memoGet("table:$lg", 15 * 60_000) {
+    suspend fun table(lg: String): SpTable? = memoGet("table:$lg", 15 * 60_000L) {
         val o = JSONObject(get("$FN?q=table&lg=$lg"))
         SpTable(
             lg, o.optJSONArray("cols").strs(),
@@ -200,7 +200,7 @@ object Sports {
         )
     }
 
-    suspend fun game(lg: String, id: String, live: Boolean): SpGameDetail? = memoGet("game:$lg:$id", if (live) 15_000 else 5 * 60_000) {
+    suspend fun game(lg: String, id: String, live: Boolean): SpGameDetail? = memoGet("game:$lg:$id", if (live) 15_000L else 5 * 60_000L) {
         val o = JSONObject(get("$FN?q=game&lg=$lg&id=$id"))
         val wp = o.optJSONArray("wp") ?: JSONArray()
         val inj = o.optJSONArray("inj").objs().associate { t ->
@@ -217,7 +217,7 @@ object Sports {
         )
     }
 
-    suspend fun teams(lg: String): List<SpTeam> = memoGet("teams:$lg", 6 * 3600_000) {
+    suspend fun teams(lg: String): List<SpTeam> = memoGet("teams:$lg", 6 * 3600_000L) {
         JSONObject(get("$FN?q=teams&lg=$lg")).optJSONArray("teams").objs().map(::team)
     } ?: emptyList()
 
