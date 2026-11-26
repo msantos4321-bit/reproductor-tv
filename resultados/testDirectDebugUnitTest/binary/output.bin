@@ -1,0 +1,8 @@
+tabla nfl desde la nube: 2
+ipartido g6_alineaciones_ligamx: stats=11 jugadores=0 jugadas=45 momios=true forma=2 h2h=5 alineaciones=2
+bpartido g4_apuestas_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+	cpartido g3_jugadores_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+dpartido g7_jugadas_ligamx: stats=11 jugadores=0 jugadas=45 momios=true forma=2 h2h=5 alineaciones=2
+apartido g1_resumen_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+^partido g5_previa_nfl: stats=6 jugadores=0 jugadas=0 momios=true forma=2 h2h=0 alineaciones=0
+fpartido g2_estadisticas_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0

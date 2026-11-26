@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.mauricio.cinecasa.SportsTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-26T07:45:28" hostname="runnervm0hi8g" time="1.852">
+  <properties/>
+  <testcase name="sinMarcadoresOcultaYSePuedeMostrar" classname="com.mauricio.cinecasa.SportsTest" time="1.099"/>
+  <testcase name="quinielaCuentaAciertos" classname="com.mauricio.cinecasa.SportsTest" time="0.075"/>
+  <testcase name="estimaEspacio" classname="com.mauricio.cinecasa.SportsTest" time="0.034"/>
+  <testcase name="leeLosMarcadores" classname="com.mauricio.cinecasa.SportsTest" time="0.025"/>
+  <testcase name="detectaCategoriasDeDeportes" classname="com.mauricio.cinecasa.SportsTest" time="0.023"/>
+  <testcase name="encuentraElCanalDelPartido" classname="com.mauricio.cinecasa.SportsTest" time="0.031"/>
+  <testcase name="fichaDeEquipo" classname="com.mauricio.cinecasa.SportsTest" time="0.028"/>
+  <testcase name="grabacionSeVeMientrasCrece" classname="com.mauricio.cinecasa.SportsTest" time="0.535"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

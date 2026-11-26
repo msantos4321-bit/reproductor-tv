@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.mauricio.cinecasa.ShotsTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-11-26T07:44:34" hostname="runnervm0hi8g" time="54.373">
+  <properties/>
+  <testcase name="pantallaDeportesCelular" classname="com.mauricio.cinecasa.ShotsTest" time="13.3"/>
+  <testcase name="fichaCargaDatos" classname="com.mauricio.cinecasa.ShotsTest" time="0.38"/>
+  <testcase name="g6Alineaciones" classname="com.mauricio.cinecasa.ShotsTest" time="3.447"/>
+  <testcase name="fichaEquipo" classname="com.mauricio.cinecasa.ShotsTest" time="3.14"/>
+  <testcase name="g8Tabla" classname="com.mauricio.cinecasa.ShotsTest" time="2.919"/>
+  <testcase name="probabilidad" classname="com.mauricio.cinecasa.ShotsTest" time="2.872"/>
+  <testcase name="g4Apuestas" classname="com.mauricio.cinecasa.ShotsTest" time="3.893"/>
+  <testcase name="g3Jugadores" classname="com.mauricio.cinecasa.ShotsTest" time="3.096"/>
+  <testcase name="tarjetas" classname="com.mauricio.cinecasa.ShotsTest" time="2.936"/>
+  <testcase name="g7Jugadas" classname="com.mauricio.cinecasa.ShotsTest" time="3.002"/>
+  <testcase name="g1Resumen" classname="com.mauricio.cinecasa.ShotsTest" time="3.016"/>
+  <testcase name="pantallaDeportesTele" classname="com.mauricio.cinecasa.ShotsTest" time="3.053"/>
+  <testcase name="g5Previa" classname="com.mauricio.cinecasa.ShotsTest" time="3.273"/>
+  <testcase name="g2Estadisticas" classname="com.mauricio.cinecasa.ShotsTest" time="2.973"/>
+  <testcase name="opcionesDelPartido" classname="com.mauricio.cinecasa.ShotsTest" time="0.151"/>
+  <testcase name="grabaciones" classname="com.mauricio.cinecasa.ShotsTest" time="2.921"/>
+  <system-out><![CDATA[tabla nfl desde la nube: 2
+partido g6_alineaciones_ligamx: stats=11 jugadores=0 jugadas=45 momios=true forma=2 h2h=5 alineaciones=2
+partido g4_apuestas_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+partido g3_jugadores_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+partido g7_jugadas_ligamx: stats=11 jugadores=0 jugadas=45 momios=true forma=2 h2h=5 alineaciones=2
+partido g1_resumen_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+partido g5_previa_nfl: stats=6 jugadores=0 jugadas=0 momios=true forma=2 h2h=0 alineaciones=0
+partido g2_estadisticas_nba: stats=14 jugadores=2 jugadas=44 momios=true forma=0 h2h=1 alineaciones=0
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
