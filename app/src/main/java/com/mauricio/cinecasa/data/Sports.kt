@@ -80,11 +80,30 @@ data class SpTeamPage(
 data class SpTableRow(val id: String, val n: String, val ab: String, val logo: String, val v: List<String>)
 data class SpTable(val lg: String, val cols: List<String>, val groups: List<Pair<String, List<SpTableRow>>>)
 
-data class SpPlay(val t: String, val clk: String, val scoring: Boolean)
+data class SpPlay(val t: String, val clk: String, val scoring: Boolean, val per: Int = 0, val team: String = "", val score: String = "", val kind: String = "")
 data class SpLine(val id: String, val ab: String, val home: Boolean, val ls: List<String>, val sc: String)
+data class GStat(val l: String, val h: String, val a: String, val hn: Double, val an: Double, val low: Boolean)
+data class GPlayerRow(val n: String, val pos: String, val num: String, val starter: Boolean, val v: List<String>)
+data class GPlayerGroup(val g: String, val cols: List<String>, val rows: List<GPlayerRow>)
+data class GLeader(val cat: String, val n: String, val v: String, val head: String, val pos: String)
+data class GOddsSide(val open: String, val now: String, val oddsNow: String = "")
+data class GOdds(
+    val by: String, val details: String, val favH: Boolean, val favA: Boolean, val favOpenH: Boolean, val favOpenA: Boolean,
+    val mlH: GOddsSide, val mlA: GOddsSide, val mlD: String, val spH: GOddsSide, val spA: GOddsSide,
+    val ouOpen: String, val ouNow: String, val over: String, val under: String,
+)
+data class GForm(val r: String, val s: String, val o: String, val logo: String, val at: String, val d: Long)
+data class GH2H(val d: Long, val h: String, val a: String, val hs: String, val `as`: String, val w: String)
+data class GStarter(val n: String, val num: String, val pos: String, val ev: List<String>)
+data class GLineup(val formation: String, val starters: List<GStarter>)
 data class SpGameDetail(
     val id: String, val st: String, val det: String, val line: List<SpLine>, val wp: List<Float>,
-    val plays: List<SpPlay>, val drive: String, val predHome: Float?, val inj: Map<String, List<Pair<String, String>>>,
+    val plays: List<SpPlay>, val drive: String, val predHome: Float?, val inj: Map<String, List<SpInjury>>,
+    val tv: List<String> = emptyList(), val venue: String = "", val city: String = "", val temp: Int? = null, val rain: Int? = null,
+    val stats: List<GStat> = emptyList(), val players: Map<String, List<GPlayerGroup>> = emptyMap(),
+    val leaders: Map<String, List<GLeader>> = emptyMap(), val keyPlays: List<SpPlay> = emptyList(), val odds: GOdds? = null,
+    val ats: Map<String, List<Pair<String, String>>> = emptyMap(), val last5: Map<String, List<GForm>> = emptyMap(),
+    val h2h: List<GH2H> = emptyList(), val lineups: Map<String, GLineup> = emptyMap(),
 )
 
 /** Equipo que sigue un perfil. */
@@ -213,20 +232,65 @@ object Sports {
     }
 
     suspend fun game(lg: String, id: String, live: Boolean): SpGameDetail? = memoGet("game:$lg:$id", if (live) 15_000L else 5 * 60_000L) {
-        val o = JSONObject(get("$FN?q=game&lg=$lg&id=$id"))
+        parseGame(get("$FN?q=game&lg=$lg&id=$id"))
+    }
+
+    /** Lee la respuesta de «?q=game». */
+    fun parseGame(json: String): SpGameDetail {
+        val o = JSONObject(json)
         val wp = o.optJSONArray("wp") ?: JSONArray()
-        val inj = o.optJSONArray("inj").objs().associate { t ->
-            t.optString("team") to t.optJSONArray("list").objs().map { it.optString("n") to it.optString("st") }
-        }
-        SpGameDetail(
-            id, o.optString("st"), o.optString("det"),
-            o.optJSONArray("line").objs().map { SpLine(it.optString("id"), it.optString("ab"), it.optBoolean("home"), it.optJSONArray("ls").strs(), it.optString("sc")) },
-            (0 until wp.length()).map { wp.optDouble(it, 50.0).toFloat() },
-            o.optJSONArray("plays").objs().map { SpPlay(it.optString("t"), it.optString("clk"), it.optBoolean("sc")) },
-            o.optString("drive"),
-            o.optJSONObject("pred")?.optDouble("h", Double.NaN)?.takeIf { !it.isNaN() }?.toFloat(),
-            inj,
+        fun byTeam(a: JSONArray?) = a.objs()
+        fun play(it: JSONObject) = SpPlay(it.optString("t"), it.optString("clk"), it.optBoolean("sc"), it.optInt("per"), it.optString("team"), it.optString("score"), it.optString("kind"))
+        fun side(x: JSONObject?) = GOddsSide(x?.optString("open").orEmpty(), x?.optString("now").orEmpty(), x?.optString("oddsNow").orEmpty())
+        val od = o.optJSONObject("odds")
+        return SpGameDetail(
+            id = o.optString("id"), st = o.optString("st"), det = o.optString("det"),
+            line = o.optJSONArray("teams").objs().map { SpLine(it.optString("id"), it.optString("ab"), it.optBoolean("home"), it.optJSONArray("ls").strs(), it.optString("sc")) },
+            wp = (0 until wp.length()).map { wp.optDouble(it, 50.0).toFloat() },
+            plays = o.optJSONArray("plays").objs().map(::play),
+            drive = o.optString("drive"),
+            predHome = o.optJSONObject("pred")?.optDouble("h", Double.NaN)?.takeIf { !it.isNaN() }?.toFloat(),
+            inj = byTeam(o.optJSONArray("inj")).associate { t ->
+                t.optString("team") to t.optJSONArray("list").objs().map { SpInjury(it.optString("n"), it.optString("pos"), it.optString("st"), it.optString("d"), "") }
+            },
+            tv = o.optJSONArray("tv").strs(), venue = o.optString("venue"), city = o.optString("city"),
+            temp = if (o.isNull("temp") || !o.has("temp")) null else o.optInt("temp"),
+            rain = if (o.isNull("rain") || !o.has("rain")) null else o.optInt("rain"),
+            stats = o.optJSONArray("stats").objs().map { GStat(it.optString("l"), it.optString("h"), it.optString("a"), it.optDouble("hn", Double.NaN), it.optDouble("an", Double.NaN), it.optBoolean("low")) },
+            players = byTeam(o.optJSONArray("players")).associate { t ->
+                t.optString("team") to t.optJSONArray("groups").objs().map { g ->
+                    GPlayerGroup(g.optString("g"), g.optJSONArray("cols").strs(), g.optJSONArray("rows").objs().map { r ->
+                        GPlayerRow(r.optString("n"), r.optString("pos"), r.optString("num"), r.optBoolean("st"), r.optJSONArray("v").strs())
+                    })
+                }
+            },
+            leaders = byTeam(o.optJSONArray("leaders")).associate { t ->
+                t.optString("team") to t.optJSONArray("items").objs().map { GLeader(it.optString("cat"), it.optString("n"), it.optString("v"), it.optString("head"), it.optString("pos")) }
+            },
+            keyPlays = o.optJSONArray("keyPlays").objs().map(::play),
+            odds = od?.let {
+                val ou = it.optJSONObject("ou")
+                GOdds(it.optString("by"), it.optString("details"), it.optBoolean("favH"), it.optBoolean("favA"), it.optBoolean("favOpenH"), it.optBoolean("favOpenA"),
+                    side(it.optJSONObject("mlH")), side(it.optJSONObject("mlA")), it.optString("mlD"), side(it.optJSONObject("spH")), side(it.optJSONObject("spA")),
+                    ou?.optString("open").orEmpty(), ou?.optString("now").orEmpty(), ou?.optString("over").orEmpty(), ou?.optString("under").orEmpty())
+            },
+            ats = byTeam(o.optJSONArray("ats")).associate { t -> t.optString("team") to t.optJSONArray("recs").objs().map { it.optString("t") to it.optString("s") } },
+            last5 = byTeam(o.optJSONArray("last5")).associate { t ->
+                t.optString("team") to t.optJSONArray("ev").objs().map { GForm(it.optString("r"), it.optString("s"), it.optString("o"), it.optString("logo"), it.optString("at"), parseTime(it.optString("d"))) }
+            },
+            h2h = o.optJSONArray("h2h").objs().map { GH2H(parseTime(it.optString("d")), it.optString("h"), it.optString("a"), it.optString("hs"), it.optString("as"), it.optString("w")) },
+            lineups = byTeam(o.optJSONArray("lineups")).associate { t ->
+                t.optString("team") to GLineup(t.optString("formation"), t.optJSONArray("starters").objs().map { GStarter(it.optString("n"), it.optString("num"), it.optString("pos"), it.optJSONArray("ev").strs()) })
+            },
         )
+    }
+
+    /** Partido del tablero que pasa en este canal (por los nombres de los dos equipos en el nombre del canal). */
+    fun eventForChannel(ch: Channel, events: List<SpEvent>): SpEvent? {
+        val n = ch.norm
+        if (n.length < 6) return null
+        return events.filter { e -> !e.done || e.start > System.currentTimeMillis() - 6 * 3600_000 }
+            .firstOrNull { e -> words(e.h).any { n.contains(it) } && words(e.a).any { n.contains(it) } }
     }
 
     suspend fun teams(lg: String): List<SpTeam> = memoGet("teams:$lg", 6 * 3600_000L) {

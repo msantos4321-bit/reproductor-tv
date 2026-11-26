@@ -327,27 +327,51 @@ fun ResultChip(r: String) {
     }
 }
 
-/** Tile de canal (para PPV y canales de deportes). */
+/** Tile de canal (PPV y canales de deportes). Si el canal pasa un partido conocido, muestra los escudos y el marcador. */
 @Composable
-fun ChannelTile(ch: Channel, modifier: Modifier = Modifier, onFocused: () -> Unit = {}, onClick: () -> Unit) {
+fun ChannelTile(ch: Channel, modifier: Modifier = Modifier, events: List<SpEvent> = emptyList(), onFocused: () -> Unit = {}, onClick: () -> Unit) {
+    val ev = remember(ch.id, events) { Sports.eventForChannel(ch, events) }
     val epg = rememberEpg(ch, 900)
-    val shape = RoundedCornerShape(10.dp)
+    val ns by Teams.noSpoil.collectAsState()
+    val rv by Teams.revealed.collectAsState()
+    val hide = ev != null && remember(ev, ns, rv) { Teams.hidden(ev) }
+    val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.width(220.dp).onFocusChanged { if (it.isFocused) onFocused() },
+        modifier = modifier.width(250.dp).onFocusChanged { if (it.isFocused) onFocused() },
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, C.Accent), shape = shape)),
         colors = ClickableSurfaceDefaults.colors(containerColor = C.Panel, contentColor = C.Hi, focusedContainerColor = C.Panel, focusedContentColor = C.Hi),
     ) {
         Column(Modifier.padding(10.dp)) {
-            Box(Modifier.fillMaxWidth().height(70.dp).clip(RoundedCornerShape(6.dp)).background(C.Panel2).padding(8.dp), contentAlignment = Alignment.Center) {
-                Text(ch.name, color = C.Mid, fontSize = 11.sp, maxLines = 2, textAlign = TextAlign.Center)
-                Img(ch.icon, Modifier.fillMaxSize(), ContentScale.Fit)
+            Box(
+                Modifier.fillMaxWidth().height(88.dp).clip(RoundedCornerShape(8.dp)).background(
+                    if (ev != null) Brush.horizontalGradient(listOf(Color(ev.a.color).copy(alpha = 0.55f), C.Panel2, Color(ev.h.color).copy(alpha = 0.55f)))
+                    else Brush.linearGradient(listOf(C.Panel2, C.Panel2)),
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    ev != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        TeamBadge(ev.a, 52.dp)
+                        Text(if (!ev.upcoming && !hide) "  ${ev.a.sc} – ${ev.h.sc}  " else "  vs  ", color = Color.White, fontSize = if (!ev.upcoming && !hide) 20.sp else 15.sp, fontWeight = FontWeight.Bold)
+                        TeamBadge(ev.h, 52.dp)
+                    }
+                    ch.icon.isNotBlank() -> Img(ch.icon, Modifier.fillMaxSize().padding(12.dp), ContentScale.Fit)
+                    else -> Text(ch.name, color = C.Mid, fontSize = 12.sp, maxLines = 3, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp))
+                }
+                if (ev?.live == true) Box(Modifier.align(Alignment.TopStart).padding(6.dp).background(Color(0xCC000000), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp)) { LiveDot("EN VIVO", 9) }
             }
-            Spacer(Modifier.height(6.dp))
-            Text(ch.name, color = C.Hi, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(epg.firstOrNull()?.title ?: " ", color = C.Low, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(8.dp))
+            if (ev != null) {
+                Text(ev.title, color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${leagueShort(ev.lg)} · ${statusText(ev)}", color = if (ev.live) Live else C.Accent, fontSize = 12.sp, maxLines = 1)
+                Text(ch.name, color = C.Low, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                Text(ch.name, color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(epg.firstOrNull()?.title ?: " ", color = C.Low, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -497,7 +521,7 @@ fun SportsScreen() {
                                 ScoreCard(e, Modifier.rememberFocus(mem, "${row.id}/${e.key}"), width = if (compact) 270.dp else 300.dp, onFocused = { focused = e }) { sheet = e }
                             }
                             else -> items(row.channels, key = { it.id }) { ch ->
-                                ChannelTile(ch, Modifier.rememberFocus(mem, "${row.id}/${ch.id}")) {
+                                ChannelTile(ch, Modifier.rememberFocus(mem, "${row.id}/${ch.id}"), board.events, onFocused = { focused = Sports.eventForChannel(ch, board.events) }) {
                                     val list = row.channels
                                     nav.playLive(list, list.indexOf(ch).coerceAtLeast(0))
                                 }
