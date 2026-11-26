@@ -82,7 +82,7 @@ class ShotsTest {
         return Bitmap.createBitmap(full, 0, 0, minOf(w, full.width), minOf(h, full.height))
     }
 
-    private fun shoot(name: String, compact: Boolean = false, w: Int = 960, h: Int = 540, content: @Composable () -> Unit) {
+    private fun shoot(name: String, compact: Boolean = false, w: Int = 960, h: Int = 540, waitRounds: Int = 4, content: @Composable () -> Unit) {
         val act = org.robolectric.Robolectric.buildActivity(androidx.activity.ComponentActivity::class.java).setup().get()
         act.setContent {
             CompositionLocalProvider(LocalNav provides nav, LocalCompact provides compact, LocalInspectionMode provides true) {
@@ -91,7 +91,7 @@ class ShotsTest {
         }
         idle(1500)
         // Deja terminar lo que llega de internet o de la memoria (fichas de equipos)
-        repeat(4) { Thread.sleep(700); idle(400) }
+        repeat(waitRounds) { Thread.sleep(700); idle(400) }
         save(draw(act.window.decorView, w, h), name)
     }
 
@@ -119,7 +119,15 @@ class ShotsTest {
         }
     }
 
-    @Test fun fichaEquipo() = shoot("4_ficha_equipo", h = 1300) {
+    @Test fun fichaCargaDatos() {
+        // La ficha pide los datos igual que en la app (sin pantalla): deben llegar de la memoria
+        val p = kotlinx.coroutines.runBlocking { Sports.team("nfl", "12") }
+        org.junit.Assert.assertEquals("Kansas City Chiefs", p?.team?.full)
+        val t = kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(20_000) { Sports.table("nfl") } }
+        println("tabla nfl desde la nube: " + (t?.groups?.size ?: "sin internet"))
+    }
+
+    @Test fun fichaEquipo() = shoot("4_ficha_equipo", h = 1300, waitRounds = 12) {
         TeamScreen("nfl", com.mauricio.cinecasa.data.SpTeam("12", "Chiefs", "Kansas City Chiefs", "KC", "", "e31837"))
     }
 
