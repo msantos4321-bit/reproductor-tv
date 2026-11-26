@@ -103,8 +103,10 @@ fun FocusCard(
 
 /** Color del equipo que se vea bien sobre fondo oscuro. */
 fun teamTint(t: SpTeam): Color {
+    if (t.col.length != 6) return Color(0xFF8E8E93)
     val c = Color(t.color)
-    return if (c.luminance() < 0.06f) Color(0xFF8E8E93) else c
+    // Colores muy oscuros (azul marino, negro): se aclaran para que se vean sobre el fondo grafito
+    return if (c.luminance() < 0.09f) androidx.compose.ui.graphics.lerp(c, Color.White, if (c.luminance() < 0.02f) 0.55f else 0.35f) else c
 }
 
 /** Dos colores que no se confundan entre sí. */
