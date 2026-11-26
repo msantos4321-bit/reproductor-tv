@@ -99,7 +99,7 @@ class ShotsTest {
         File(out, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @Test fun pantallaDeportesTele() = shoot("1_deportes_tele", h = 1100) { SportsScreen() }
+    @Test fun pantallaDeportesTele() = shoot("1_deportes_tele", h = 1500) { SportsScreen() }
 
     @Test fun pantallaDeportesCelular() = shoot("2_deportes_celular", compact = true, w = 412, h = 1400) { SportsScreen() }
 
@@ -166,4 +166,31 @@ class ShotsTest {
         val v = d.window!!.decorView
         save(draw(v, v.width, v.height), "7_opciones_partido")
     }
+
+    // ---------- Detalle del partido con datos reales de la nube ----------
+    private fun t(id: String, n: String, full: String, ab: String, col: String, sc: String = "", rec: String = "", win: Boolean = false) =
+        com.mauricio.cinecasa.data.SpTeam(id, n, full, ab, "", col, sc, rec, win)
+
+    private fun partido(name: String, lg: String, sp: String, id: String, st: String, h: com.mauricio.cinecasa.data.SpTeam, a: com.mauricio.cinecasa.data.SpTeam, tab: String?, start: Long = System.currentTimeMillis() - 3 * 3600_000) {
+        val ev = com.mauricio.cinecasa.data.SpEvent(id, lg, sp, "", start, st, if (st == "post") "Final" else "", h, a, emptyList(), null, "", null)
+        val d = kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(25_000) { Sports.game(lg, id, false) } }
+        println("partido $name: " + (d?.let { "stats=${it.stats.size} jugadores=${it.players.size} jugadas=${it.plays.size} momios=${it.odds != null} forma=${it.last5.size} h2h=${it.h2h.size} alineaciones=${it.lineups.size}" } ?: "sin datos"))
+        shoot(name, h = 1300) { com.mauricio.cinecasa.ui.GameBody(ev, d, tab) }
+    }
+
+    private val phi = t("20", "76ers", "Philadelphia 76ers", "PHI", "1d428a", "111", "15-4", true)
+    private val mia = t("14", "Heat", "Miami Heat", "MIA", "98002e", "104", "10-7")
+
+    @Test fun g1Resumen() = partido("g1_resumen_nba", "nba", "basketball", "401909317", "post", phi, mia, "Resumen")
+    @Test fun g2Estadisticas() = partido("g2_estadisticas_nba", "nba", "basketball", "401909317", "post", phi, mia, "Estadísticas")
+    @Test fun g3Jugadores() = partido("g3_jugadores_nba", "nba", "basketball", "401909317", "post", phi, mia, "Jugadores")
+    @Test fun g4Apuestas() = partido("g4_apuestas_nba", "nba", "basketball", "401909317", "post", phi, mia, "Apuestas")
+    @Test fun g5Previa() = partido("g5_previa_nfl", "nfl", "football", "401873081", "pre",
+        t("8", "Lions", "Detroit Lions", "DET", "0076b6", rec = "8-2"), t("3", "Bears", "Chicago Bears", "CHI", "0b1c3a", rec = "8-2"), "Previa",
+        start = System.currentTimeMillis() + 5 * 3600_000)
+    @Test fun g6Alineaciones() = partido("g6_alineaciones_ligamx", "ligamx", "soccer", "401931986", "post",
+        t("223", "Toluca", "Toluca", "TOL", "EF0107", "2", win = true), t("216", "Atlas", "Atlas", "ATS", "000000", "0"), "Alineaciones")
+    @Test fun g7Jugadas() = partido("g7_jugadas_ligamx", "ligamx", "soccer", "401931986", "post",
+        t("223", "Toluca", "Toluca", "TOL", "EF0107", "2", win = true), t("216", "Atlas", "Atlas", "ATS", "000000", "0"), "Jugadas")
+    @Test fun g8Tabla() = shoot("g8_tabla_nfl", h = 900) { com.mauricio.cinecasa.ui.TableScreen("nfl") }
 }

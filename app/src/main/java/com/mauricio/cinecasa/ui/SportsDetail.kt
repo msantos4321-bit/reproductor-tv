@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -345,7 +346,6 @@ fun TeamScreen(lg: String, team: SpTeam) {
 
 @Composable
 fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPage?, table: com.mauricio.cinecasa.data.SpTable?) {
-    val nav = LocalNav.current
     val c by Repo.catalog.collectAsState()
     val board = rememberBoard()
     val teams by Teams.list.collectAsState()
@@ -360,36 +360,38 @@ fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPa
     val side = if (compact) 16.dp else 28.dp
     val t = page?.team?.let { it.copy(logo = it.logo.ifBlank { team.logo }, col = it.col.ifBlank { team.col }) } ?: team
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 20.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 16.dp, bottom = 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item("head") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamBadge(t, if (compact) 64.dp else 88.dp)
-                Spacer(Modifier.width(18.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(t.full.ifBlank { t.n }, color = C.Hi, fontSize = if (compact) 24.sp else 30.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-                    Text(listOfNotNull(Sports.leagueByKey[lg]?.name, page?.rec?.ifBlank { null }?.let { "Récord $it" }, page?.standing?.ifBlank { null }).joinToString(" · "), color = C.Mid, fontSize = 14.sp)
-                    val p = page
-                    if (p != null && (p.home.isNotBlank() || p.streak.isNotBlank()) && !noSpoil) Text(
-                        listOfNotNull(p.home.ifBlank { null }?.let { "En casa $it" }, p.away.ifBlank { null }?.let { "De visita $it" }, p.streak.ifBlank { null }?.let { "Racha: ${streakEs(it)}" }).joinToString(" · "),
-                        color = C.Low, fontSize = 13.sp,
-                    )
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(teamTint(t).copy(alpha = 0.5f), C.Panel)))) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TeamBadge(t, if (compact) 64.dp else 96.dp)
+                    Spacer(Modifier.width(20.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(t.full.ifBlank { t.n }, color = C.Hi, fontSize = if (compact) 24.sp else 32.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text(listOfNotNull(Sports.leagueByKey[lg]?.name, page?.standing?.ifBlank { null }).joinToString(" · "), color = C.Mid, fontSize = 15.sp)
+                        val p = page
+                        if (p != null && !noSpoil) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (p.rec.isNotBlank()) StatPill("Récord", p.rec)
+                            if (p.home.isNotBlank()) StatPill("En casa", p.home)
+                            if (p.away.isNotBlank()) StatPill("De visita", p.away)
+                            if (p.streak.isNotBlank()) StatPill("Racha", streakEs(p.streak))
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(14.dp))
+        }
+        item("actions") {
             Wrap(gap = 10.dp) {
                 ActionButton(if (following) "Siguiendo" else "Seguir equipo", { Teams.toggle(lg, t) }, Modifier.focusRequester(fr), primary = !following, icon = if (following) Icons.Filled.Star else Icons.Filled.StarBorder)
                 Pill(if (noSpoil) "Sin marcadores: activado" else "Sin marcadores", noSpoil, { Teams.setNoSpoil(key, !noSpoil) })
             }
-            if (noSpoil) Text("Los marcadores de este equipo quedan ocultos hasta que tú los pidas. Ideal si lo vas a ver grabado.", color = C.Low, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         }
+        if (noSpoil) item("nsp") { Text("Los marcadores de este equipo quedan ocultos hasta que tú los pidas. Ideal si lo vas a ver grabado.", color = C.Low, fontSize = 12.sp) }
         val p = page
         if (p == null) item("load") { Spinner() }
         else {
-            // En vivo ahora (del tablero)
             board.events.firstOrNull { it.live && it.has(key) }?.let { live ->
-                item("live") {
-                    Column { SectionTitle("En vivo ahora"); ScoreCard(live, onFocused = {}) { sheet = live } }
-                }
+                item("live") { Column { SectionTitle("En vivo ahora"); ScoreCard(live, onFocused = {}) { sheet = live } } }
             }
             val liveId = board.events.firstOrNull { it.live && it.has(key) }?.id
             val upcoming = p.next.filter { it.id != liveId && it.st != "in" }
@@ -404,50 +406,46 @@ fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPa
                     }
                 }
             }
-            if (p.past.isNotEmpty()) item("past") {
-                Column {
-                    SectionTitle("Últimos resultados")
-                    if (noSpoil) Text("Ocultos (sin marcadores activado).", color = C.Low, fontSize = 13.sp)
-                    else Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        p.past.reversed().forEach { g ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ResultChip(g.res)
-                                Spacer(Modifier.width(10.dp))
-                                Text(whenLabel(g.start).substringBeforeLast(' '), color = C.Low, fontSize = 13.sp, modifier = Modifier.width(90.dp))
-                                Text(if (g.home) "vs" else "en", color = C.Low, fontSize = 13.sp, modifier = Modifier.width(28.dp))
-                                TeamBadge(g.opp, 22.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text(g.opp.n, color = C.Hi, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                                Text("${g.us} – ${g.them}", color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            }
+            if (p.past.isNotEmpty()) {
+                item("pastT") { SectionTitle("Últimos resultados", Modifier.padding(top = 6.dp)) }
+                if (noSpoil) item("pastH") { FocusCard { Text("Ocultos (sin marcadores activado).", color = C.Low, fontSize = 13.sp) } }
+                else items(p.past.reversed(), key = { "past" + it.id }) { g ->
+                    val ev = board.events.firstOrNull { it.lg == lg && it.id == g.id } ?: gameToEvent(lg, t, g)
+                    FocusCard(pad = 12.dp, onClick = { if (lg != "lmp") sheet = ev }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ResultChip(g.res)
+                            Spacer(Modifier.width(12.dp))
+                            Text(whenLabel(g.start).substringBeforeLast(' '), color = C.Low, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                            Text(if (g.home) "vs" else "en", color = C.Low, fontSize = 14.sp, modifier = Modifier.width(30.dp))
+                            TeamBadge(g.opp, 28.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(g.opp.full.ifBlank { g.opp.n }, color = C.Hi, fontSize = 16.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                            Text("${g.us} – ${g.them}", color = C.Hi, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
-            item("inj") {
-                Column {
-                    SectionTitle("Lesionados")
-                    if (p.inj.isEmpty()) Text(if (lg == "lmp") "Esta liga no publica reporte de lesionados." else "Sin reporte de lesionados por ahora.", color = C.Low, fontSize = 13.sp)
-                    else Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        p.inj.forEach { i ->
-                            Row {
-                                Text(i.n, color = C.Hi, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                                Text(listOf(i.pos, i.d).filter { it.isNotBlank() }.joinToString(" · "), color = C.Low, fontSize = 12.sp, modifier = Modifier.width(150.dp), maxLines = 1)
-                                Text(i.st, color = if (i.st == "Fuera" || i.st.startsWith("Lista")) Live else C.Warn, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(130.dp))
-                            }
-                        }
+            item("injT") { SectionTitle("Lesionados", Modifier.padding(top = 6.dp)) }
+            if (p.inj.isEmpty()) item("injE") { FocusCard { Text(if (lg == "lmp") "Esta liga no publica reporte de lesionados." else "Sin reporte de lesionados por ahora.", color = C.Low, fontSize = 13.sp) } }
+            else items(p.inj.size, key = { "inj$it" }) { ix ->
+                val i = p.inj[ix]
+                FocusCard(pad = 12.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(i.n, color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+                        Text(listOf(i.pos, injuryPartEs(i.d)).filter { it.isNotBlank() }.joinToString(" · "), color = C.Low, fontSize = 13.sp, modifier = Modifier.width(190.dp), maxLines = 1)
+                        StatusChip(i.st)
                     }
                 }
             }
             if (p.leaders.isNotEmpty()) item("lead") {
-                Column {
-                    SectionTitle("Líderes del equipo")
-                    Wrap(gap = 12.dp) {
+                FocusCard {
+                    Text("Líderes del equipo", color = C.Hi, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         p.leaders.forEach { l ->
-                            Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp).width(230.dp)) {
+                            Column(Modifier.weight(1f).background(C.Panel2.copy(alpha = 0.6f), RoundedCornerShape(10.dp)).padding(12.dp)) {
                                 Text(leaderEs(l.cat), color = C.Low, fontSize = 12.sp)
                                 Text(l.n, color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                Text(l.v, color = C.Mid, fontSize = 12.sp, maxLines = 1)
+                                Text(l.v, color = C.Accent, fontSize = 12.sp, maxLines = 2)
                             }
                         }
                     }
@@ -455,24 +453,26 @@ fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPa
             }
             table?.let { tb ->
                 val g = tb.groups.firstOrNull { gr -> gr.second.any { it.id == team.id } } ?: tb.groups.firstOrNull()
-                if (g != null) item("table") { Column { SectionTitle("Tabla · ${g.first}"); TableBlock(tb.cols, g.second, team.id) } }
+                if (g != null) {
+                    item("tableT") { SectionTitle("Tabla · ${g.first}", Modifier.padding(top = 6.dp)) }
+                    tableItems("tb", tb.cols, g.second, team.id)
+                }
             }
-            if (p.news.isNotEmpty()) item("news") {
-                Column {
-                    SectionTitle("Noticias")
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        p.news.forEach { n ->
-                            Row(Modifier.fillMaxWidth().background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp)) {
-                                if (n.img.isNotBlank()) {
-                                    Img(n.img, Modifier.width(140.dp).height(80.dp).roundedClip(8.dp))
-                                    Spacer(Modifier.width(12.dp))
-                                }
-                                Column(Modifier.weight(1f)) {
-                                    Text(n.t, color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    if (n.d.isNotBlank()) Text(n.d, color = C.Mid, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                    val at = Sports.parseTime(n.at)
-                                    if (at > 0) Text(whenLabel(at), color = C.Low, fontSize = 11.sp)
-                                }
+            if (p.news.isNotEmpty()) {
+                item("newsT") { SectionTitle("Noticias", Modifier.padding(top = 6.dp)) }
+                items(p.news.size, key = { "n$it" }) { nx ->
+                    val n = p.news[nx]
+                    FocusCard(pad = 12.dp) {
+                        Row {
+                            if (n.img.isNotBlank()) {
+                                Img(n.img, Modifier.width(150.dp).height(86.dp).roundedClip(8.dp))
+                                Spacer(Modifier.width(14.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(rememberSpanish(n.t), color = C.Hi, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (n.d.isNotBlank()) Text(rememberSpanish(n.d), color = C.Mid, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                val at = Sports.parseTime(n.at)
+                                if (at > 0) Text(whenLabel(at), color = C.Low, fontSize = 11.sp)
                             }
                         }
                     }
@@ -480,8 +480,16 @@ fun TeamBody(lg: String, team: SpTeam, page: com.mauricio.cinecasa.data.SpTeamPa
             }
         }
     }
-    LaunchedEffect(Unit) { delay(120); runCatching { fr.requestFocus() } }
+    LaunchedEffect(Unit) { delay(150); runCatching { fr.requestFocus() } }
     sheet?.let { ev -> EventSheet(ev, c, sportsCats) { sheet = null } }
+}
+
+@Composable
+private fun StatPill(label: String, value: String) {
+    Column(Modifier.background(Color(0x22FFFFFF), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text(label, color = C.Mid, fontSize = 11.sp)
+        Text(value, color = C.Hi, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 private fun leaderEs(cat: String): String = when {
@@ -499,22 +507,33 @@ private fun leaderEs(cat: String): String = when {
     else -> cat
 }
 
-@Composable
-private fun TableBlock(cols: List<String>, rows: List<com.mauricio.cinecasa.data.SpTableRow>, highlight: String?) {
-    Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row {
-            Text("#", color = C.Low, fontSize = 12.sp, modifier = Modifier.width(28.dp))
+/** Renglones de una tabla de posiciones; cada uno se puede enfocar para bajar con el control. */
+fun androidx.compose.foundation.lazy.LazyListScope.tableItems(prefix: String, cols: List<String>, rows: List<com.mauricio.cinecasa.data.SpTableRow>, highlight: String?, firstFocus: FocusRequester? = null) {
+    item("${prefix}_h") {
+        Row(Modifier.padding(horizontal = 14.dp)) {
+            Text("#", color = C.Low, fontSize = 12.sp, modifier = Modifier.width(34.dp))
             Text("Equipo", color = C.Low, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            cols.forEach { Text(it, color = C.Low, fontSize = 12.sp, modifier = Modifier.width(54.dp)) }
+            cols.forEach { Text(it, color = C.Low, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(64.dp)) }
         }
-        rows.forEachIndexed { i, r ->
-            val me = r.id == highlight
-            Row(Modifier.then(if (me) Modifier.background(C.AccentSoft, RoundedCornerShape(6.dp)) else Modifier).padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${i + 1}", color = C.Low, fontSize = 13.sp, modifier = Modifier.width(28.dp))
-                TeamBadge(SpTeam(r.id, r.n, r.n, r.ab, r.logo, ""), 20.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(r.n, color = C.Hi, fontSize = 14.sp, fontWeight = if (me) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f), maxLines = 1)
-                r.v.forEach { Text(it, color = C.Mid, fontSize = 13.sp, modifier = Modifier.width(54.dp)) }
+    }
+    items(rows.size, key = { "${prefix}_$it" }) { i ->
+        val r = rows[i]
+        val me = r.id == highlight
+        val shape = RoundedCornerShape(10.dp)
+        Surface(
+            onClick = {},
+            modifier = Modifier.fillMaxWidth().then(if (i == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier),
+            shape = ClickableSurfaceDefaults.shape(shape),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.01f),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, C.Accent), shape = shape)),
+            colors = ClickableSurfaceDefaults.colors(containerColor = if (me) C.AccentSoft else C.Panel, contentColor = C.Hi, focusedContainerColor = if (me) C.AccentSoft else C.Panel2, focusedContentColor = C.Hi),
+        ) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${i + 1}", color = C.Low, fontSize = 14.sp, modifier = Modifier.width(34.dp))
+                TeamBadge(SpTeam(r.id, r.n, r.n, r.ab, r.logo, ""), 28.dp)
+                Spacer(Modifier.width(12.dp))
+                Text(r.n, color = C.Hi, fontSize = 16.sp, fontWeight = if (me) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1)
+                r.v.forEachIndexed { k, v -> Text(v, color = if (k == 0) C.Hi else C.Mid, fontSize = 15.sp, fontWeight = if (k == 0) FontWeight.SemiBold else FontWeight.Normal, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(64.dp)) }
             }
         }
     }
@@ -526,139 +545,19 @@ fun TableScreen(lg: String) {
     val teams by Teams.list.collectAsState()
     val mine = teams.filter { it.lg == lg }.map { it.id }.toSet()
     val side = if (LocalCompact.current) 16.dp else 28.dp
-    val t = table
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 20.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { Text("Tabla · ${Sports.leagueByKey[lg]?.name ?: lg}", color = C.Hi, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
-        if (t == null) item { Spinner() }
-        else if (t.groups.isEmpty()) item { Text("Esta liga no tiene tabla disponible.", color = C.Mid, fontSize = 14.sp) }
-        else t.groups.forEach { g ->
-            item(g.first) { Column { SectionTitle(g.first); TableBlock(t.cols, g.second, g.second.firstOrNull { it.id in mine }?.id) } }
-        }
-    }
-}
-
-// ======================================================================
-// Detalle del partido
-// ======================================================================
-@Composable
-fun GameScreen(ev0: SpEvent) {
-    val board = rememberBoard()
-    val ev = board.events.firstOrNull { it.key == ev0.key } ?: ev0
-    val detail by produceState<com.mauricio.cinecasa.data.SpGameDetail?>(null, ev.key) {
-        while (true) {
-            value = Sports.game(ev.lg, ev.id, ev.live)
-            delay(if (value?.st == "in") 20_000 else 120_000)
-        }
-    }
-    val c by Repo.catalog.collectAsState()
-    val sportsCats = remember(c) { SportsCats.ids(c) }
-    var sheet by remember { mutableStateOf(false) }
-    val rv by Teams.revealed.collectAsState()
-    val ns by Teams.noSpoil.collectAsState()
-    val hide = remember(ev, rv, ns) { Teams.hidden(ev) }
     val fr = remember { FocusRequester() }
-    val side = if (LocalCompact.current) 16.dp else 28.dp
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 20.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item("head") {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(Sports.leagueByKey[ev.lg]?.name ?: "", color = C.Low, fontSize = 13.sp)
-                    Spacer(Modifier.width(10.dp))
-                    if (ev.live) LiveDot(ev.det.ifBlank { "EN VIVO" }, 13) else Text(statusText(ev), color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.height(10.dp))
-                listOf(ev.a, ev.h).forEach { t ->
-                    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TeamBadge(t, 44.dp)
-                        Spacer(Modifier.width(14.dp))
-                        Text(t.full.ifBlank { t.n }, color = C.Hi, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        if (!ev.upcoming && !hide) Text(t.sc, color = C.Hi, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Wrap(gap = 10.dp) {
-                    ActionButton("Opciones (ver, grabar)", { sheet = true }, Modifier.focusRequester(fr), primary = true)
-                    if (hide) ActionButton("Mostrar marcador", { Teams.reveal(ev.key) })
-                }
-            }
-        }
-        val d = detail
-        if (d == null) item("load") { Spinner() }
-        else if (!hide) {
-            if (d.line.isNotEmpty() && d.line.any { it.ls.isNotEmpty() }) item("line") {
-                Column {
-                    SectionTitle(if (ev.sp == "baseball") "Carreras por entrada" else "Marcador por periodo")
-                    Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp)) {
-                        val n = d.line.maxOf { it.ls.size }
-                        Row {
-                            Text("", modifier = Modifier.width(70.dp))
-                            (1..n).forEach { Text("$it", color = C.Low, fontSize = 12.sp, modifier = Modifier.width(34.dp)) }
-                            Text("T", color = C.Low, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        d.line.sortedBy { it.home }.forEach { l ->
-                            Row(Modifier.padding(top = 4.dp)) {
-                                Text(l.ab, color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(70.dp))
-                                (0 until n).forEach { i -> Text(l.ls.getOrElse(i) { "" }, color = C.Mid, fontSize = 14.sp, modifier = Modifier.width(34.dp)) }
-                                Text(l.sc, color = C.Hi, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            if (d.wp.size > 2) item("wp") {
-                Column {
-                    SectionTitle("Probabilidad de ganar")
-                    WinProbChart(d.wp, ev.h, ev.a, Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(14.dp))
-                }
-            } else d.predHome?.let { ph ->
-                item("pred") {
-                    Column {
-                        SectionTitle("Pronóstico antes del partido")
-                        Row(Modifier.fillMaxWidth().height(28.dp).roundedClip(8.dp)) {
-                            Box(Modifier.weight(ph.coerceIn(5f, 95f)).fillMaxSize().background(Color(ev.h.color)), contentAlignment = Alignment.CenterStart) {
-                                Text("  ${ev.h.initials} ${ph.toInt()}%", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Box(Modifier.weight((100f - ph).coerceIn(5f, 95f)).fillMaxSize().background(Color(ev.a.color)), contentAlignment = Alignment.CenterEnd) {
-                                Text("${ev.a.initials} ${(100 - ph).toInt()}%  ", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            if (d.plays.isNotEmpty()) item("plays") {
-                Column {
-                    SectionTitle(if (ev.done) "Últimas jugadas" else "Jugada por jugada")
-                    if (d.drive.isNotBlank()) Text("Serie actual: ${d.drive}", color = C.Mid, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
-                    Column(Modifier.background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        d.plays.forEach { pl ->
-                            Row {
-                                Text(pl.clk, color = C.Low, fontSize = 12.sp, modifier = Modifier.width(60.dp))
-                                Text(rememberSpanish(pl.t), color = if (pl.scoring) C.Hi else C.Mid, fontSize = 14.sp, fontWeight = if (pl.scoring) FontWeight.SemiBold else FontWeight.Normal)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        val d2 = detail
-        if (d2 != null && d2.inj.isNotEmpty()) item("inj") {
-            Column {
-                SectionTitle("Lesionados")
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    listOf(ev.a, ev.h).forEach { t ->
-                        Column(Modifier.weight(1f).background(C.Panel, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(t.n, color = C.Hi, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            val l = d2.inj[t.id].orEmpty()
-                            if (l.isEmpty()) Text("Sin reporte", color = C.Low, fontSize = 13.sp)
-                            l.forEach { (n, st) -> Row { Text(n, color = C.Mid, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1); Text(st, color = C.Warn, fontSize = 12.sp) } }
-                        }
-                    }
-                }
-            }
+    val t = table
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 20.dp, bottom = 60.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item("title") { Text("Tabla · ${Sports.leagueByKey[lg]?.name ?: lg}", color = C.Hi, fontSize = 28.sp, fontWeight = FontWeight.Bold) }
+        if (t == null) item("load") { Spinner() }
+        else if (t.groups.isEmpty()) item("empty") { Text("Esta liga no tiene tabla disponible.", color = C.Mid, fontSize = 14.sp) }
+        else t.groups.forEachIndexed { gi, g ->
+            item("g$gi") { SectionTitle(g.first, Modifier.padding(top = 12.dp)) }
+            tableItems("t$gi", t.cols, g.second, g.second.firstOrNull { it.id in mine }?.id, if (gi == 0) fr else null)
         }
     }
-    LaunchedEffect(Unit) { delay(120); runCatching { fr.requestFocus() } }
-    if (sheet) EventSheet(ev, c, sportsCats) { sheet = false }
+    // En cuanto llega la tabla, el foco entra a ella (si no, se va al menú lateral)
+    LaunchedEffect(t) { if (t != null) { delay(120); runCatching { fr.requestFocus() } } }
 }
 
 // ======================================================================
