@@ -2,6 +2,7 @@ package com.mauricio.cinecasa
 
 import android.app.Application
 import android.graphics.Bitmap
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +56,6 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], application = Application::class, qualifiers = "w1000dp-h1500dp-mdpi")
 class ShotsTest {
-    @get:Rule val rule = createComposeRule()
     private val out = File("build/capturas").apply { mkdirs() }
 
     @Before fun setUp() {
@@ -73,18 +73,26 @@ class ShotsTest {
 
     private val nav = Nav({}, {}, { _, _, _ -> }, { _, _ -> }, { FocusMemory() }, HashMap())
 
+    private fun idle(ms: Long) = org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
+
+    /** Dibuja la vista en una imagen (sin esperar a que terminen las animaciones). */
+    private fun draw(v: android.view.View, w: Int, h: Int): Bitmap {
+        val full = Bitmap.createBitmap(maxOf(1, v.width), maxOf(1, v.height), Bitmap.Config.ARGB_8888)
+        v.draw(android.graphics.Canvas(full))
+        return Bitmap.createBitmap(full, 0, 0, minOf(w, full.width), minOf(h, full.height))
+    }
+
     private fun shoot(name: String, compact: Boolean = false, w: Int = 960, h: Int = 540, content: @Composable () -> Unit) {
-        // Sin avanzar el reloj solo: así las animaciones sin fin (ruedita de carga) no detienen la prueba
-        rule.mainClock.autoAdvance = false
-        rule.setContent {
+        val act = org.robolectric.Robolectric.buildActivity(androidx.activity.ComponentActivity::class.java).setup().get()
+        act.setContent {
             CompositionLocalProvider(LocalNav provides nav, LocalCompact provides compact, LocalInspectionMode provides true) {
-                CineTheme { Box(Modifier.size(w.dp, h.dp).background(C.Bg).testTag("shot")) { content() } }
+                CineTheme { Box(Modifier.size(w.dp, h.dp).background(C.Bg)) { content() } }
             }
         }
-        rule.mainClock.advanceTimeBy(1500)
+        idle(1500)
         Thread.sleep(2500) // deja terminar lo que llega de internet (fichas de equipos)
-        rule.mainClock.advanceTimeBy(500)
-        save(rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap(), name)
+        idle(800)
+        save(draw(act.window.decorView, w, h), name)
     }
 
     private fun save(b: Bitmap, name: String) {
@@ -135,13 +143,15 @@ class ShotsTest {
     @Test fun opcionesDelPartido() {
         val l = Muestra.events()
         val e = l.first { it.id == "401873081" }
-        rule.mainClock.autoAdvance = false
-        rule.setContent {
+        val act = org.robolectric.Robolectric.buildActivity(androidx.activity.ComponentActivity::class.java).setup().get()
+        act.setContent {
             CompositionLocalProvider(LocalNav provides nav, LocalCompact provides false, LocalInspectionMode provides true) {
                 CineTheme { EventSheet(e, Muestra.catalog(), setOf("10", "11", "12")) {} }
             }
         }
-        rule.mainClock.advanceTimeBy(1000)
-        runCatching { save(rule.onNode(isDialog()).captureToImage().asAndroidBitmap(), "7_opciones_partido") }
+        idle(1500)
+        val d = org.robolectric.shadows.ShadowDialog.getLatestDialog() ?: return
+        val v = d.window!!.decorView
+        save(draw(v, v.width, v.height), "7_opciones_partido")
     }
 }
