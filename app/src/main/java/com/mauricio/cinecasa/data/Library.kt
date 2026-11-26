@@ -68,6 +68,7 @@ object Library {
         if (p == null) {
             _progress.value = emptyMap(); _myList.value = emptyList(); _watched.value = emptySet()
             _favChannels.value = emptyList(); _recentChannels.value = emptyList()
+            Teams.load(null, null)
             return
         }
         _progress.value = try {
@@ -81,6 +82,7 @@ object Library {
         _watched.value = intList("watched").toSet()
         _favChannels.value = intList("favch")
         _recentChannels.value = intList("recentch")
+        Teams.load(p.getString("teams", "[]"), p.getString("nospoil", "[]"))
     }
 
     /** La primera vez, lo que ya tenías guardado (antes de los perfiles) pasa a tu perfil principal. */
@@ -105,6 +107,19 @@ object Library {
         _watched.value.forEach { emit("watched", it.toString(), JSONObject().put("w", true)) }
         _favChannels.value.forEach { emit("favch", it.toString(), JSONObject().put("f", true)) }
         emit("recentch", "list", JSONObject().put("ids", JSONArray(_recentChannels.value)))
+        Teams.list.value.forEach { f -> with(Teams) { emit("team", f.key, f.toJson()) } }
+        Teams.noSpoil.value.forEach { emit("nospoil", it, JSONObject().put("on", true)) }
+    }
+
+    // ---------- Equipos (deportes) ----------
+    internal fun teamChanged(key: String, data: JSONObject?) {
+        sp?.edit()?.putString("teams", Teams.dump())?.apply()
+        emit("team", key, data, data == null)
+    }
+
+    internal fun noSpoilChanged(key: String, on: Boolean) {
+        sp?.edit()?.putString("nospoil", Teams.dumpNo())?.apply()
+        emit("nospoil", key, if (on) JSONObject().put("on", true) else null, !on)
     }
 
     private fun emit(kind: String, key: String, data: JSONObject?, deleted: Boolean = false) {
@@ -121,6 +136,7 @@ object Library {
 
     // ---------- Progreso ----------
     fun saveProgress(item: PlayItem, pos: Long, dur: Long) {
+        if (item.kind == "rec") { Recorder.savePos(item.id, pos, dur); return }
         if (dur <= 0 || pos < 0) return
         val finished = pos >= dur * 0.92 || dur - pos < 90_000 && dur > 10 * 60_000
         val m = _progress.value.toMutableMap()
@@ -234,6 +250,10 @@ object Library {
                 val id = key.toIntOrNull() ?: return
                 _favChannels.value = if (deleted) _favChannels.value - id else if (id in _favChannels.value) _favChannels.value else _favChannels.value + id
                 putInts("favch", _favChannels.value)
+            }
+            "team", "nospoil" -> {
+                Teams.applyRemote(kind, key, data, deleted)
+                sp?.edit()?.putString("teams", Teams.dump())?.putString("nospoil", Teams.dumpNo())?.apply()
             }
             "recentch" -> {
                 val a = data?.optJSONArray("ids") ?: return

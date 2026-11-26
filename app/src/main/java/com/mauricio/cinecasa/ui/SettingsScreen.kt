@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -214,6 +215,8 @@ fun SettingsScreen() {
             }
         }
 
+        Section("Deportes") { SportsSettings(isAdmin) }
+
         if (isAdmin) Section("Contenido para adultos") {
             Text("Las categorías para adultos están ocultas en toda la app, incluida la búsqueda.", color = C.Mid, fontSize = 13.sp)
             Wrap {
@@ -360,4 +363,73 @@ fun ServerDialog(onClose: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { delay(80); runCatching { fr.requestFocus() } }
+}
+
+
+/** Ajustes de la pestaña Deportes. */
+@Composable
+private fun SportsSettings(isAdmin: Boolean) {
+    val c by Repo.catalog.collectAsState()
+    var hide by remember { mutableStateOf(Prefs.sportsHideFromLive) }
+    var odds by remember { mutableStateOf(Prefs.showOdds) }
+    var alerts by remember { mutableStateOf(Prefs.sportAlerts) }
+    var mini by remember { mutableStateOf(Prefs.miniScore) }
+    var custom by remember { mutableStateOf(Prefs.sportsCats) }
+    var pick by remember { mutableStateOf(false) }
+    val ids = remember(c, custom) { com.mauricio.cinecasa.data.SportsCats.ids(c) }
+    Text("Los canales de deportes y de pago por evento tienen su propia pestaña con marcadores en vivo.", color = C.Mid, fontSize = 13.sp)
+    Text("Canales de deportes en «TV en vivo»", color = C.Low, fontSize = 12.sp)
+    Wrap {
+        Pill("Solo en Deportes", hide, { hide = true; Prefs.sportsHideFromLive = true })
+        Pill("En los dos lados", !hide, { hide = false; Prefs.sportsHideFromLive = false })
+    }
+    if (isAdmin) {
+        Text("Categorías de deportes: ${if (custom == null) "automáticas" else "elegidas a mano"} (${ids.size})", color = C.Low, fontSize = 12.sp)
+        Wrap {
+            ActionButton("Elegir categorías", { pick = true })
+            if (custom != null) ActionButton("Volver a automáticas", { custom = null; Prefs.sportsCats = null })
+        }
+    }
+    Text("Avisos de mis equipos (cuándo empiezan, anotaciones y resultado)", color = C.Low, fontSize = 12.sp)
+    Wrap {
+        Pill("Activados", alerts, { alerts = true; Prefs.sportAlerts = true })
+        Pill("Apagados", !alerts, { alerts = false; Prefs.sportAlerts = false })
+    }
+    Text("Marcador chiquito en la esquina mientras ves otra cosa", color = C.Low, fontSize = 12.sp)
+    Wrap {
+        Pill("Mostrar", mini, { mini = true; Prefs.miniScore = true })
+        Pill("No mostrar", !mini, { mini = false; Prefs.miniScore = false })
+    }
+    if (!BuildConfig.PLAY) {
+        Text("Momios (quién es favorito)", color = C.Low, fontSize = 12.sp)
+        Wrap {
+            Pill("Mostrar", odds, { odds = true; Prefs.showOdds = true })
+            Pill("Ocultar", !odds, { odds = false; Prefs.showOdds = false })
+        }
+    }
+    if (pick) {
+        var sel by remember { mutableStateOf(ids) }
+        val fr = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.ui.window.Dialog(onDismissRequest = { pick = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            Column(
+                Modifier.cardWidth(680.dp).heightIn(max = 640.dp).background(C.Panel, RoundedCornerShape(16.dp)).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("¿Qué categorías son de deportes?", color = C.Hi, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Las marcadas salen en la pestaña Deportes.", color = C.Mid, fontSize = 13.sp)
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(c.visLiveCats.size) { i ->
+                        val k = c.visLiveCats[i]
+                        val on = k.id in sel
+                        Pill((if (on) "✓  " else "") + k.name, on, { sel = if (on) sel - k.id else sel + k.id }, if (i == 0) Modifier.focusRequester(fr) else Modifier)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ActionButton("Guardar", { custom = sel; Prefs.sportsCats = sel; pick = false }, primary = true)
+                    ActionButton("Cancelar", { pick = false })
+                }
+            }
+        }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); runCatching { fr.requestFocus() } }
+    }
 }

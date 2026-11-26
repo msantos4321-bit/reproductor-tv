@@ -178,6 +178,8 @@ object Repo {
         Cloud.init(ctx)
         Profiles.init(ctx)
         Downloads.init(ctx)
+        Quiniela.init(ctx)
+        Recorder.init(ctx)
         Translate.init(ctx)
     }
 

@@ -209,6 +209,7 @@ object Cloud {
             when (kind) {
                 "profile" -> Profiles.applyRemote(key, o.optJSONObject("data"), del)
                 "device" -> if (key == deviceId && del) _revoked.value = true else Devices.applyRemote(key, o.optJSONObject("data"), del)
+                "pick" -> Quiniela.applyRemote(key, o.optJSONObject("data"), del)
             }
         }
         val cur = Profiles.current.value
