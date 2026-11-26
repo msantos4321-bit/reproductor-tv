@@ -185,6 +185,9 @@ object Repo {
 
     fun xtream(): Xtream? = Prefs.account.value?.let { Xtream(it) }
 
+    /** Solo para pruebas. */
+    internal fun debugSetCatalog(c: Catalog) { _catalog.value = c }
+
     // ---------------- Catálogo ----------------
     fun start(force: Boolean = false) {
         if (refreshJob?.isActive == true) return

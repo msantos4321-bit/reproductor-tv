@@ -1,0 +1,56 @@
+name: Pruebas
+# Corre las pruebas de la app (lógica y capturas de pantallas) en las ramas de trabajo.
+on:
+  push:
+    branches: ["trabajo/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Correr pruebas
+        run: |
+          set -o pipefail
+          gradle :app:testDirectDebugUnitTest --no-daemon --continue 2>&1 | tee pruebas.log
+      - name: Resumen
+        if: always()
+        run: |
+          grep -E "^e: |FAILED|tests completed|What went wrong" -A3 pruebas.log | head -60 || true
+          python3 - <<'PY' || true
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob('app/build/test-results/**/*.xml', recursive=True):
+              r = ET.parse(f).getroot()
+              for tc in r.iter('testcase'):
+                  fail = tc.find('failure') or tc.find('error')
+                  print(('FALLA ' if fail is not None else 'OK    ') + tc.get('classname','').split('.')[-1] + '.' + tc.get('name',''))
+                  if fail is not None: print('      ' + (fail.get('message') or '')[:400])
+          PY
+      - name: Guardar capturas en la rama «capturas»
+        if: always()
+        run: |
+          set -e
+          [ -d app/build/capturas ] || exit 0
+          mkdir -p /tmp/cap && cp app/build/capturas/*.png /tmp/cap/ 2>/dev/null || exit 0
+          cp -r app/build/test-results /tmp/cap/resultados 2>/dev/null || true
+          cd /tmp/cap
+          git init -q && git checkout -q -b capturas
+          git config user.name "pruebas" && git config user.email "pruebas@cinecasa"
+          git add -A && git commit -qm "Capturas de ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" capturas

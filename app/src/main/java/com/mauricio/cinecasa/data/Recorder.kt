@@ -108,6 +108,9 @@ object Recorder {
 
     fun get(id: Int) = _list.value.firstOrNull { it.id == id }
 
+    /** Solo para pruebas. */
+    internal fun debugSet(l: List<Rec>) { _list.value = l }
+
     /** ¿Ya hay una grabación para este canal que se empalma con ese horario? */
     fun overlapping(chId: Int, start: Long, end: Long) = _list.value.firstOrNull {
         it.chId == chId && (it.scheduled || it.recording) && it.start < end && start < it.end

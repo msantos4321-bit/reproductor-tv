@@ -150,14 +150,23 @@ object Sports {
         if (!force && System.currentTimeMillis() - _board.value.at < 15_000 && _board.value.events.isNotEmpty()) return@withContext
         _board.value = _board.value.copy(loading = true)
         try {
-            val o = JSONObject(get("$FN?q=board"))
-            val a = o.optJSONArray("events") ?: JSONArray()
-            val list = (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::event) }
+            val list = parseBoard(get("$FN?q=board"))
             _board.value = Board(list, System.currentTimeMillis(), null, false)
         } catch (e: Exception) {
             _board.value = _board.value.copy(loading = false, error = "No se pudieron cargar los marcadores. Revisa tu internet.")
         }
     }
+
+    /** Lee la respuesta de «?q=board». */
+    fun parseBoard(json: String): List<SpEvent> {
+        val a = JSONObject(json).optJSONArray("events") ?: JSONArray()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::event) }
+    }
+
+    /** Solo para pruebas. */
+    internal fun debugSet(b: Board) { _board.value = b }
+    internal fun debugMemo(k: String, v: Any) { memo[k] = System.currentTimeMillis() to v }
+    fun parseTeamPage(lg: String, json: String): SpTeamPage = teamPage(lg, JSONObject(json))
 
     private fun get(url: String): String {
         val req = Request.Builder().url(url).header("apikey", KEY).header("User-Agent", "CineCasa").build()
@@ -177,9 +186,12 @@ object Sports {
     }
 
     suspend fun team(lg: String, id: String): SpTeamPage? = memoGet("team:$lg:$id", 5 * 60_000L) {
-        val o = JSONObject(get("$FN?q=team&lg=$lg&id=$id"))
+        teamPage(lg, JSONObject(get("$FN?q=team&lg=$lg&id=$id")))
+    }
+
+    private fun teamPage(lg: String, o: JSONObject): SpTeamPage {
         val t = o.getJSONObject("team")
-        SpTeamPage(
+        return SpTeamPage(
             lg, team(t), t.optString("rec"), t.optString("home"), t.optString("away"), t.optString("standing"),
             o.optJSONArray("past").objs().map(::game), o.optJSONArray("next").objs().map(::game), o.optString("streak"),
             o.optJSONArray("inj").objs().map { SpInjury(it.optString("n"), it.optString("pos"), it.optString("st"), it.optString("d"), it.optString("ret")) },

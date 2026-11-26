@@ -150,16 +150,18 @@ private fun pm(s: String) = s.replace("-", "−")
 
 fun leagueShort(lg: String) = Sports.leagueByKey[lg]?.short ?: lg.uppercase()
 
-/** Escudo del equipo; en la versión de Google Play, círculo con sus iniciales. */
+/** Escudo del equipo; si no carga (o en la versión de Google Play), círculo con su color e iniciales. */
 @Composable
 fun TeamBadge(t: SpTeam, size: Dp, modifier: Modifier = Modifier) {
-    val showLogo = !BuildConfig.PLAY && t.logo.isNotBlank()
-    Box(modifier.size(size).clip(CircleShape).background(if (showLogo) Color(0x22FFFFFF) else Color(t.color)), contentAlignment = Alignment.Center) {
-        Text(t.initials, color = Color.White, fontSize = (size.value * 0.30f).sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        if (showLogo) {
-            Box(Modifier.fillMaxSize().background(Color(0xFF2C2C2E)))
-            Img(t.logo, Modifier.fillMaxSize().padding(size * 0.12f), ContentScale.Fit)
-        }
+    val url = if (!BuildConfig.PLAY && t.logo.isNotBlank() && !androidx.compose.ui.platform.LocalInspectionMode.current) t.logo else null
+    var ok by remember(url) { mutableStateOf(false) }
+    Box(modifier.size(size).clip(CircleShape).background(if (ok) Color(0xFFF2F2F7) else Color(t.color)), contentAlignment = Alignment.Center) {
+        if (!ok) Text(t.initials, color = Color.White, fontSize = (size.value * 0.30f).sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        if (url != null) coil.compose.AsyncImage(
+            model = url, contentDescription = null, contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize().padding(size * 0.14f),
+            onSuccess = { ok = true }, onError = { ok = false },
+        )
     }
 }
 
@@ -561,7 +563,7 @@ private fun SportsHero(ev: SpEvent?, c: Catalog, sportsCats: Set<String>, compac
         if (!compact) {
             Spacer(Modifier.width(24.dp))
             Box(Modifier.width(420.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(14.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-                if (ch != null && ev.live) HeroPreview(ch)
+                if (ch != null && ev.live && !androidx.compose.ui.platform.LocalInspectionMode.current) HeroPreview(ch)
                 else {
                     Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(ev.a.color).copy(alpha = 0.55f), Color(0xFF1C1C1E), Color(ev.h.color).copy(alpha = 0.55f)))))
                     Row(verticalAlignment = Alignment.CenterVertically) {
