@@ -1,0 +1,27 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 6
+k left down*13 ok
+w 4
+s 40-tablas
+k left down*2
+w 3
+s 41-tablas-nba
+k up*2 right ok
+w 4
+s 42-tabla-equipo
+k back back
+w 2
+k down ok
+w 4
+s 43-elegir
+k down*2 ok
+w 2
+s 44-elegir-sigue
+k back
+w 2
+k up*13 ok
+w 2
+s 45-todo-con-nuevo

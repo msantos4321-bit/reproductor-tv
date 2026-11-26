@@ -1,0 +1,17 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 50
+s 60-aviso-a
+w 4
+s 61-aviso-b
+w 4
+s 62-aviso-c
+k down ok
+w 3
+k ok
+w 2
+s 63-viendo-canal
+w 3
+s 64-viendo-canal-b

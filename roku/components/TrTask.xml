@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="TrTask" extends="Task">
+  <interface>
+    <field id="req" type="array" alwaysNotify="true" />
+    <field id="res" type="assocarray" />
+  </interface>
+  <script type="text/brightscript" uri="TrTask.brs" />
+</component>

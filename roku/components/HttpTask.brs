@@ -16,7 +16,7 @@ sub doRequest()
     x.InitClientCertificates()
     x.EnableEncodings(true)
     x.RetainBodyOnError(true)
-    ua = "CineCasaRoku/1.3"
+    ua = "CineCasaRoku/1.4"
     ' Algunos proveedores solo aceptan apps conocidas: con ellos se presenta como las más comunes
     if Instr(1, r.url, "supabase.co") = 0 then ua = "IPTVSmartersPro"
     x.AddHeader("User-Agent", ua)

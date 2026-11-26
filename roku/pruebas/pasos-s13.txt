@@ -1,0 +1,14 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 5
+s 95-hero-trad
+k down ok
+w 4
+k down*5 ok
+w 4
+s 96-resumen-trad
+k left down*3
+w 3
+s 97-jugadas-trad

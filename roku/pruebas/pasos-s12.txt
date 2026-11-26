@@ -1,0 +1,17 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 5
+k left down*4 ok
+w 3
+s 90-ligamx
+k ok
+w 4
+s 91-evento
+k down*4 ok
+w 4
+s 92-resumen
+k left down*2
+w 2
+s 93-alineaciones

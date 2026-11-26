@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tarjeta de Deportes: marcador de un partido, uno de Mis equipos o un canal de deportes -->
+<component name="ScoreItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent" />
+    <field id="focusPercent" type="float" onChange="onFocus" />
+    <field id="width" type="float" />
+    <field id="height" type="float" />
+  </interface>
+  <script type="text/brightscript" uri="ScoreItem.brs" />
+  <children>
+    <Rectangle id="bg" width="380" height="190" color="0x171A24FF" />
+    <Rectangle id="liveBar" width="6" height="190" color="0xFF3B30FF" visible="false" />
+    <Label id="top" translation="[20,14]" width="310" height="32" color="0x8E97ADFF">
+      <Font role="font" uri="font:BoldSystemFontFile" size="22" />
+    </Label>
+    <Poster id="star" translation="[336,12]" width="28" height="28" uri="pkg:/images/star.png" visible="false" />
+    <!-- partido -->
+    <Group id="gEv">
+      <TeamLogo id="lgA" translation="[20,52]" size="44" />
+      <Label id="nA" translation="[78,56]" width="210" height="36" color="0xE6EAF2FF">
+        <Font role="font" uri="font:SystemFontFile" size="28" />
+      </Label>
+      <Label id="sA" translation="[280,50]" width="80" height="44" horizAlign="right" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="36" />
+      </Label>
+      <TeamLogo id="lgH" translation="[20,104]" size="44" />
+      <Label id="nH" translation="[78,108]" width="210" height="36" color="0xE6EAF2FF">
+        <Font role="font" uri="font:SystemFontFile" size="28" />
+      </Label>
+      <Label id="sH" translation="[280,102]" width="80" height="44" horizAlign="right" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="36" />
+      </Label>
+    </Group>
+    <!-- equipo o canal -->
+    <Group id="gOne" visible="false">
+      <TeamLogo id="lgOne" translation="[20,54]" size="84" />
+      <Rectangle id="chBox" translation="[20,54]" width="120" height="84" color="0x232838FF" visible="false" />
+      <Poster id="chImg" translation="[26,58]" width="108" height="76" loadDisplayMode="scaleToFit" visible="false" />
+      <TeamLogo id="evA" translation="[20,60]" size="64" visible="false" />
+      <TeamLogo id="evH" translation="[76,60]" size="64" visible="false" />
+      <Label id="one" translation="[160,54]" width="200" height="90" vertAlign="center" wrap="true" maxLines="2" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="28" />
+      </Label>
+    </Group>
+    <Label id="foot" translation="[20,152]" width="340" height="30" color="0x9AA3B8FF">
+      <Font role="font" uri="font:SystemFontFile" size="22" />
+    </Label>
+  </children>
+</component>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Escudo del equipo en un círculo; si no carga, círculo con el color del equipo y sus iniciales -->
+<component name="TeamLogo" extends="Group">
+  <interface>
+    <field id="size" type="integer" value="64" onChange="layout" />
+    <field id="uri" type="string" onChange="onUri" />
+    <field id="ab" type="string" onChange="onAb" />
+    <field id="col" type="string" onChange="onCol" />
+  </interface>
+  <script type="text/brightscript" uri="TeamLogo.brs" />
+  <children>
+    <Poster id="base" uri="pkg:/images/circle.png" blendColor="0x5A5A60FF" />
+    <Label id="ini" horizAlign="center" vertAlign="center" color="0xFFFFFFFF">
+      <Font role="font" uri="font:BoldSystemFontFile" size="20" />
+    </Label>
+    <Poster id="light" uri="pkg:/images/circle.png" blendColor="0xF2F2F7FF" visible="false" />
+    <Poster id="img" loadDisplayMode="scaleToFit" />
+  </children>
+</component>

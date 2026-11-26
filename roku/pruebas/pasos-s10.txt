@@ -1,0 +1,13 @@
+w 6
+k ok
+w 3
+k left down*2 ok
+w 3
+s 70-envivo
+k left up*2 down*7 ok
+w 2
+k down*4
+s 71-micuenta
+k ok
+w 1
+s 72-micuenta-cambio

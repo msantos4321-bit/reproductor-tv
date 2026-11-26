@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de las pantallas de información (partido, equipo, tabla, quiniela).
+     rt: h (título), t (texto), btn (botón), stat (comparativo con barras), cols (tabla), chart (gráfica) -->
+<component name="InfoRow" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent" />
+    <field id="focusPercent" type="float" onChange="onFocus" />
+    <field id="width" type="float" onChange="draw" />
+    <field id="height" type="float" />
+  </interface>
+  <script type="text/brightscript" uri="InfoRow.brs" />
+  <children>
+    <Rectangle id="bg" width="1400" height="68" color="0x00000000" />
+    <Rectangle id="hline" translation="[16,62]" width="1360" height="2" color="0x2A3045FF" visible="false" />
+    <Label id="pre" translation="[16,0]" width="150" height="68" vertAlign="center" color="0x8E97ADFF">
+      <Font role="font" uri="font:SystemFontFile" size="24" />
+    </Label>
+    <TeamLogo id="logo" translation="[16,10]" size="48" visible="false" />
+    <Label id="t1" translation="[16,8]" width="900" color="0xE6EAF2FF">
+      <Font role="font" uri="font:SystemFontFile" size="28" />
+    </Label>
+    <Label id="t2" translation="[16,40]" width="900" height="28" color="0x8E97ADFF">
+      <Font role="font" uri="font:SystemFontFile" size="22" />
+    </Label>
+    <Label id="t3" translation="[900,0]" width="480" height="68" horizAlign="right" vertAlign="center" color="0xFFFFFFFF">
+      <Font role="font" uri="font:BoldSystemFontFile" size="28" />
+    </Label>
+    <Group id="gStat" visible="false">
+      <Label id="av" translation="[16,4]" width="300" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="28" />
+      </Label>
+      <Label id="lab" translation="[400,6]" width="600" horizAlign="center" color="0xB9C2D6FF">
+        <Font role="font" uri="font:SystemFontFile" size="24" />
+      </Label>
+      <Label id="hv" translation="[1080,4]" width="300" horizAlign="right" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="28" />
+      </Label>
+      <Rectangle id="track" translation="[16,48]" width="1368" height="8" color="0x262B3AFF" />
+      <Rectangle id="barA" translation="[16,48]" width="0" height="8" color="0x3D9BFFFF" />
+      <Rectangle id="barH" translation="[700,48]" width="0" height="8" color="0x3D9BFFFF" />
+    </Group>
+    <Group id="gCols" visible="false" />
+    <Group id="gChart" visible="false" />
+  </children>
+</component>

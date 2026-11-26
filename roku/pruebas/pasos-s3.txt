@@ -1,0 +1,12 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 5
+s 05-deportes
+k down ok
+w 4
+s 06-partido
+k down*8
+w 1
+s 07-partido-abajo

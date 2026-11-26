@@ -50,6 +50,7 @@ sub init()
     m.formList.observeField("itemSelected", "onFormSelect")
     m.video.observeField("state", "onVideoState")
     homeInit()
+    spInit()
 
     di = CreateObject("roDeviceInfo")
     m.deviceId = "roku-" + di.GetChannelClientId()
@@ -119,6 +120,11 @@ sub onResponse(e as object)
     id = r.id
     data = r.data
     if data = invalid and r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
+    if Left(id, 3) = "sp:" then
+        m.tasks.Delete(id)
+        spOnResponse(id, r.code, data)
+        return
+    end if
     if id = "login" then
         onLogin(r.code, data)
     else if id = "check" or id = "ping" then
@@ -189,7 +195,7 @@ end sub
 
 ' ---------- revisión periódica (cada 3 min): activación, servidor del vendedor y «en uso ahora» ----------
 sub ping(id as string)
-    rpc(id, "cc_lic_ping", { p_code: m.code, p_device: m.deviceId, p_playing: m.video.visible, p_model: m.deviceName, p_version: "1.3.0" })
+    rpc(id, "cc_lic_ping", { p_code: m.code, p_device: m.deviceId, p_playing: m.video.visible, p_model: m.deviceName, p_version: "1.4.0" })
 end sub
 
 sub onPingTick()
@@ -548,6 +554,14 @@ sub onFormSelect()
         end if
     else if m.mode = "account" then
         onAccountSelect(i)
+    else if m.mode = "spset" then
+        if i < m.spSetKeys.Count() then
+            k = m.spSetKeys[i]
+            if spPref(k) then rset(k, "0") else rset(k, "1")
+            showSportsSettings("Listo, se guardó.", i)
+        else
+            showAccount("")
+        end if
     else if m.mode = "profiles" then
         if i < m.profiles.Count() then useProfile(m.profiles[i]) else useGuest()
     else if m.mode = "hpair" then
@@ -939,7 +953,8 @@ sub showHome()
     m.mode = "home"
     m.codeLbl.text = "Código " + m.code
     c = CreateObject("roSGNode", "ContentNode")
-    for each t in ["Inicio", "Buscar", "En vivo", "Películas", "Series", "Mi lista", "Mi cuenta"]
+    m.secNames = ["Inicio", "Buscar", "En vivo", "Deportes", "Películas", "Series", "Mi lista", "Mi cuenta"]
+    for each t in m.secNames
         n = c.createChild("ContentNode")
         n.title = t
     end for
@@ -955,6 +970,7 @@ sub showHome()
         rpc("prof", "cc_get", { p_h: m.hh, p_s: m.hs, p_since: "1970-01-01T00:00:00Z", p_scopes: ["_"] })
     else
         m.scope = ""
+        m.kids = false
         m.profName.text = ""
         loadLocalLib()
         openSection(0, true)
@@ -980,7 +996,11 @@ sub onProfiles(data as object)
     latest = {}
     if type(data) = "roArray" then
         for each o in data
-            if o.kind = "profile" then latest[o.key] = o
+            if o.kind = "profile" then
+                latest[o.key] = o
+            else if o.kind = "pick" then
+                spApplyRemote("pick", Str2(o.key), o.data, o.deleted = true)
+            end if
         end for
     end if
     profs = []
@@ -989,7 +1009,7 @@ sub onProfiles(data as object)
         if o.deleted <> true and o.data <> invalid then
             nm = Str2(o.data.name)
             if nm = "" then nm = "Perfil"
-            profs.Push({ id: k, name: nm })
+            profs.Push({ id: k, name: nm, kids: (o.data.kids = true) })
         end if
     end for
     m.profiles = profs
@@ -1029,6 +1049,10 @@ end sub
 sub useProfile(p as object)
     m.guest = false
     m.scope = p.id
+    m.kids = (p.kids = true)
+    m.teams = {}
+    m.nospoil = {}
+    m.alertLast = {}
     rset("prof", p.id)
     m.profName.text = p.name
     m.lib = { progress: {}, mylist: {}, watched: {} }
@@ -1045,6 +1069,9 @@ end sub
 sub useGuest()
     m.guest = true
     m.scope = ""
+    m.kids = false
+    m.teams = {}
+    m.nospoil = {}
     m.profName.text = "Invitado"
     m.lib = { progress: {}, mylist: {}, watched: {} }
     backToHome()
@@ -1053,6 +1080,8 @@ end sub
 
 sub onLib(data as object)
     m.lib = { progress: {}, mylist: {}, watched: {} }
+    m.teams = {}
+    m.nospoil = {}
     if type(data) = "roArray" then
         for each o in data
             k = Str2(o.key)
@@ -1063,16 +1092,22 @@ sub onLib(data as object)
                 if del then m.lib.mylist.Delete(k) else m.lib.mylist[k] = o.data
             else if o.kind = "watched" then
                 if del then m.lib.watched.Delete(k) else m.lib.watched[k] = true
+            else if o.kind = "team" or o.kind = "nospoil" then
+                spApplyRemote(o.kind, k, o.data, del)
             end if
         end for
     end if
     if m.section = 0 and m.mode = "home" then
         buildRows()
         m.rows.setFocus(true)
+    else if m.pgSports.visible then
+        m.spFilterSig = ""
+        spRender(true)
     end if
 end sub
 
 sub loadLocalLib()
+    spLoadLocal()
     m.lib = { progress: {}, mylist: {}, watched: {} }
     t = rget("lib_local")
     if t <> "" then
@@ -1107,7 +1142,21 @@ sub onSectionSelect()
     openSection(m.sections.itemSelected, true)
 end sub
 
+' Menú lateral: «Deportes» es nuevo; los demás conservan su número de antes
 sub openSection(i as integer, focus as boolean)
+    nm = "Inicio"
+    if m.secNames <> invalid and i >= 0 and i < m.secNames.Count() then nm = m.secNames[i]
+    if nm = "Deportes" then
+        spOpen(focus)
+        return
+    end if
+    old = { "Inicio": 0, "Buscar": 1, "En vivo": 2, "Películas": 3, "Series": 4, "Mi lista": 5, "Mi cuenta": 6 }
+    openSec(old[nm], focus)
+end sub
+
+sub openSec(i as integer, focus as boolean)
+    m.pgSports.visible = false
+    m.pgInfo.visible = false
     if i = 1 then
         showSearchPage(focus)
         return
@@ -1227,7 +1276,9 @@ sub buildRows()
             yr = Str2(it.year)
             lbl = "Película"
             if yr <> "" then lbl = lbl + " · " + yr
-            n.addFields({ kind: "movie", xid: Str2(it.stream_id), sid: "", frac: 0, cap: "", desc: lbl, ext: Str2(it.container_extension) })
+            cap = ""
+            if nowSec() - Int(Val(Str2(it.added))) < 7 * 86400 then cap = "NUEVO"
+            n.addFields({ kind: "movie", xid: Str2(it.stream_id), sid: "", frac: 0, cap: cap, desc: lbl, ext: Str2(it.container_extension) })
         end for
     end if
     if m.recentSeries <> invalid and m.recentSeries.Count() > 0 then
@@ -1237,7 +1288,9 @@ sub buildRows()
             n = row.createChild("ContentNode")
             n.title = Str2(it.name)
             n.HDPosterUrl = img(it.cover)
-            n.addFields({ kind: "series", xid: Str2(it.series_id), sid: Str2(it.series_id), frac: 0, cap: "", desc: "Serie · " + Str2(it.genre) })
+            cap = ""
+            if nowSec() - Int(Val(Str2(it.last_modified))) < 7 * 86400 then cap = "EP. NUEVO"
+            n.addFields({ kind: "series", xid: Str2(it.series_id), sid: Str2(it.series_id), frac: 0, cap: cap, desc: "Serie · " + Str2(it.genre) })
         end for
     end if
     m.rows.content = root
@@ -1304,11 +1357,17 @@ sub onCats(id as string, data as object)
     n = c.createChild("ContentNode")
     n.title = "Todo"
     n.addFields({ catId: "" })
+    hideSports = (kind = "live" and rget("sportsHide") <> "0")
+    sportRe = spSportRe()
+    adultRe = spAdultRe()
     if type(data) = "roArray" then
         for each it in data
-            n = c.createChild("ContentNode")
-            n.title = Str2(it.category_name)
-            n.addFields({ catId: Str2(it.category_id) })
+            nm = Str2(it.category_name)
+            if not (hideSports and spIsSportCat(nm, sportRe, adultRe)) then
+                n = c.createChild("ContentNode")
+                n.title = nm
+                n.addFields({ catId: Str2(it.category_id) })
+            end if
         end for
     end if
     m.cats.content = c
@@ -1861,6 +1920,7 @@ sub showAccount(msg as string)
     if m.profiles.Count() > 0 then items.Push("Cambiar de perfil")
     items.Push("Cambiar datos del proveedor")
     if m.code <> "" then items.Push("Pedir ayuda a mi vendedor (WhatsApp)")
+    items.Push("Ajustes de Deportes")
     items.Push("Volver")
     m.accItems = items
     showForm("Mi cuenta", cur + " Para usar tu misma cuenta, tu lista y lo que estabas viendo en tu celular, tablet o tele Android, elige «Unir a mi cuenta».", items, "account")
@@ -1879,10 +1939,31 @@ sub onAccountSelect(i as integer)
         clearProvider()
     else if Left(t, 5) = "Pedir" then
         askHelp()
+    else if t = "Ajustes de Deportes" then
+        showSportsSettings("", 0)
     else
         backToHome()
     end if
 end sub
+
+' Ajustes de Deportes de esta tele
+sub showSportsSettings(msg as string, idx as integer)
+    m.spSetKeys = ["showOdds", "sportAlerts", "miniScore", "sportsHide"]
+    items = []
+    items.Push("Mostrar momios " + yesNo(spPref("showOdds")))
+    items.Push("Avisarme cuando juegan o anotan mis equipos " + yesNo(spPref("sportAlerts")))
+    items.Push("Marcador en la esquina al ver un partido " + yesNo(spPref("miniScore")))
+    items.Push("Canales de deportes también en En vivo " + yesNo(not spPref("sportsHide")))
+    items.Push("Volver")
+    showForm("Ajustes de Deportes", "Elige qué quieres ver en Deportes en esta tele. Los momios son solo informativos.", items, "spset")
+    m.formList.jumpToItem = idx
+    m.formMsg.text = msg
+end sub
+
+function yesNo(b as boolean) as string
+    if b then return "(sí)"
+    return "(no)"
+end function
 
 ' ---------------- reproductor ----------------
  ' Guarda los canales de esa lista para cambiar con ▲ ▼ mientras se ve
@@ -1907,6 +1988,7 @@ sub playLiveNow()
     k = m.live.fmt mod 2
     play(ch.title, streamUrl("live", ch.xid, exts[k]), formats[k], true, invalid, 0)
     m.info.text = ch.title
+    if m.live.tries = 0 then spMiniFor(ch.title)
 end sub
 
 sub liveStep(d as integer)
@@ -1966,6 +2048,7 @@ sub saveProgress()
 end sub
 
 sub stopVideo()
+    spMiniStop()
     saveProgress()
     m.progTimer.control = "stop"
     m.playMeta = invalid
@@ -2027,6 +2110,10 @@ function onKeyEvent(key as string, press as boolean) as boolean
             stopVideo()
             return true
         end if
+        if key = "options" then
+            spMiniShow()
+            return true
+        end if
         if m.live <> invalid then
             if key = "up" or key = "channelup" then
                 liveStep(1)
@@ -2037,6 +2124,10 @@ function onKeyEvent(key as string, press as boolean) as boolean
             end if
         end if
         return false
+    end if
+    if key = "back" and m.mode = "spset" then
+        showAccount("")
+        return true
     end if
     if key = "back" and (m.mode = "account" or m.mode = "hpair") then
         stopHousePair()
@@ -2068,7 +2159,41 @@ function onKeyEvent(key as string, press as boolean) as boolean
         end if
         return false
     end if
+    if m.mode = "info" then
+        if key = "back" then
+            ipBack()
+            return true
+        else if key = "left" and m.ipList.hasFocus() and m.ipTabs.visible then
+            m.ipTabs.setFocus(true)
+            return true
+        else if key = "right" and m.ipTabs.hasFocus() then
+            m.ipList.setFocus(true)
+            return true
+        end if
+        return false
+    end if
     if m.mode <> "home" then return false
+    if m.pgSports.visible and not m.sections.hasFocus() then
+        hasRows = (m.spRows.content <> invalid and m.spRows.content.getChildCount() > 0)
+        if key = "left" and m.spRows.hasFocus() then
+            m.spFilters.setFocus(true)
+            return true
+        else if key = "right" and m.spFilters.hasFocus() then
+            if hasRows then m.spRows.setFocus(true)
+            return true
+        else if key = "left" and m.spFilters.hasFocus() then
+            m.sections.setFocus(true)
+            return true
+        else if key = "back" then
+            if m.spRows.hasFocus() then m.spFilters.setFocus(true) else m.sections.setFocus(true)
+            return true
+        end if
+        return false
+    end if
+    if key = "right" and m.sections.hasFocus() and m.pgSports.visible then
+        if m.spRows.content <> invalid and m.spRows.content.getChildCount() > 0 then m.spRows.setFocus(true) else m.spFilters.setFocus(true)
+        return true
+    end if
     if m.pgSearch.visible and not m.sections.hasFocus() then
         if key = "right" and (m.kb.isInFocusChain() or m.sRecent.hasFocus()) then
             if m.sRows.content <> invalid and m.sRows.content.getChildCount() > 0 then m.sRows.setFocus(true)

@@ -5,6 +5,8 @@
     <field id="launchArgs" type="assocarray" onChange="onLaunchArgs" />
   </interface>
   <script type="text/brightscript" uri="MainScene.brs" />
+  <script type="text/brightscript" uri="Sports.brs" />
+  <script type="text/brightscript" uri="SportsLib.brs" />
   <children>
     <Rectangle id="bg" width="1920" height="1080" color="0x0B0C12FF" />
     <Rectangle id="glow" width="1920" height="300" color="0x14244AFF" opacity="0.55" />
@@ -17,7 +19,7 @@
     <Group id="form" visible="false">
       <Label id="formTitle" translation="[80,220]" width="1100" wrap="true" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
       <Label id="formText" translation="[80,300]" width="1100" wrap="true" maxLines="5" font="font:SmallSystemFont" color="0xB9C2D6FF" lineSpacing="6" />
-      <LabelList id="formList" translation="[80,500]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="6"
+      <LabelList id="formList" translation="[80,500]" itemSize="[900,72]" itemSpacing="[0,14]" numRows="5" vertFocusAnimationStyle="floatingFocus"
         color="0xE6EAF2FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
       <Group id="qrBox" visible="false">
         <Rectangle translation="[1240,220]" width="560" height="760" color="0x17171CFF" />
@@ -99,6 +101,100 @@
         </Group>
       </Group>
 
+
+      <!-- Deportes: portada del partido enfocado, filtros y marcadores -->
+      <Group id="pgSports" visible="false">
+        <Label id="spKicker" translation="[340,44]" width="1540" height="34" color="0x3D9BFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="26" />
+        </Label>
+        <Label id="spTitle" translation="[340,96]" width="760" wrap="true" maxLines="2" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="54" />
+        </Label>
+        <TeamLogo id="spLgA" translation="[340,92]" size="72" />
+        <Label id="spNA" translation="[432,92]" width="520" height="72" vertAlign="center" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="40" />
+        </Label>
+        <Label id="spSA" translation="[930,86]" width="150" height="84" horizAlign="right" vertAlign="center" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="60" />
+        </Label>
+        <TeamLogo id="spLgH" translation="[340,180]" size="72" />
+        <Label id="spNH" translation="[432,180]" width="520" height="72" vertAlign="center" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="40" />
+        </Label>
+        <Label id="spSH" translation="[930,174]" width="150" height="84" horizAlign="right" vertAlign="center" color="0xFFFFFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="60" />
+        </Label>
+        <Label id="spMeta1" translation="[1140,96]" width="740" wrap="true" maxLines="2" color="0xC3CBE0FF" lineSpacing="4">
+          <Font role="font" uri="font:SystemFontFile" size="28" />
+        </Label>
+        <Label id="spMeta2" translation="[1140,184]" width="740" wrap="true" maxLines="3" color="0x8E97ADFF" lineSpacing="4">
+          <Font role="font" uri="font:SystemFontFile" size="24" />
+        </Label>
+        <Label id="spHint" translation="[340,282]" width="1540" color="0x6E7891FF">
+          <Font role="font" uri="font:SystemFontFile" size="22" />
+        </Label>
+        <LabelList id="spFilters" vertFocusAnimationStyle="floatingFocus" translation="[330,350]" itemSize="[310,54]" itemSpacing="[0,4]" numRows="12"
+          color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+        <RowList id="spRows" translation="[680,346]" itemComponentName="ScoreItem" numRows="3"
+          itemSize="[1220,250]" rowItemSize="[[380,190]]" rowItemSpacing="[[20,0]]" itemSpacing="[0,20]"
+          showRowLabel="[true]" rowLabelOffset="[[0,12]]" rowLabelColor="0xFFFFFFFF" rowLabelFont="font:SmallBoldSystemFont"
+          rowFocusAnimationStyle="floatingFocus" focusBitmapUri="pkg:/images/focus.9.png" drawFocusFeedbackOnTop="true" />
+        <Label id="spMsg" translation="[690,380]" width="1160" wrap="true" maxLines="6" color="0xB9C2D6FF" lineSpacing="6">
+          <Font role="font" uri="font:SystemFontFile" size="30" />
+        </Label>
+      </Group>
+
+      <!-- Información: partido, detalle, equipo, tablas, elegir equipos, quiniela -->
+      <Group id="pgInfo" visible="false">
+        <Label id="ipKicker" translation="[80,40]" width="1760" height="34" color="0x3D9BFFFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="26" />
+        </Label>
+        <Group id="ipMatch">
+          <TeamLogo id="ipLgA" translation="[80,88]" size="110" />
+          <Label id="ipNA" translation="[210,98]" width="500" height="54" color="0xFFFFFFFF">
+            <Font role="font" uri="font:BoldSystemFontFile" size="40" />
+          </Label>
+          <Label id="ipRA" translation="[210,152]" width="500" color="0x8E97ADFF">
+            <Font role="font" uri="font:SystemFontFile" size="24" />
+          </Label>
+          <Label id="ipSA" translation="[700,78]" width="180" height="120" horizAlign="right" vertAlign="center" color="0xFFFFFFFF">
+            <Font role="font" uri="font:BoldSystemFontFile" size="92" />
+          </Label>
+          <Label id="ipMid" translation="[880,90]" width="160" height="96" horizAlign="center" vertAlign="center" wrap="true" maxLines="3" color="0xB9C2D6FF">
+            <Font role="font" uri="font:SystemFontFile" size="24" />
+          </Label>
+          <Label id="ipSH" translation="[1040,78]" width="180" height="120" vertAlign="center" color="0xFFFFFFFF">
+            <Font role="font" uri="font:BoldSystemFontFile" size="92" />
+          </Label>
+          <Label id="ipNH" translation="[1220,98]" width="490" height="54" horizAlign="right" color="0xFFFFFFFF">
+            <Font role="font" uri="font:BoldSystemFontFile" size="40" />
+          </Label>
+          <Label id="ipRH" translation="[1220,152]" width="490" horizAlign="right" color="0x8E97ADFF">
+            <Font role="font" uri="font:SystemFontFile" size="24" />
+          </Label>
+          <TeamLogo id="ipLgH" translation="[1730,88]" size="110" />
+        </Group>
+        <Group id="ipPlain" visible="false">
+          <TeamLogo id="ipLogo" translation="[80,70]" size="130" />
+          <Label id="ipTitle" translation="[240,92]" width="1600" height="66" color="0xFFFFFFFF">
+            <Font role="font" uri="font:BoldSystemFontFile" size="54" />
+          </Label>
+          <Label id="ipSub" translation="[240,168]" width="1600" wrap="true" maxLines="2" color="0x9AA3B8FF" lineSpacing="4">
+            <Font role="font" uri="font:SystemFontFile" size="26" />
+          </Label>
+        </Group>
+        <Label id="ipInfo" translation="[80,232]" width="1760" color="0xB9C2D6FF">
+          <Font role="font" uri="font:SystemFontFile" size="26" />
+        </Label>
+        <LabelList id="ipTabs" vertFocusAnimationStyle="floatingFocus" translation="[70,316]" itemSize="[310,58]" itemSpacing="[0,6]" numRows="10"
+          color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" />
+        <MarkupList id="ipList" translation="[420,310]" itemComponentName="InfoRow" itemSize="[1420,68]" itemSpacing="[0,6]" numRows="9"
+          drawFocusFeedback="true" drawFocusFeedbackOnTop="true" focusBitmapUri="pkg:/images/focus.9.png" vertFocusAnimationStyle="floatingFocus" />
+        <Label id="ipFoot" translation="[80,1032]" width="1760" color="0x5C6478FF">
+          <Font role="font" uri="font:SystemFontFile" size="20" />
+        </Label>
+      </Group>
+
       <!-- Menú lateral -->
       <Group id="side">
         <Rectangle width="300" height="1080" color="0x0E1018F0" />
@@ -106,7 +202,7 @@
           <Font role="font" uri="font:BoldSystemFontFile" size="44" />
         </Label>
         <Label id="profName" translation="[42,112]" width="240" font="font:SmallestSystemFont" color="0x8E97ADFF" />
-        <LabelList id="sections" translation="[24,200]" itemSize="[252,66]" itemSpacing="[0,8]" numRows="8"
+        <LabelList id="sections" vertFocusAnimationStyle="floatingFocus" translation="[24,190]" itemSize="[252,64]" itemSpacing="[0,6]" numRows="8"
           color="0xC3CBE0FF" focusedColor="0x0B0C12FF" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
         <Label id="codeLbl" translation="[42,1010]" width="240" font="font:SmallestSystemFont" color="0x5C6478FF" />
       </Group>
@@ -116,5 +212,35 @@
     <Timer id="progTimer" repeat="true" duration="30" />
     <Timer id="pingTimer" repeat="true" duration="180" />
     <Video id="video" width="1920" height="1080" visible="false" enableUI="true" />
+
+    <!-- Aviso de tus equipos (anotó, empezó, terminó) -->
+    <Group id="spBanner" visible="false" translation="[1150,40]">
+      <Rectangle width="730" height="132" color="0x1C1F2AF4" />
+      <Rectangle width="6" height="132" color="0x3D9BFFFF" />
+      <TeamLogo id="bnA" translation="[24,34]" size="64" />
+      <TeamLogo id="bnH" translation="[96,34]" size="64" />
+      <Label id="bnTitle" translation="[184,20]" width="520" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="32" />
+      </Label>
+      <Label id="bnBody" translation="[184,64]" width="520" wrap="true" maxLines="2" color="0xD1D1D6FF">
+        <Font role="font" uri="font:SystemFontFile" size="25" />
+      </Label>
+    </Group>
+
+    <!-- Marcador chico mientras ves el canal del partido -->
+    <Group id="spMini" visible="false" translation="[1440,40]">
+      <Rectangle width="440" height="112" color="0x0E1018E6" />
+      <TeamLogo id="mnA" translation="[18,28]" size="56" />
+      <TeamLogo id="mnH" translation="[80,28]" size="56" />
+      <Label id="mnTxt" translation="[152,18]" width="276" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="32" />
+      </Label>
+      <Label id="mnSub" translation="[152,62]" width="276" color="0xB9C2D6FF">
+        <Font role="font" uri="font:SystemFontFile" size="24" />
+      </Label>
+    </Group>
+    <Timer id="spTimer" repeat="true" duration="30" />
+    <Timer id="bnTimer" repeat="false" duration="8" />
+    <Timer id="miniTimer" repeat="false" duration="12" />
   </children>
 </component>

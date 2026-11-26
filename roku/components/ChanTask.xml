@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="ChanTask" extends="Task">
+  <interface>
+    <field id="base" type="string" />
+    <field id="cmd" type="assocarray" alwaysNotify="true" />
+    <field id="out" type="assocarray" />
+    <field id="status" type="string" />
+  </interface>
+  <script type="text/brightscript" uri="ChanTask.brs" />
+  <script type="text/brightscript" uri="SportsLib.brs" />
+</component>

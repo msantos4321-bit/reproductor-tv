@@ -1,0 +1,32 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 6
+k left down*11 ok
+w 2
+s 30-canales
+k left down ok
+w 4
+s 31-quiniela
+k back
+w 2
+k down ok
+w 4
+s 32-tablas
+k left down*2
+w 3
+s 33-tablas-nba
+k back
+w 2
+k down ok
+w 4
+s 34-elegir
+k ok
+w 1
+s 35-elegir-sigue
+k back
+w 2
+k up*14 ok
+w 2
+s 36-todo

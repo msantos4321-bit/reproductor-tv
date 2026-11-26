@@ -1,0 +1,32 @@
+w 6
+k ok
+w 3
+k left down*3 ok
+w 5
+k down ok
+w 4
+s 08-partido-foco
+k down*5 ok
+w 4
+s 09-resumen
+k down*9
+w 1
+s 10-resumen-abajo
+k left down
+w 2
+s 11-estadisticas
+k down
+w 2
+s 12-jugadores
+k down
+w 2
+s 13-jugadas
+k down
+w 2
+s 14-apuestas
+k right down*8
+w 1
+s 15-apuestas-abajo
+k left down
+w 2
+s 16-lesionados
