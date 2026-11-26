@@ -82,6 +82,7 @@ import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
+import androidx.compose.material.icons.filled.FiberManualRecord
 import com.mauricio.cinecasa.data.Channel
 import com.mauricio.cinecasa.data.Library
 import com.mauricio.cinecasa.data.Net

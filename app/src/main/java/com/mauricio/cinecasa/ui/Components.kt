@@ -226,6 +226,7 @@ fun Pill(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     onFocused: () -> Unit = {},
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(50)
     Surface(
@@ -245,6 +246,7 @@ fun Pill(
                 Icon(icon, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
             }
+            if (leading != null) { leading(); Spacer(Modifier.width(7.dp)) }
             Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
@@ -499,3 +501,29 @@ fun BackBar(onClick: () -> Unit) {
     }
 }
 
+
+
+/**
+ * Logo de la plataforma cuando la categoría del proveedor se llama como una (Netflix, Prime Video…).
+ * Solo en la versión directa; en Google Play no se muestran marcas de terceros.
+ */
+fun platformLogo(catName: String): String? {
+    if (com.mauricio.cinecasa.BuildConfig.PLAY) return null
+    val n = catName.lowercase()
+    val path = when {
+        "netflix" in n -> "/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg"
+        "prime" in n || "amazon" in n -> "/emthp39XA2YScoYL1p0sdbAH2WA.jpg"
+        "disney" in n -> "/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg"
+        "apple" in n -> "/6uhKBfmtzFqOcLousHwZuzcrScK.jpg"
+        "paramount" in n -> "/xbhHHa1YgtpwhC8lb1NQ3ACVcLd.jpg"
+        else -> null
+    } ?: return null
+    return "https://image.tmdb.org/t/p/w92$path"
+}
+
+@Composable
+fun PlatformIcon(url: String, size: Dp = 20.dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(5.dp)).background(Color(0x22888888))) {
+        Img(url, Modifier.fillMaxSize())
+    }
+}

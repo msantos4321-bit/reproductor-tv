@@ -663,6 +663,7 @@ fun TeamPickerDialog(onDone: () -> Unit) {
     val list by produceState(emptyList<SpTeam>(), lg) { value = emptyList(); value = Sports.teams(lg) }
     val teams by Teams.list.collectAsState()
     val fr = remember { FocusRequester() }
+    val perRow = if (LocalCompact.current) 2 else 3
     Dialog(onDismissRequest = onDone, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.cardWidth(760.dp).heightIn(max = 660.dp).background(C.Panel, RoundedCornerShape(16.dp)).padding(24.dp),
@@ -677,7 +678,7 @@ fun TeamPickerDialog(onDone: () -> Unit) {
             }
             if (list.isEmpty()) Spinner()
             LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(list.chunked(if (LocalCompact.current) 2 else 3), key = { r -> r.joinToString { it.id } }) { row ->
+                items(list.chunked(perRow), key = { r -> r.joinToString { it.id } }) { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { t ->
                             val on = teams.any { it.key == "$lg:${t.id}" }
@@ -701,7 +702,7 @@ fun TeamPickerDialog(onDone: () -> Unit) {
                                 }
                             }
                         }
-                        repeat((if (LocalCompact.current) 2 else 3) - row.size) { Spacer(Modifier.weight(1f)) }
+                        repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
